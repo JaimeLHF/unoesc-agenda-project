@@ -16,11 +16,18 @@ from typing import Optional
 from playwright.async_api import async_playwright, Page, Browser, TimeoutError as PlaywrightTimeoutError
 
 
+# URL base do portal acadêmico UNOESC
+BASE_URL = "https://acad.unoesc.edu.br"
+
 # URL principal do portal acadêmico UNOESC
 PORTAL_URL = "https://acad.unoesc.edu.br/academico/portal/index.jspa"
 
+# URL da página de disciplinas EAD
+EAD_URL = "https://acad.unoesc.edu.br/academico/portal/modules/ead/aulaOnlineAcademico.jspa"
+
 # Tempo máximo de espera por seletores (em milissegundos)
-TIMEOUT_MS = 15_000
+# O portal pode ser lento para carregar
+TIMEOUT_MS = 30_000
 
 
 class ScraperService:
@@ -78,25 +85,28 @@ class ScraperService:
         """
         Navega até o portal e preenche o formulário de login.
 
-        O portal UNOESC usa o Jive SBS; os campos de login ficam em um
-        formulário padrão com os identificadores '#username' e '#password'.
+        O portal UNOESC é um sistema próprio; os campos de login ficam em um
+        formulário padrão com os identificadores '#j_username' e '#j_password'.
+        Após login bem-sucedido, o painel carrega uma navbar com classe
+        '.navbar-inverse' e um 'div#content' com o painel principal.
         """
         await page.goto(PORTAL_URL, wait_until="domcontentloaded")
 
         # Aguarda o campo de usuário aparecer para garantir que a página carregou
-        await page.wait_for_selector("#username", timeout=TIMEOUT_MS)
+        await page.wait_for_selector("#j_username", timeout=TIMEOUT_MS)
 
         # Preenche usuário e senha
-        await page.fill("#username", username)
-        await page.fill("#password", password)
+        await page.fill("#j_username", username)
+        await page.fill("#j_password", password)
 
         # Clica no botão de submissão do formulário de login
         await page.click("input[type='submit'], button[type='submit']")
 
         # Aguarda o redirecionamento para o painel após o login
         try:
-            # O painel possui um elemento com a classe 'j-community-sidebar' ou similar
-            await page.wait_for_selector(".j-main-content, #jive-main-content", timeout=TIMEOUT_MS)
+            # O painel possui uma navbar com '.navbar-inverse' e um 'div#content'
+            await page.wait_for_selector(".navbar-inverse, #content", timeout=TIMEOUT_MS)
+            print("[Scraper] Login bem-sucedido, navegando para disciplinas...")
         except PlaywrightTimeoutError as exc:
             # Se não chegou ao painel, verifica se há mensagem de erro de login
             error_msg = await self._get_login_error(page)
@@ -119,73 +129,76 @@ class ScraperService:
         """
         Extrai os links e nomes de todas as disciplinas matriculadas.
 
-        No portal UNOESC (Jive), as disciplinas aparecem como 'espaços' (spaces)
-        na barra lateral ou no painel de comunidades do aluno.
+        No portal UNOESC, as disciplinas EAD ficam disponíveis na página
+        '/academico/portal/modules/ead/aulaOnlineAcademico.jspa'. O método
+        navega até essa página e procura por links de disciplinas/turmas.
+        Se nenhum link específico for encontrado, retorna a própria página
+        como uma única "disciplina" de fallback.
         """
         subject_links = []
 
-        try:
-            # Aguarda o menu de disciplinas/comunidades carregar
-            await page.wait_for_selector(
-                ".jive-widget-content a, .j-browse-space-link, .jive-community-link",
-                timeout=TIMEOUT_MS,
-            )
+        print("[Scraper] Navegando para a página de disciplinas EAD...")
+        await page.goto(EAD_URL, wait_until="domcontentloaded")
 
-            # Seleciona todos os links de disciplinas visíveis na página
+        try:
+            # Aguarda o conteúdo principal carregar
+            await page.wait_for_selector("#content, body", timeout=TIMEOUT_MS)
+
+            # Procura por links de disciplinas/turmas: padrões com /ead/ ou /community/
             links = await page.query_selector_all(
-                ".jive-widget-content a[href*='/community/'], "
-                ".j-browse-space-link, "
-                ".jive-community-link"
+                "a[href*='/ead/'], a[href*='/community/']"
             )
 
             for link in links:
                 href = await link.get_attribute("href")
                 name = (await link.inner_text()).strip()
                 if href and name:
-                    # Normaliza URL relativa para absoluta
+                    # Normaliza URL relativa para absoluta usando BASE_URL
                     if href.startswith("/"):
-                        base = "https://acad.unoesc.edu.br"
-                        href = base + href
+                        href = BASE_URL + href
                     subject_links.append({"name": name, "url": href})
+
         except PlaywrightTimeoutError:
-            # Nenhuma disciplina encontrada no seletor padrão; retorna lista vazia
+            # Página não carregou no tempo esperado
             pass
 
+        if not subject_links:
+            # Fallback: retorna a própria página EAD como uma única "disciplina"
+            print("[Scraper] Nenhum link de disciplina encontrado; usando fallback para página EAD.")
+            subject_links = [{"name": "Aula on-line EAD", "url": EAD_URL}]
+
+        print(f"[Scraper] {len(subject_links)} disciplina(s) encontrada(s).")
         return subject_links
 
     async def _extract_subject_content(self, page: Page, url: str) -> str:
         """
         Navega para a página de uma disciplina e extrai todo o texto relevante.
 
-        Busca conteúdo em:
-          - Avisos/anúncios da disciplina
-          - Posts de fórum
-          - Descrições de atividades e tarefas
+        Busca conteúdo na área principal da página (#content), que no portal
+        UNOESC contém avisos, atividades e materiais da disciplina.
+        Como fallback, extrai o conteúdo do body inteiro.
         """
         try:
             await page.goto(url, wait_until="domcontentloaded")
 
             # Aguarda o conteúdo principal da disciplina carregar
             await page.wait_for_selector(
-                ".jive-rendered-content, .j-content-body, #jive-main-content",
+                "#content, #mainbar, body",
                 timeout=TIMEOUT_MS,
             )
 
-            # Extrai o texto de todo o conteúdo principal da página da disciplina
-            content_elements = await page.query_selector_all(
-                ".jive-rendered-content, "   # Conteúdo HTML renderizado (avisos, posts)
-                ".jive-subject, "             # Assunto/título de posts
-                ".jive-body-main, "           # Corpo principal de mensagens
-                ".jive-widget-content"        # Widgets com conteúdo do espaço
-            )
+            # Extrai o texto da área principal da página da disciplina
+            content_element = await page.query_selector("#content")
 
-            texts = []
-            for el in content_elements:
-                text = (await el.inner_text()).strip()
-                if text:
-                    texts.append(text)
+            if content_element:
+                # Pega todo o conteúdo da área principal do portal
+                text = (await content_element.inner_text()).strip()
+            else:
+                # Fallback: extrai o body inteiro se #content não existir
+                body_element = await page.query_selector("body")
+                text = (await body_element.inner_text()).strip() if body_element else ""
 
-            return "\n\n".join(texts)
+            return text
 
         except PlaywrightTimeoutError:
             # Conteúdo não carregou no tempo esperado; retorna string vazia
