@@ -79,16 +79,16 @@ class ScraperService:
         Navega até o portal e preenche o formulário de login.
 
         O portal UNOESC usa o Jive SBS; os campos de login ficam em um
-        formulário padrão com os identificadores '#username' e '#password'.
+        formulário padrão com os identificadores '#j_username' e '#j_password'.
         """
         await page.goto(PORTAL_URL, wait_until="domcontentloaded")
 
         # Aguarda o campo de usuário aparecer para garantir que a página carregou
-        await page.wait_for_selector("#username", timeout=TIMEOUT_MS)
+        await page.wait_for_selector("#j_username", timeout=TIMEOUT_MS)
 
         # Preenche usuário e senha
-        await page.fill("#username", username)
-        await page.fill("#password", password)
+        await page.fill("#j_username", username)
+        await page.fill("#j_password", password)
 
         # Clica no botão de submissão do formulário de login
         await page.click("input[type='submit'], button[type='submit']")
