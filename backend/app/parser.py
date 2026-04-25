@@ -8,11 +8,13 @@ de cada disciplina e identificar eventos acadêmicos estruturados
 
 import json
 import os
+import re
 import uuid
 from typing import Any
 
-import google.generativeai as genai
 from dotenv import load_dotenv
+from google import genai
+from google.genai import types as genai_types
 
 # Carrega variáveis de ambiente do arquivo .env (se existir)
 load_dotenv()
@@ -21,7 +23,12 @@ load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 # Modelo Gemini a ser utilizado
-GEMINI_MODEL = "gemini-1.5-flash"
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
+# Limite de caracteres do conteúdo enviado ao Gemini por disciplina.
+# Gemini 2.5 Flash aceita ~1M tokens (~4M chars). 250k cobre disciplinas
+# longas com folga e mantém o custo controlado.
+MAX_CONTENT_CHARS = 250_000
 
 
 class ParserService:
@@ -30,11 +37,12 @@ class ParserService:
     def __init__(self) -> None:
         if not GEMINI_API_KEY:
             raise EnvironmentError(
-                "Variável de ambiente GEMINI_API_KEY não definida. "
-                "Configure-a no arquivo .env antes de usar o serviço."
+                "GEMINI_API_KEY não configurada. "
+                "Edite backend/.env e adicione sua chave da Gemini API. "
+                "Como obter: https://aistudio.google.com/ → Get API key. "
+                "Veja README.md, seção 'Configurando o Gemini'."
             )
-        genai.configure(api_key=GEMINI_API_KEY)
-        self._model = genai.GenerativeModel(GEMINI_MODEL)
+        self._client = genai.Client(api_key=GEMINI_API_KEY)
 
     async def extract_events(self, subjects: list[Any]) -> list[dict]:
         """
@@ -57,7 +65,14 @@ class ParserService:
                 # Sem conteúdo para analisar; pula a disciplina
                 continue
 
+            # A URL do curso fica no header injetado pelo scraper ("URL: ...")
+            course_url_match = re.search(r"^URL:\s*(\S+)", content, re.MULTILINE)
+            course_url = course_url_match.group(1) if course_url_match else None
+
             events = await self._extract_from_content(name, content)
+            for e in events:
+                if course_url:
+                    e["url"] = course_url
             all_events.extend(events)
 
         return all_events
@@ -76,23 +91,31 @@ class ParserService:
         prompt = self._build_prompt(subject_name, content)
 
         try:
-            response = self._model.generate_content(prompt)
-            raw_text = response.text.strip()
-
-            # Remove possíveis marcadores de bloco de código markdown (```json ... ```)
-            if raw_text.startswith("```"):
-                raw_text = raw_text.split("```", 2)[1]
-                if raw_text.lower().startswith("json"):
-                    raw_text = raw_text[4:]
-                raw_text = raw_text.rsplit("```", 1)[0].strip()
-
-            events_data: list[dict] = json.loads(raw_text)
-
-        except json.JSONDecodeError:
-            # Gemini retornou texto não-JSON; considera sem eventos para esta disciplina
+            response = self._client.models.generate_content(
+                model=GEMINI_MODEL,
+                contents=prompt,
+                config=genai_types.GenerateContentConfig(
+                    response_mime_type="application/json",
+                    response_schema=self._response_schema(),
+                ),
+            )
+            raw_text = (response.text or "").strip()
+        except Exception as exc:
+            msg = str(exc)
+            if "SERVICE_DISABLED" in msg or "has not been used in project" in msg:
+                print(
+                    f"[Parser] Gemini API ainda não foi habilitada no seu projeto Google. "
+                    f"Abra o link que aparece na mensagem de erro e clique em 'Ativar'. "
+                    f"Detalhes: {msg[:200]}"
+                )
+            else:
+                print(f"[Parser] Erro chamando Gemini para '{subject_name}': {exc}")
             return []
-        except Exception:
-            # Erro de comunicação com a API; considera sem eventos
+
+        try:
+            events_data: list[dict] = json.loads(raw_text) if raw_text else []
+        except json.JSONDecodeError:
+            print(f"[Parser] Resposta do Gemini não é JSON válido para '{subject_name}': {raw_text[:200]}")
             return []
 
         # Enriquece cada evento com ID único e nome da disciplina
@@ -112,6 +135,27 @@ class ParserService:
         return structured_events
 
     @staticmethod
+    def _response_schema() -> dict:
+        """Schema JSON que o Gemini deve retornar (array de eventos)."""
+        return {
+            "type": "ARRAY",
+            "items": {
+                "type": "OBJECT",
+                "properties": {
+                    "title": {"type": "STRING"},
+                    "date": {"type": "STRING"},
+                    "time": {"type": "STRING", "nullable": True},
+                    "description": {"type": "STRING"},
+                    "type": {
+                        "type": "STRING",
+                        "enum": ["webconference", "deadline", "exam", "other"],
+                    },
+                },
+                "required": ["title", "date", "description", "type"],
+            },
+        }
+
+    @staticmethod
     def _build_prompt(subject_name: str, content: str) -> str:
         """
         Monta o prompt em português para o Gemini analisar o conteúdo da disciplina.
@@ -119,28 +163,40 @@ class ParserService:
         O prompt instrui o modelo a retornar somente um array JSON válido,
         sem texto adicional, para facilitar o parsing automático.
         """
-        return f"""Você é um assistente especializado em extrair eventos acadêmicos de textos do portal universitário da UNOESC.
+        return f"""Você extrai eventos acadêmicos de páginas do Moodle da UNOESC.
 
-Analise o texto abaixo, proveniente da disciplina "{subject_name}", e identifique todos os eventos acadêmicos presentes, como:
-- Webconferências (videoaulas ao vivo)
-- Prazos de entrega de atividades e trabalhos
-- Provas e avaliações
-- Qualquer outra atividade com data definida
+Disciplina: "{subject_name}"
 
-Retorne APENAS um array JSON válido (sem texto adicional, sem markdown) com os eventos encontrados.
-Se não houver nenhum evento, retorne um array vazio: []
+Analise o texto abaixo (extraído da página do curso no Moodle) e identifique
+TODOS os eventos com data definida. Tipos típicos:
+- Tarefas/Atividades a entregar (geralmente com texto "Aberto até", "Entrega até",
+  "Prazo final", "Encerramento") → type="deadline"
+- Questionários/Provas (texto "Quiz", "Avaliação", "Prova") → type="exam"
+- Webconferências (texto "Webconferência", "Encontro síncrono", "Aula ao vivo",
+  "Live") → type="webconference"
+- Demais eventos com data → type="other"
 
-Cada evento deve ter exatamente os seguintes campos:
-- "title": string — título ou nome do evento
-- "date": string — data no formato ISO 8601 (AAAA-MM-DD); use o ano atual se não estiver explícito
-- "time": string ou null — horário no formato HH:MM (24h), se disponível
-- "description": string — breve descrição do evento
-- "subject": string — nome da disciplina (use "{subject_name}")
-- "type": string — um dos valores: "webconference", "deadline", "exam", "other"
+REGRAS IMPORTANTES:
+- Inclua apenas eventos com data minimamente identificável.
+- Se a data não tiver ano explícito, assuma o ano atual.
+- Se houver intervalo "de DD/MM até DD/MM", use a data FINAL (prazo).
+- Não inclua materiais de leitura, vídeos gravados ou recursos sem prazo.
+- Não duplique eventos idênticos.
 
-Texto da disciplina:
+Retorne APENAS um array JSON (sem markdown, sem texto fora do JSON).
+Se não houver eventos, retorne [].
+
+Cada evento deve ter EXATAMENTE estes campos:
+- "title": string — nome curto do evento
+- "date": string — data ISO 8601 (AAAA-MM-DD)
+- "time": string ou null — horário "HH:MM" (24h), se houver
+- "description": string — descrição breve (até 200 chars)
+- "subject": string — use "{subject_name}"
+- "type": "webconference" | "deadline" | "exam" | "other"
+
+Texto do curso:
 \"\"\"
-{content[:4000]}
+{content[:MAX_CONTENT_CHARS]}
 \"\"\"
 
 Responda somente com o array JSON."""

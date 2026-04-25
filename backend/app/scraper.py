@@ -1,207 +1,385 @@
 """
 Módulo de scraping — UNOESC Agenda.
 
-Utiliza Playwright (modo assíncrono) para:
-  1. Abrir um navegador headless
-  2. Fazer login no portal acadêmico da UNOESC
-  3. Navegar por cada disciplina matriculada
-  4. Extrair todo o conteúdo de texto relevante (avisos, fóruns, atividades)
-  5. Retornar uma lista de disciplinas com o texto extraído
+Fluxo:
+  1. Login no portal acadêmico (acad.unoesc.edu.br)
+  2. Acessa a página EAD e extrai cards de disciplina do semestre vigente
+  3. Para cada disciplina, gera URL de SSO via moodleRooms.jspa e navega
+     para o Moodle (on.unoesc.edu.br) — onde estão as atividades reais
+  4. Extrai:
+     a) Texto da página de cada curso (alimenta o Gemini para webconferências)
+     b) Eventos estruturados do calendário consolidado do Moodle
+        (/calendar/view.php?view=upcoming) — prazos exatos sem LLM
+
+Implementado com a API síncrona do Playwright para evitar incompatibilidades
+do asyncio com o uvicorn no Windows. O endpoint FastAPI deve invocar
+`ScraperService.run` via `asyncio.to_thread(...)`.
 """
 
-import asyncio
+import re
 import uuid
+from datetime import date, datetime, timedelta, timezone
 from typing import Optional
+from urllib.parse import urlparse
 
-from playwright.async_api import async_playwright, Page, Browser, TimeoutError as PlaywrightTimeoutError
+from playwright.sync_api import sync_playwright, Page, Browser, BrowserContext
 
-
-# URL base do portal acadêmico UNOESC
+# URLs base
 BASE_URL = "https://acad.unoesc.edu.br"
+PORTAL_URL = f"{BASE_URL}/academico/portal/index.jspa"
+EAD_URL = f"{BASE_URL}/academico/portal/modules/ead/aulaOnlineAcademico.jspa"
+MOODLE_LINK_URL = f"{BASE_URL}/academico/portal/modules/portal/moodleRooms.jspa"
 
-# URL principal do portal acadêmico UNOESC
-PORTAL_URL = "https://acad.unoesc.edu.br/academico/portal/index.jspa"
-
-# URL da página de disciplinas EAD
-EAD_URL = "https://acad.unoesc.edu.br/academico/portal/modules/ead/aulaOnlineAcademico.jspa"
-
-# Tempo máximo de espera por seletores (em milissegundos)
-# O portal pode ser lento para carregar
 TIMEOUT_MS = 30_000
+
+# Lookahead em dias para o calendário Moodle (180 = ~6 meses, cobre o semestre)
+CALENDAR_LOOKAHEAD_DAYS = 180
+
+# Mapeia o componente do Moodle para o tipo de evento da nossa aplicação
+COMPONENT_TYPE_MAP = {
+    "mod_assign": "deadline",
+    "mod_quiz": "exam",
+    "mod_forum": "deadline",
+    "mod_hsuforum": "deadline",
+    "mod_workshop": "deadline",
+    "mod_lesson": "deadline",
+    "mod_choice": "other",
+    "mod_feedback": "other",
+}
+
+# Brasil não tem horário de verão desde 2019; UTC-3 é estável.
+TZ_BR = timezone(timedelta(hours=-3))
+
+
+def current_semester(today: Optional[date] = None) -> str:
+    """Retorna o semestre vigente no formato 'AAAA/N' (ex: '2026/1')."""
+    today = today or date.today()
+    return f"{today.year}/{1 if today.month <= 6 else 2}"
 
 
 class ScraperService:
     """Serviço responsável pelo login e extração de conteúdo do portal UNOESC."""
 
-    async def run(self, username: str, password: str) -> list[dict]:
-        """
-        Ponto de entrada principal do scraper.
+    def __init__(self, semester: Optional[str] = None) -> None:
+        self.semester = semester or current_semester()
 
-        Parâmetros:
-            username: Matrícula ou CPF do aluno no portal UNOESC.
-            password: Senha do portal.
+    def run(self, username: str, password: str) -> dict:
+        """
+        Executa o fluxo completo: login → disciplinas → conteúdo + calendário.
+
+        Função síncrona — chame via `asyncio.to_thread(scraper.run, ...)` em
+        contextos async (FastAPI).
 
         Retorna:
-            Lista de dicionários com 'id', 'name' e 'content' de cada disciplina.
+            {
+              "subjects": [{id, name, content}, ...],
+              "calendar_events": [{title, date, time, description, subject, type, source_url}, ...],
+            }
 
-        Lança:
-            PermissionError: Se as credenciais forem inválidas.
-            RuntimeError: Para outros erros durante a extração.
+        Lança PermissionError em caso de credenciais inválidas.
         """
-        async with async_playwright() as pw:
-            # Inicia o navegador em modo headless (sem interface gráfica)
-            browser: Browser = await pw.chromium.launch(headless=True)
-            page: Page = await browser.new_page()
+        with sync_playwright() as pw:
+            browser: Browser = pw.chromium.launch(headless=True)
+            context: BrowserContext = browser.new_context()
+            page: Page = context.new_page()
+            # Aceita silenciosamente qualquer dialog que apareça (alerts JS)
+            page.on("dialog", lambda d: d.accept())
 
             try:
-                subjects = await self._scrape(page, username, password)
+                print("[Scraper] 1/3 Login no portal...")
+                self._login(page, username, password)
+                print("[Scraper]      OK")
+
+                print("[Scraper] 2/3 Extraindo cards de disciplina...")
+                cards = self._extract_subject_cards(page)
+                print(f"[Scraper]      {len(cards)} disciplina(s) encontradas")
+
+                course_id_to_subject: dict[str, str] = {}
+                subjects: list[dict] = []
+                moodle_base: Optional[str] = None
+
+                for i, card in enumerate(cards, start=1):
+                    print(f"[Scraper]      [{i}/{len(cards)}] {card['name']}...")
+                    content, base, course_id = self._fetch_moodle_course_text(
+                        context, card["dof"]
+                    )
+                    print(f"[Scraper]            -> {len(content)} chars, course_id={course_id}, base={base}")
+                    if base and not moodle_base:
+                        moodle_base = base
+                    if course_id:
+                        course_id_to_subject[course_id] = card["name"]
+                    subjects.append({
+                        "id": str(uuid.uuid4()),
+                        "name": card["name"],
+                        "content": content,
+                    })
+
+                calendar_events: list[dict] = []
+                if moodle_base:
+                    print(f"[Scraper] 3/3 Lendo calendário consolidado em {moodle_base}...")
+                    calendar_events = self._fetch_calendar_events(
+                        context, moodle_base, course_id_to_subject
+                    )
+                    print(f"[Scraper]      {len(calendar_events)} evento(s) capturado(s)")
+                    # Anexa a URL do curso aos subjects (consumido pelo parser
+                    # para enriquecer eventos do Gemini com link direto)
+                    for subj in subjects:
+                        course_id = next(
+                            (cid for cid, name in course_id_to_subject.items() if name == subj["name"]),
+                            None,
+                        )
+                        if course_id:
+                            subj["course_url"] = f"{moodle_base}/course/view.php?id={course_id}"
+                else:
+                    print("[Scraper] 3/3 Sem moodle_base detectada — pulando calendário")
             finally:
-                # Garante que o navegador sempre será fechado
-                await browser.close()
+                browser.close()
 
-        return subjects
+        return {"subjects": subjects, "calendar_events": calendar_events}
 
     # ------------------------------------------------------------------
-    # Métodos privados
+    # Login
     # ------------------------------------------------------------------
 
-    async def _scrape(self, page: Page, username: str, password: str) -> list[dict]:
-        """Orquestra o fluxo completo de login e extração."""
-        await self._login(page, username, password)
-        subject_links = await self._get_subject_links(page)
-        subjects = []
+    def _login(self, page: Page, username: str, password: str) -> None:
+        page.goto(PORTAL_URL, wait_until="domcontentloaded")
+        page.wait_for_selector("#j_username", timeout=TIMEOUT_MS)
+        page.fill("#j_username", username)
+        page.fill("#j_password", password)
+        with page.expect_navigation(wait_until="domcontentloaded", timeout=TIMEOUT_MS):
+            page.click("input[type='submit']")
+        page.wait_for_timeout(1500)
 
-        for link_info in subject_links:
-            content = await self._extract_subject_content(page, link_info["url"])
-            subjects.append({
+        # Se ainda existir campo de senha, login falhou
+        if page.query_selector("input[type='password']"):
+            raise PermissionError("Credenciais inválidas para o portal UNOESC.")
+
+    # ------------------------------------------------------------------
+    # Extração das disciplinas (cards)
+    # ------------------------------------------------------------------
+
+    def _extract_subject_cards(self, page: Page) -> list[dict]:
+        """
+        Navega para a página EAD, ativa a aba do semestre vigente e extrai
+        os cards de disciplina visíveis.
+        """
+        page.goto(EAD_URL, wait_until="domcontentloaded")
+        page.wait_for_timeout(1500)
+
+        # Clica na aba do semestre desejado (se existir)
+        page.evaluate(
+            """
+            (semestre) => {
+                const buttons = document.querySelectorAll(".tablinks");
+                for (const b of buttons) {
+                    if (b.textContent.trim() === semestre) { b.click(); return; }
+                }
+            }
+            """,
+            self.semester,
+        )
+        page.wait_for_timeout(600)
+
+        cards = page.evaluate(
+            """
+            (semestre) => {
+                const result = [];
+                // Procura o painel da aba ativa do semestre solicitado
+                const panel = document.querySelector(`[id$="${semestre}"].tabcontent`)
+                           || document.querySelector(".tabcontent[style*='block']")
+                           || document.querySelector(".tabcontent");
+                if (!panel) return result;
+                for (const card of panel.querySelectorAll(".card")) {
+                    const titleEl = card.querySelector("h2 b");
+                    const moodleLink = card.querySelector("a.link-moodle");
+                    if (!titleEl || !moodleLink) continue;
+                    const dof = moodleLink.getAttribute("data-dof");
+                    if (!dof) continue;
+                    result.push({ name: titleEl.textContent.trim(), dof });
+                }
+                return result;
+            }
+            """,
+            self.semester,
+        )
+        return cards
+
+    # ------------------------------------------------------------------
+    # Acesso ao Moodle via SSO e extração do conteúdo do curso
+    # ------------------------------------------------------------------
+
+    def _fetch_moodle_course_text(
+        self, context: BrowserContext, dof: str
+    ) -> tuple[str, Optional[str], Optional[str]]:
+        """
+        Reproduz o JS MoodleRoomsAccessID.criarLink (POST em moodleRooms.jspa)
+        para obter a URL SSO, navega no Moodle e extrai o texto + identificadores.
+
+        Retorna:
+            (texto_da_area_principal, moodle_base_url, course_id_do_moodle)
+        """
+        try:
+            response = context.request.post(
+                MOODLE_LINK_URL,
+                form={"action": "criarLinkMoodleRooms", "dof": dof},
+                headers={
+                    "X-Requested-With": "XMLHttpRequest",
+                    "Referer": EAD_URL,
+                },
+            )
+            if response.status != 200:
+                return "", None, None
+            data = response.json()
+            sso_url = (data or {}).get("url")
+            if not sso_url:
+                return "", None, None
+
+            moodle_page = context.new_page()
+            try:
+                moodle_page.goto(sso_url, wait_until="domcontentloaded", timeout=45_000)
+                try:
+                    moodle_page.wait_for_selector("#region-main, main", timeout=TIMEOUT_MS)
+                except Exception:
+                    pass
+                moodle_page.wait_for_timeout(1500)
+
+                final_url = moodle_page.url
+                parsed = urlparse(final_url)
+                base = f"{parsed.scheme}://{parsed.netloc}"
+                course_id_match = re.search(r"course/view\.php\?id=(\d+)", final_url)
+                course_id = course_id_match.group(1) if course_id_match else None
+
+                text = self._extract_moodle_text(moodle_page)
+                return text, base, course_id
+            finally:
+                moodle_page.close()
+        except Exception as exc:
+            print(f"[Scraper] Falha ao buscar Moodle (dof={dof}): {exc}")
+            return "", None, None
+
+    # ------------------------------------------------------------------
+    # Calendário consolidado do Moodle (todos os prazos em um só lugar)
+    # ------------------------------------------------------------------
+
+    def _fetch_calendar_events(
+        self,
+        context: BrowserContext,
+        moodle_base: str,
+        course_id_to_subject: dict[str, str],
+    ) -> list[dict]:
+        """
+        Lê o calendário consolidado do Moodle (próximos eventos) e devolve uma
+        lista de eventos já estruturados, prontos para sincronização — sem LLM.
+        """
+        url = f"{moodle_base}/calendar/view.php?view=upcoming&lookahead={CALENDAR_LOOKAHEAD_DAYS}"
+        page = context.new_page()
+        try:
+            page.goto(url, wait_until="domcontentloaded", timeout=45_000)
+            try:
+                page.wait_for_selector(".calendarwrapper", timeout=TIMEOUT_MS)
+            except Exception:
+                pass
+            page.wait_for_timeout(1000)
+
+            raw_events = page.evaluate(
+                """() => {
+                    const events = [];
+                    for (const node of document.querySelectorAll(".calendarwrapper .event")) {
+                        const courseId = node.getAttribute("data-course-id") || "";
+                        const eventId = node.getAttribute("data-event-id") || "";
+                        const component = node.getAttribute("data-event-component") || "";
+                        const eventtype = node.getAttribute("data-event-eventtype") || "";
+                        const title = (node.querySelector("h3.name")?.textContent || "").trim();
+                        // O link "time=TIMESTAMP" carrega o instante do evento (Unix seconds)
+                        const timeLink = node.querySelector('a[href*="time="]');
+                        let timestamp = null;
+                        if (timeLink) {
+                            const m = timeLink.getAttribute("href").match(/time=(\\d+)/);
+                            if (m) timestamp = parseInt(m[1], 10);
+                        }
+                        const courseLink = node.querySelector('a[href*="/course/view.php"]');
+                        const courseName = courseLink ? courseLink.textContent.trim() : "";
+                        const description = (node.querySelector(".description-content")?.innerText || "").trim();
+                        const actionLink = node.querySelector(".card-footer a.card-link")?.getAttribute("href") || "";
+                        events.push({
+                            courseId, eventId, component, eventtype,
+                            title, timestamp, courseName, description, actionLink,
+                        });
+                    }
+                    return events;
+                }"""
+            )
+        finally:
+            page.close()
+
+        return self._normalize_calendar_events(raw_events, course_id_to_subject, moodle_base)
+
+    @staticmethod
+    def _normalize_calendar_events(
+        raw_events: list[dict],
+        course_id_to_subject: dict[str, str],
+        moodle_base: str,
+    ) -> list[dict]:
+        """
+        Converte eventos brutos do calendário Moodle para o formato canônico.
+        Filtra eventos sem timestamp e mapeia component → tipo.
+        """
+        normalized: list[dict] = []
+        for ev in raw_events:
+            ts = ev.get("timestamp")
+            if not ts:
+                continue
+            dt_local = datetime.fromtimestamp(int(ts), tz=TZ_BR)
+            event_type = COMPONENT_TYPE_MAP.get(ev.get("component", ""), "other")
+
+            # Prefere o nome de disciplina mapeado via SSO; fallback no rótulo do calendário
+            course_id = str(ev.get("courseId", ""))
+            subject_name = course_id_to_subject.get(course_id) or ev.get("courseName") or "Disciplina"
+
+            description = (ev.get("description") or "").strip()
+
+            # URL: link direto da atividade (mod/assign, mod/quiz, ...) com fallback
+            # para a URL do curso. Permite ao usuário pular direto para o portal.
+            url = ev.get("actionLink") or (
+                f"{moodle_base}/course/view.php?id={course_id}" if course_id else None
+            )
+
+            normalized.append({
                 "id": str(uuid.uuid4()),
-                "name": link_info["name"],
-                "content": content,
+                "title": ev.get("title") or "Evento",
+                "date": dt_local.strftime("%Y-%m-%d"),
+                "time": dt_local.strftime("%H:%M"),
+                "description": description[:500],
+                "subject": subject_name,
+                "type": event_type,
+                "synced": False,
+                "source": "moodle_calendar",
+                "url": url,
             })
 
-        return subjects
+        # Ordena por data/hora crescente
+        normalized.sort(key=lambda e: (e["date"], e["time"] or ""))
+        return normalized
 
-    async def _login(self, page: Page, username: str, password: str) -> None:
+    @staticmethod
+    def _extract_moodle_text(page: Page) -> str:
         """
-        Navega até o portal e preenche o formulário de login.
-
-        O portal UNOESC é um sistema próprio; os campos de login ficam em um
-        formulário padrão com os identificadores '#j_username' e '#j_password'.
-        Após login bem-sucedido, o painel carrega uma navbar com classe
-        '.navbar-inverse' e um 'div#content' com o painel principal.
+        Extrai texto relevante da página do curso no Moodle.
+        Foca em #region-main (área principal). Inclui a URL e título do curso
+        como cabeçalho, para o LLM ter contexto.
         """
-        await page.goto(PORTAL_URL, wait_until="domcontentloaded")
+        title = page.title()
+        url = page.url
 
-        # Aguarda o campo de usuário aparecer para garantir que a página carregou
-        await page.wait_for_selector("#j_username", timeout=TIMEOUT_MS)
-
-        # Preenche usuário e senha
-        await page.fill("#j_username", username)
-        await page.fill("#j_password", password)
-
-        # Clica no botão de submissão do formulário de login
-        await page.click("input[type='submit'], button[type='submit']")
-
-        # Aguarda o redirecionamento para o painel após o login
-        try:
-            # O painel possui uma navbar com '.navbar-inverse' e um 'div#content'
-            await page.wait_for_selector(".navbar-inverse, #content", timeout=TIMEOUT_MS)
-            print("[Scraper] Login bem-sucedido, navegando para disciplinas...")
-        except PlaywrightTimeoutError as exc:
-            # Se não chegou ao painel, verifica se há mensagem de erro de login
-            error_msg = await self._get_login_error(page)
-            if error_msg:
-                raise PermissionError(f"Credenciais inválidas: {error_msg}") from exc
-            raise PermissionError("Falha no login: o portal não respondeu como esperado.") from exc
-
-    async def _get_login_error(self, page: Page) -> Optional[str]:
-        """Tenta capturar a mensagem de erro exibida pelo portal após falha no login."""
-        try:
-            # O portal exibe erros dentro de elementos com a classe 'jive-error-box' ou similar
-            error_element = await page.query_selector(".jive-error-box, .error-message, .alert-error")
-            if error_element:
-                return await error_element.inner_text()
-        except Exception:
-            pass
-        return None
-
-    async def _get_subject_links(self, page: Page) -> list[dict]:
-        """
-        Extrai os links e nomes de todas as disciplinas matriculadas.
-
-        No portal UNOESC, as disciplinas EAD ficam disponíveis na página
-        '/academico/portal/modules/ead/aulaOnlineAcademico.jspa'. O método
-        navega até essa página e procura por links de disciplinas/turmas.
-        Se nenhum link específico for encontrado, retorna a própria página
-        como uma única "disciplina" de fallback.
-        """
-        subject_links = []
-
-        print("[Scraper] Navegando para a página de disciplinas EAD...")
-        await page.goto(EAD_URL, wait_until="domcontentloaded")
-
-        try:
-            # Aguarda o conteúdo principal carregar
-            await page.wait_for_selector("#content, body", timeout=TIMEOUT_MS)
-
-            # Procura por links de disciplinas/turmas: padrões com /ead/ ou /community/
-            links = await page.query_selector_all(
-                "a[href*='/ead/'], a[href*='/community/']"
-            )
-
-            for link in links:
-                href = await link.get_attribute("href")
-                name = (await link.inner_text()).strip()
-                if href and name:
-                    # Normaliza URL relativa para absoluta usando BASE_URL
-                    if href.startswith("/"):
-                        href = BASE_URL + href
-                    subject_links.append({"name": name, "url": href})
-
-        except PlaywrightTimeoutError:
-            # Página não carregou no tempo esperado
-            pass
-
-        if not subject_links:
-            # Fallback: retorna a própria página EAD como uma única "disciplina"
-            print("[Scraper] Nenhum link de disciplina encontrado; usando fallback para página EAD.")
-            subject_links = [{"name": "Aula on-line EAD", "url": EAD_URL}]
-
-        print(f"[Scraper] {len(subject_links)} disciplina(s) encontrada(s).")
-        return subject_links
-
-    async def _extract_subject_content(self, page: Page, url: str) -> str:
-        """
-        Navega para a página de uma disciplina e extrai todo o texto relevante.
-
-        Busca conteúdo na área principal da página (#content), que no portal
-        UNOESC contém avisos, atividades e materiais da disciplina.
-        Como fallback, extrai o conteúdo do body inteiro.
-        """
-        try:
-            await page.goto(url, wait_until="domcontentloaded")
-
-            # Aguarda o conteúdo principal da disciplina carregar
-            await page.wait_for_selector(
-                "#content, #mainbar, body",
-                timeout=TIMEOUT_MS,
-            )
-
-            # Extrai o texto da área principal da página da disciplina
-            content_element = await page.query_selector("#content")
-
-            if content_element:
-                # Pega todo o conteúdo da área principal do portal
-                text = (await content_element.inner_text()).strip()
-            else:
-                # Fallback: extrai o body inteiro se #content não existir
-                body_element = await page.query_selector("body")
-                text = (await body_element.inner_text()).strip() if body_element else ""
-
-            return text
-
-        except PlaywrightTimeoutError:
-            # Conteúdo não carregou no tempo esperado; retorna string vazia
-            return ""
-        except Exception:
-            return ""
+        main_text = page.evaluate(
+            """
+            () => {
+                const main = document.querySelector("#region-main") || document.querySelector("main") || document.body;
+                return main.innerText || "";
+            }
+            """
+        )
+        # Compacta espaços em branco múltiplos
+        main_text = re.sub(r"\n{3,}", "\n\n", main_text).strip()
+        header = f"# {title}\nURL: {url}\n\n"
+        return header + main_text

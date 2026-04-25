@@ -26,10 +26,11 @@ export interface AcademicEvent {
   subject: string;
   type: EventType;
   synced?: boolean;     // Indica se já foi sincronizado com o Google Calendar
+  url?: string;         // Link direto pro evento no portal (Moodle)
 }
 
 /** Resposta do endpoint /api/scrape */
 export interface ScrapeResponse {
   subjects: Subject[];
-  events: AcademicEvent[];
+  calendar_events: AcademicEvent[];
 }

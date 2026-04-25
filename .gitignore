@@ -1,3 +1,15 @@
+# Banco SQLite local (cada instalação tem o seu)
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# Saída de scripts de debug do scraper
+debug_output/
+debug_output_moodle/
+debug_output_calendar/
+debug_output_pipeline/
+
 # Python
 __pycache__/
 *.py[cod]
@@ -38,6 +50,9 @@ service_account.json
 *.swp
 *.swo
 *~
+
+# Claude Code (configurações locais da IDE/assistente)
+.claude/
 
 # OS
 .DS_Store
