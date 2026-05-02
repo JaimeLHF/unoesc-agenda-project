@@ -8,9 +8,12 @@ Aplicação web que automatiza a busca de atividades acadêmicas (webconferênci
 - **Login automático** no portal acadêmico via Playwright
 - **SSO automático** para o Moodle e leitura do calendário consolidado
 - **Detecção de webconferências** no texto de cada disciplina via Google Gemini
+- **Assistente de IA** para resolver atividades e provas (Gemini gratuito ou Claude pago)
+- **Respostas de provas** — extrai automaticamente as questões do quiz e retorna as respostas
 - **Cache local** em SQLite — abre sem refazer scraping
 - **Marcar como concluído**, **alertas de eventos próximos** e **link direto** pra cada atividade no portal
 - **Sincronização com Google Calendar** via popup OAuth (sem secrets no servidor)
+- **Responsivo** — funciona no celular
 
 ---
 
@@ -101,42 +104,78 @@ A Gemini API é usada para encontrar webconferências no texto das disciplinas. 
 
 ## 🤖 Configurando o Assistente de IA
 
-O app possui um assistente de IA integrado que ajuda a resolver atividades e provas. Ele suporta **dois provedores**:
+O app possui um **assistente de IA integrado** que ajuda a resolver atividades acadêmicas e provas. Você pode escolher entre dois provedores — basta configurar uma variável no `backend/.env`.
 
-### Opção 1: Gemini (gratuito)
+### Comparação de provedores
 
-Já configurado se você seguiu o passo anterior. No `backend/.env`:
+| | **Gemini (Google)** | **Claude (Anthropic)** |
+| --- | --- | --- |
+| **Custo** | Gratuito (com limites) | Pago (~R$ 0,03 por consulta no Haiku) |
+| **Limite diário** | 1.500 req/dia (gemini-2.0-flash) | Sem limite (enquanto tiver crédito) |
+| **Qualidade** | Boa para a maioria das atividades | Excelente, especialmente em questões complexas |
+| **Modelo recomendado** | `gemini-2.0-flash` | `claude-haiku-4-5-20251001` (rápido e barato) |
+| **Custo mensal estimado** | R$ 0 | R$ 5–15 (uso moderado de estudante) |
+| **Precisa de cartão?** | Não | Sim (para adicionar créditos) |
 
-```
+> **Dica**: comece com o Gemini (grátis). Se as respostas não estiverem boas ou a cota estourar, mude para o Claude.
+
+### Opção 1: Gemini (gratuito) — Recomendado para começar
+
+Se você já configurou a Gemini API no passo anterior, o assistente já funciona. Só certifique-se de usar o modelo com mais cota:
+
+```env
+GEMINI_API_KEY=AIzaSy...sua_chave
+GEMINI_MODEL=gemini-2.0-flash
 AI_PROVIDER=gemini
 ```
 
-> Recomendamos `GEMINI_MODEL=gemini-2.0-flash` (1500 req/dia grátis). O `gemini-2.5-flash` tem limite de apenas 20 req/dia.
+> ⚠️ **Não use** `gemini-2.5-flash` para o assistente — ele tem limite de apenas 20 requisições/dia. O `gemini-2.0-flash` tem 1.500 req/dia grátis.
 
 ### Opção 2: Claude / Anthropic (pago, melhor qualidade)
 
-1. Crie uma conta em [console.anthropic.com](https://console.anthropic.com/)
-2. Gere uma API key em **API Keys**
-3. No `backend/.env`:
+1. Acesse [console.anthropic.com](https://console.anthropic.com/) e crie uma conta
+2. Vá em **Settings → API Keys** e crie uma nova chave
+3. Adicione créditos em **Settings → Billing** (mínimo: $5 USD)
+4. No `backend/.env`, adicione:
 
-```
+```env
 AI_PROVIDER=claude
-ANTHROPIC_API_KEY=sk-ant-...sua_chave
+ANTHROPIC_API_KEY=sk-ant-api03-...sua_chave_aqui
 CLAUDE_MODEL=claude-haiku-4-5-20251001
 ```
 
-4. Instale a dependência (se não rodou `setup.sh` recentemente):
+5. Instale o pacote (necessário apenas na primeira vez ou se não rodou `setup.sh` recentemente):
 ```bash
 cd backend && source .venv/bin/activate && pip install anthropic
 ```
 
-> **Custo estimado**: Claude Haiku custa ~$0.005 por consulta. Uso típico de estudante: menos de $2/mês.
+**Modelos disponíveis do Claude (do mais barato ao mais caro):**
 
-### Como funciona
+| Modelo | Custo por consulta | Quando usar |
+| --- | --- | --- |
+| `claude-haiku-4-5-20251001` | ~R$ 0,03 | Quizzes, perguntas objetivas — rápido e barato |
+| `claude-sonnet-4-6` | ~R$ 0,15 | Atividades dissertativas, textos complexos |
 
-1. Abra um evento e clique em **"🤖 Pedir ajuda à IA"**
-2. O assistente acessa o Moodle, extrai o conteúdo da atividade e abre um chat
-3. Para provas: clique em **"📝 Respostas"**, cole o link da tentativa iniciada, e receba as respostas diretas
+### Como trocar de provedor
+
+Basta alterar `AI_PROVIDER` no `backend/.env` e reiniciar o backend:
+
+```env
+# Para usar Gemini:
+AI_PROVIDER=gemini
+
+# Para usar Claude:
+AI_PROVIDER=claude
+```
+
+### Como usar o assistente
+
+1. Abra qualquer evento e clique em **"🤖 Pedir ajuda à IA"**
+2. O sistema acessa o Moodle automaticamente, extrai o conteúdo completo da atividade e abre um chat
+3. Pergunte o que quiser — a IA tem acesso ao enunciado, critérios e materiais da atividade
+4. **Para provas/quizzes**: clique no botão **"📝 Respostas"**, cole o link da tentativa iniciada no navegador, e receba todas as respostas de uma vez
+
+> ⚠️ **Importante**: para provas, você precisa **iniciar a tentativa no Moodle primeiro** (no seu navegador). Só depois de iniciar, copie a URL (algo como `https://on.unoesc.edu.br/mod/quiz/attempt.php?attempt=123&cmid=456`) e cole no campo que aparece ao clicar "Respostas".
 
 ---
 

@@ -75,19 +75,74 @@ Ou seja: se você só precisa ver prazos e datas de avaliação, pode usar o app
 
 ---
 
-## 3. Configurando o Google Calendar (OAuth)
+## 3. Configurando o Assistente de IA (resolver atividades)
+
+O assistente de IA permite resolver atividades e provas diretamente pelo app. Ele suporta dois provedores: **Gemini** (grátis) e **Claude** (pago, melhor qualidade).
+
+### 3.1. Usando Gemini (grátis)
+
+Se você já configurou a `GEMINI_API_KEY` no passo 2, basta garantir que o modelo é o `gemini-2.0-flash` (maior cota gratuita):
+
+```
+GEMINI_MODEL=gemini-2.0-flash
+AI_PROVIDER=gemini
+```
+
+> O `gemini-2.0-flash` tem **1.500 requisições/dia** grátis. O `gemini-2.5-flash` tem apenas 20/dia — evite usá-lo para o assistente.
+
+### 3.2. Usando Claude (pago)
+
+Para melhor qualidade nas respostas:
+
+1. Acesse [console.anthropic.com](https://console.anthropic.com/) e crie uma conta
+2. Vá em **Settings → API Keys** → crie uma chave
+3. Adicione créditos em **Settings → Billing** (mínimo $5 USD, dura meses com uso normal)
+4. No `backend/.env`:
+
+```
+AI_PROVIDER=claude
+ANTHROPIC_API_KEY=sk-ant-api03-...sua_chave
+CLAUDE_MODEL=claude-haiku-4-5-20251001
+```
+
+5. Instale o pacote:
+```bash
+cd backend
+source .venv/bin/activate
+pip install anthropic
+```
+
+### 3.3. Custos estimados
+
+| Provedor | Modelo | Custo por consulta | Custo mensal estimado |
+| --- | --- | --- | --- |
+| Gemini | `gemini-2.0-flash` | R$ 0 (grátis até 1500/dia) | R$ 0 |
+| Claude | `claude-haiku-4-5-20251001` | ~R$ 0,03 | R$ 5–15 |
+| Claude | `claude-sonnet-4-6` | ~R$ 0,15 | R$ 20–50 |
+
+### 3.4. Como trocar de provedor
+
+Altere `AI_PROVIDER` no `backend/.env` e reinicie o backend:
+
+```
+AI_PROVIDER=gemini   # ou claude
+```
+
+---
+
+## 4. Configurando o Google Calendar (OAuth)
 
 A sincronização com o Google Calendar é feita via popup OAuth no navegador. Você precisa criar um **Client ID** no Google Cloud Console. Não há Client Secret nem redirect URI — fica tudo no frontend.
 
-### 3.1. Criar um novo projeto
+### 4.1. Criar um novo projeto
 
 Acesse **https://console.cloud.google.com/** e clique no seletor de projeto no topo → **"Novo projeto"**. Nome sugerido: `unoesc-agenda`.
 
-### 3.2. Habilitar a Google Calendar API
+### 4.2. Habilitar a Google Calendar API
 
 No menu lateral, vá em **APIs e Serviços → Biblioteca**, busque por *"Google Calendar API"* e clique em **"Ativar"**.
 
-### 3.3. Configurar a Tela de consentimento OAuth
+### 4.3. Configurar a Tela de consentimento OAuth
 
 **APIs e Serviços → Tela de consentimento OAuth**:
 
@@ -96,13 +151,13 @@ No menu lateral, vá em **APIs e Serviços → Biblioteca**, busque por *"Google
 - **E-mail de suporte**: o seu
 - **E-mail do desenvolvedor**: o seu
 
-### 3.4. Adicionar Test Users
+### 4.4. Adicionar Test Users
 
 Na mesma tela de consentimento, role até **"Test users"** e adicione **seu e-mail Google** (e o de qualquer colega que vai usar o app).
 
 > ⚠️ Apenas e-mails listados aqui podem usar a sincronização. Se um colega tentar e não estiver na lista, o popup do Google vai bloquear a autenticação.
 
-### 3.5. Criar o OAuth Client ID
+### 4.5. Criar o OAuth Client ID
 
 **APIs e Serviços → Credenciais → + Criar credenciais → ID do cliente OAuth 2.0**:
 
@@ -114,11 +169,11 @@ Na mesma tela de consentimento, role até **"Test users"** e adicione **seu e-ma
 
 > ⚠️ **Atenção**: a origem `http://localhost:5180` **precisa** estar cadastrada aqui. Sem ela, o popup de autenticação do Google será bloqueado e a sincronização com o Calendar não vai funcionar. Se você mudar a porta do Vite, atualize aqui também.
 
-### 3.6. Copiar o Client ID
+### 4.6. Copiar o Client ID
 
 A janela final mostra o **Client ID** gerado. Copie ele todo (termina com `.apps.googleusercontent.com`).
 
-### 3.7. Colar em `frontend/.env`
+### 4.7. Colar em `frontend/.env`
 
 ```
 VITE_GOOGLE_CLIENT_ID=000000000000-xxxxxxxxxxxx.apps.googleusercontent.com
@@ -128,9 +183,9 @@ Salve o arquivo. Se o `npm run dev` já estava rodando, **reinicie** — o Vite 
 
 ---
 
-## 4. Rodando a aplicação
+## 5. Rodando a aplicação
 
-### 4.1. Forma rápida (um comando só)
+### 5.1. Forma rápida (um comando só)
 
 Sobe backend + frontend em paralelo com um único comando:
 
@@ -149,7 +204,7 @@ Ctrl+C encerra os dois processos. Você deve ver as URLs:
 - Backend: `http://localhost:8880`
 - Frontend: `http://localhost:5180`
 
-### 4.2. Forma manual (dois terminais separados)
+### 5.2. Forma manual (dois terminais separados)
 
 Se preferir controlar cada processo individualmente:
 
@@ -168,13 +223,13 @@ cd frontend
 npm run dev
 ```
 
-### 4.3. Acessar no navegador
+### 5.3. Acessar no navegador
 
 Abra **http://localhost:5180**. Se chegar até a tela de login, está tudo certo.
 
 ---
 
-## 5. Solução de problemas comuns
+## 6. Solução de problemas comuns
 
 ### Venv criado no Windows não funciona no WSL
 
