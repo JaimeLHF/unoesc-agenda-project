@@ -34,12 +34,14 @@ def upsert_subjects(session: Session, subjects: list[dict]) -> None:
         stmt = sqlite_insert(Subject).values(
             name=s["name"],
             content=s.get("content"),
+            dof=s.get("dof"),
             updated_at=datetime.utcnow(),
         )
         stmt = stmt.on_conflict_do_update(
             index_elements=[Subject.name],
             set_={
                 "content": stmt.excluded.content,
+                "dof": stmt.excluded.dof,
                 "updated_at": datetime.utcnow(),
             },
         )

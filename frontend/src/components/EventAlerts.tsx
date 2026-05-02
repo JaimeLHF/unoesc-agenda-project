@@ -6,6 +6,8 @@ import { useDoneEvents } from '../contexts/DoneEventsContext';
 interface EventAlertsProps {
   events: AcademicEvent[];
   maxAlerts?: number;
+  onOpenPortal?: (subjectName: string, targetUrl?: string) => Promise<{ ssoUrl: string; targetUrl?: string } | null>;
+  onAskAi?: (event: AcademicEvent) => void;
 }
 
 type Urgency = 'today' | 'tomorrow' | 'soon' | 'week';
@@ -90,7 +92,7 @@ function buildMessage(alert: Alert): { icon: string; text: string } {
   }
 }
 
-const EventAlerts: React.FC<EventAlertsProps> = ({ events, maxAlerts = 6 }) => {
+const EventAlerts: React.FC<EventAlertsProps> = ({ events, maxAlerts = 6, onOpenPortal, onAskAi }) => {
   const [openEvent, setOpenEvent] = useState<AcademicEvent | null>(null);
   const { isDone } = useDoneEvents();
 
@@ -125,7 +127,7 @@ const EventAlerts: React.FC<EventAlertsProps> = ({ events, maxAlerts = 6 }) => {
         })}
       </ul>
 
-      <EventModal event={openEvent} onClose={() => setOpenEvent(null)} />
+      <EventModal event={openEvent} onClose={() => setOpenEvent(null)} onOpenPortal={onOpenPortal} onAskAi={onAskAi} />
     </section>
   );
 };

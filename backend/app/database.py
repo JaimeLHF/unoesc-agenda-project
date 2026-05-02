@@ -42,6 +42,7 @@ class Subject(Base):
 
     name: Mapped[str] = mapped_column(String, primary_key=True)
     content: Mapped[Optional[str]] = mapped_column(Text)
+    dof: Mapped[Optional[str]] = mapped_column(String)  # ID usado p/ gerar SSO pro Moodle
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
     )

@@ -40,6 +40,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, loading, error }) => {
             disabled={loading}
             required
             autoComplete="username"
+            className="input-blurred"
           />
         </div>
 

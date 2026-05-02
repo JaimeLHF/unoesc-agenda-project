@@ -10,6 +10,8 @@ interface SubjectDetailProps {
   onSync: () => void;
   syncing: boolean;
   error?: string | null;
+  onOpenPortal?: (subjectName: string, targetUrl?: string) => Promise<{ ssoUrl: string; targetUrl?: string } | null>;
+  onAskAi?: (event: AcademicEvent) => void;
 }
 
 const SECTIONS: { type: EventType; label: string; emoji: string }[] = [
@@ -77,6 +79,8 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
   onSync,
   syncing,
   error,
+  onOpenPortal,
+  onAskAi,
 }) => {
   const [openEvent, setOpenEvent] = useState<AcademicEvent | null>(null);
   const [hideDone, setHideDone] = useState(false);
@@ -250,7 +254,7 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
         </div>
       )}
 
-      <EventModal event={openEvent} onClose={() => setOpenEvent(null)} />
+      <EventModal event={openEvent} onClose={() => setOpenEvent(null)} onOpenPortal={onOpenPortal} onAskAi={onAskAi} />
     </section>
   );
 };

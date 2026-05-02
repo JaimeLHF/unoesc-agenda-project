@@ -1,6 +1,6 @@
 /**
  * Serviço de comunicação com a API FastAPI do backend UNOESC Agenda.
- * Todas as chamadas são feitas para http://localhost:8000 (redirecionadas
+ * Todas as chamadas são feitas para http://localhost:8880 (redirecionadas
  * via proxy do Vite para evitar problemas de CORS durante o desenvolvimento).
  */
 
@@ -9,7 +9,8 @@ import type { LoginCredentials, Subject, AcademicEvent, ScrapeResponse } from '.
 
 // Instância do Axios apontando para o backend FastAPI
 const api = axios.create({
-  baseURL: '/api', // O proxy do Vite redireciona /api → http://localhost:8000
+  baseURL: '/api', // O proxy do Vite redireciona /api → http://localhost:8880
+  timeout: 300_000, // 5 min — scraping de quiz multi-página pode demorar
   headers: {
     'Content-Type': 'application/json',
   },
@@ -123,4 +124,64 @@ export async function unmarkEventDone(stableKey: string): Promise<string[]> {
 /** Apaga o cache local (subjects, events, meta). Done events são preservados. */
 export async function clearCache(): Promise<void> {
   await api.delete('/cache');
+}
+
+/**
+ * Extrai o conteúdo completo de uma atividade do Moodle (enunciado, critérios).
+ */
+export async function fetchActivityContent(
+  username: string,
+  password: string,
+  subjectName: string,
+  activityUrl: string,
+): Promise<string> {
+  const { data } = await api.post<{ content: string }>('/activity-content', {
+    username,
+    password,
+    subject_name: subjectName,
+    activity_url: activityUrl,
+  });
+  return data.content;
+}
+
+export interface AiMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+/**
+ * Envia mensagens pro Gemini com contexto da atividade e retorna a resposta.
+ */
+export async function askAiHelp(
+  activityContent: string,
+  activityTitle: string,
+  subjectName: string,
+  messages: AiMessage[],
+): Promise<string> {
+  const { data } = await api.post<{ response: string }>('/ai-help', {
+    activity_content: activityContent,
+    activity_title: activityTitle,
+    subject_name: subjectName,
+    messages,
+  });
+  return data.response;
+}
+
+/**
+ * Gera um link SSO fresco para abrir o Moodle da disciplina.
+ * Retorna sso_url (cria sessão) e target_url (atividade específica).
+ */
+export async function openCourse(
+  username: string,
+  password: string,
+  subjectName: string,
+  targetUrl?: string,
+): Promise<{ ssoUrl: string; targetUrl?: string }> {
+  const { data } = await api.post<{ sso_url: string; target_url?: string }>('/open-course', {
+    username,
+    password,
+    subject_name: subjectName,
+    target_url: targetUrl,
+  });
+  return { ssoUrl: data.sso_url, targetUrl: data.target_url ?? undefined };
 }

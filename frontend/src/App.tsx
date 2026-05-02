@@ -2,19 +2,21 @@ import React, { useEffect, useState } from 'react';
 import LoginForm from './components/LoginForm';
 import SubjectList from './components/SubjectList';
 import SubjectDetail from './components/SubjectDetail';
+import AiHelper from './components/AiHelper';
 import {
   scrapePortal,
   parseEvents,
   syncToCalendar,
   fetchCache,
   clearCache,
+  openCourse,
 } from './services/api';
 import { requestGoogleAccessToken } from './services/googleAuth';
 import { useDoneEvents } from './contexts/DoneEventsContext';
 import type { Subject, AcademicEvent, LoginCredentials } from './types';
 import './index.css';
 
-type AppStep = 'login' | 'loading' | 'results';
+type AppStep = 'login' | 'results' | 'ai-helper';
 
 const App: React.FC = () => {
   const [step, setStep] = useState<AppStep>('login');
@@ -25,6 +27,8 @@ const App: React.FC = () => {
   const [lastScrapedAt, setLastScrapedAt] = useState<string | null>(null);
   // Credenciais em memória — só durante a sessão. Permite refresh sem relogar.
   const [credentials, setCredentials] = useState<LoginCredentials | null>(null);
+
+  const [aiHelperEvent, setAiHelperEvent] = useState<AcademicEvent | null>(null);
 
   const [loadingMessage, setLoadingMessage] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -84,16 +88,19 @@ const App: React.FC = () => {
   };
 
   /** Login inicial — captura credenciais e busca dados. */
+  const [loginLoading, setLoginLoading] = useState(false);
+
   const handleLogin = async (creds: LoginCredentials) => {
     setLoginError(null);
-    setStep('loading');
+    setLoginLoading(true);
 
     try {
       await fetchAll(creds);
       setCredentials(creds);
+      setLoginLoading(false);
       setStep('results');
     } catch (err: unknown) {
-      setStep('login');
+      setLoginLoading(false);
       setLoginError(
         err instanceof Error ? err.message : 'Ocorreu um erro inesperado. Tente novamente.',
       );
@@ -171,6 +178,34 @@ const App: React.FC = () => {
     }
   };
 
+  /** Gera link SSO fresco pro Moodle da disciplina (login automático). */
+  const handleOpenPortal = async (
+    subjectName: string,
+    targetUrl?: string,
+  ): Promise<{ ssoUrl: string; targetUrl?: string } | null> => {
+    if (!credentials) {
+      alert('Faça login novamente para abrir o portal.');
+      return null;
+    }
+    try {
+      return await openCourse(credentials.username, credentials.password, subjectName, targetUrl);
+    } catch (err) {
+      console.error('Erro ao gerar link SSO:', err);
+      alert('Não foi possível abrir o portal. Tente novamente.');
+      return null;
+    }
+  };
+
+  /** Abre a tela de assistente IA para uma atividade. */
+  const handleAskAi = (event: AcademicEvent) => {
+    if (!credentials) {
+      alert('Faça login novamente para usar o assistente de IA.');
+      return;
+    }
+    setAiHelperEvent(event);
+    setStep('ai-helper');
+  };
+
   const selectedSubject = subjects.find((s) => s.id === selectedSubjectId) ?? null;
   const eventsForSelected = selectedSubject
     ? events.filter((e) => e.subject === selectedSubject.name)
@@ -188,16 +223,16 @@ const App: React.FC = () => {
       {backendOffline && (
         <div className="backend-offline-banner" role="alert">
           ⚠️ Sem conexão com o servidor. Confira se o backend (uvicorn) está rodando em
-          {' '}<code>http://localhost:8000</code>.
+          {' '}<code>http://localhost:8880</code>.
         </div>
       )}
 
       <main className="app-main">
         {step === 'login' && (
-          <LoginForm onSubmit={handleLogin} loading={false} error={loginError} />
+          <LoginForm onSubmit={handleLogin} loading={loginLoading} error={loginError} />
         )}
 
-        {step === 'loading' && (
+        {step === 'login' && loginLoading && (
           <div className="loading-screen">
             <div className="loading-spinner" aria-label="Carregando" />
             <p className="loading-message">{loadingMessage}</p>
@@ -215,6 +250,8 @@ const App: React.FC = () => {
             onLogout={handleLogout}
             onClearCache={handleClearCache}
             lastScrapedAt={lastScrapedAt}
+            onOpenPortal={handleOpenPortal}
+            onAskAi={handleAskAi}
           />
         )}
 
@@ -229,6 +266,19 @@ const App: React.FC = () => {
             onSync={() => handleSyncSubject(selectedSubject.name)}
             syncing={syncing}
             error={syncError}
+            onOpenPortal={handleOpenPortal}
+            onAskAi={handleAskAi}
+          />
+        )}
+
+        {step === 'ai-helper' && aiHelperEvent && credentials && (
+          <AiHelper
+            event={aiHelperEvent}
+            credentials={credentials}
+            onBack={() => {
+              setAiHelperEvent(null);
+              setStep('results');
+            }}
           />
         )}
       </main>

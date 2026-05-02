@@ -19,13 +19,16 @@ cd unoesc-agenda-project
 .\setup.ps1
 ```
 
-**Linux / macOS:**
+**Linux / macOS / WSL:**
 
 ```bash
-chmod +x setup.sh && ./setup.sh
+make setup
+# ou diretamente: chmod +x setup.sh && ./setup.sh
 ```
 
 O script cria o `venv`, instala as dependências, baixa o Chromium do Playwright e cria os arquivos `.env`. Aguarde até ver "Setup concluído!".
+
+> ⚠️ **WSL**: se você já rodou `.\setup.ps1` no Windows antes, o venv criado não funciona no WSL. Apague com `rm -rf backend/.venv` e rode `./setup.sh` novamente.
 
 ---
 
@@ -59,6 +62,16 @@ Salve o arquivo.
 ### 2.5. Se aparecer erro `SERVICE_DISABLED`
 
 Na primeira execução, pode ser que precise habilitar a API explicitamente. O erro mostra um link tipo `https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=ID`. Abra e clique em **"Ativar"**. Espere 1-2 minutos.
+
+### 2.6. E se eu não configurar o Gemini?
+
+A aplicação funciona **parcialmente** sem a chave do Gemini:
+
+| O que funciona | O que NÃO funciona |
+| --- | --- |
+| Eventos do **calendário do Moodle** (prazos, provas, entregas) — dados estruturados extraídos direto do HTML | **Webconferências** e eventos mencionados apenas no corpo de texto das disciplinas — dependem da IA para serem identificados |
+
+Ou seja: se você só precisa ver prazos e datas de avaliação, pode usar o app normalmente sem Gemini. Mas para ter a visão completa (incluindo encontros síncronos/lives), configure a chave.
 
 ---
 
@@ -95,10 +108,11 @@ Na mesma tela de consentimento, role até **"Test users"** e adicione **seu e-ma
 
 - **Tipo de aplicativo**: Aplicativo da Web
 - **Nome**: qualquer um (ex: `Agenda UNOESC Web`)
-- **Origens JavaScript autorizadas** (adicione **as duas**):
-  - `http://localhost:5173`
-  - `http://localhost:5174`
+- **Origens JavaScript autorizadas** (**obrigatório**):
+  - `http://localhost:5180`
 - **URIs de redirecionamento autorizados**: deixe vazio
+
+> ⚠️ **Atenção**: a origem `http://localhost:5180` **precisa** estar cadastrada aqui. Sem ela, o popup de autenticação do Google será bloqueado e a sincronização com o Calendar não vai funcionar. Se você mudar a porta do Vite, atualize aqui também.
 
 ### 3.6. Copiar o Client ID
 
@@ -116,42 +130,62 @@ Salve o arquivo. Se o `npm run dev` já estava rodando, **reinicie** — o Vite 
 
 ## 4. Rodando a aplicação
 
-### 4.1. Terminal 1 — Backend
+### 4.1. Forma rápida (um comando só)
 
-**Windows:**
+Sobe backend + frontend em paralelo com um único comando:
 
-```powershell
-cd backend
-.venv\Scripts\activate
-uvicorn app.main:app --reload --port 8000
+**Linux / WSL / macOS:**
+```bash
+make dev
+# ou diretamente: ./dev.sh
 ```
 
-**Linux / macOS:**
+**Windows (PowerShell):**
+```powershell
+.\dev.ps1
+```
+
+Ctrl+C encerra os dois processos. Você deve ver as URLs:
+- Backend: `http://localhost:8880`
+- Frontend: `http://localhost:5180`
+
+### 4.2. Forma manual (dois terminais separados)
+
+Se preferir controlar cada processo individualmente:
+
+**Terminal 1 — Backend:**
 
 ```bash
 cd backend
-source .venv/bin/activate
-uvicorn app.main:app --reload --port 8000
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+uvicorn app.main:app --reload --port 8880
 ```
 
-Você deve ver `Uvicorn running on http://127.0.0.1:8000`.
-
-### 4.2. Terminal 2 — Frontend
+**Terminal 2 — Frontend:**
 
 ```bash
 cd frontend
 npm run dev
 ```
 
-Você deve ver `Local: http://localhost:5173/`.
-
 ### 4.3. Acessar no navegador
 
-Abra **http://localhost:5173**. Se chegar até a tela de login, está tudo certo. 🎉
+Abra **http://localhost:5180**. Se chegar até a tela de login, está tudo certo.
 
 ---
 
 ## 5. Solução de problemas comuns
+
+### Venv criado no Windows não funciona no WSL
+
+O `.venv` é específico do sistema operacional. Se você criou pelo Windows e tenta usar no WSL (ou vice-versa), vai dar erro. Solução:
+
+```bash
+rm -rf backend/.venv
+./setup.sh
+```
+
+### Outros problemas
 
 Veja o [README → Troubleshooting](../README.md#-troubleshooting) para erros frequentes.
 

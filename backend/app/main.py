@@ -15,7 +15,7 @@ from pydantic import BaseModel
 
 from app import repository as repo
 from app.calendar_sync import CalendarSyncService
-from app.database import init_db, stable_event_key
+from app.database import Subject as SubjectDB, init_db, stable_event_key
 from app.parser import ParserService
 from app.scraper import ScraperService
 
@@ -117,8 +117,8 @@ def _startup() -> None:
     """Cria as tabelas SQLite na primeira vez que o app sobe."""
     init_db()
 
-# Permite requisições do servidor de desenvolvimento Vite (5173/5174 — o Vite
-# escolhe a próxima porta livre se 5173 estiver ocupada)
+# Permite requisições do servidor de desenvolvimento Vite (porta padrão 5180,
+# regex aceita qualquer 51xx caso o Vite caia para a próxima porta livre).
 app.add_middleware(
     CORSMiddleware,
     allow_origin_regex=r"http://localhost:51\d{2}",
@@ -351,6 +351,208 @@ async def clear_cache():
         repo.clear_cache(session)
         session.commit()
     return {"status": "ok", "message": "Cache limpo. Faça login para recarregar os dados."}
+
+
+class AiHelpMessage(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+
+class AiHelpRequest(BaseModel):
+    """Requisição para pedir ajuda da IA sobre uma atividade."""
+    activity_content: str
+    activity_title: str
+    subject_name: str
+    messages: list[AiHelpMessage]  # histórico da conversa
+
+
+def _build_system_prompt(request: AiHelpRequest) -> str:
+    return f"""Você é um assistente acadêmico direto e eficiente. Seu papel é ajudar o aluno a resolver a atividade da forma mais completa e objetiva possível.
+
+Atividade: "{request.activity_title}"
+Disciplina: "{request.subject_name}"
+
+Conteúdo completo da atividade (extraído do Moodle):
+\"\"\"
+{request.activity_content[:50000]}
+\"\"\"
+
+REGRAS:
+- Forneça as respostas de forma clara e direta
+- Se for um quiz com alternativas, indique a resposta correta e explique brevemente o porquê
+- Se for uma atividade dissertativa, escreva a resposta completa que o aluno pode usar como base
+- Sempre justifique brevemente a resposta para que o aluno entenda o raciocínio
+- Use linguagem clara em português brasileiro
+- Formate com markdown quando útil (listas, negrito, código)
+- Se não tiver informação suficiente para responder, peça mais detalhes ao aluno
+"""
+
+
+def _call_gemini(system_prompt: str, messages: list[AiHelpMessage]) -> str:
+    from google import genai
+    from google.genai import types as genai_types
+
+    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
+
+    contents = []
+    for msg in messages:
+        role = "user" if msg.role == "user" else "model"
+        contents.append(genai_types.Content(
+            role=role,
+            parts=[genai_types.Part(text=msg.content)],
+        ))
+
+    response = client.models.generate_content(
+        model=model,
+        contents=contents,
+        config=genai_types.GenerateContentConfig(
+            system_instruction=system_prompt,
+        ),
+    )
+    return (response.text or "").strip()
+
+
+def _call_claude(system_prompt: str, messages: list[AiHelpMessage]) -> str:
+    import anthropic
+
+    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+    model = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
+
+    api_messages = []
+    for msg in messages:
+        api_messages.append({"role": msg.role, "content": msg.content})
+
+    response = client.messages.create(
+        model=model,
+        max_tokens=4096,
+        system=system_prompt,
+        messages=api_messages,
+    )
+    return response.content[0].text
+
+
+@app.post("/api/ai-help")
+async def ai_help(request: AiHelpRequest):
+    """
+    Envia o conteúdo da atividade + histórico de conversa para a IA configurada
+    (Gemini ou Claude). Retorna a resposta.
+    """
+    provider = os.getenv("AI_PROVIDER", "gemini").lower()
+
+    if provider == "claude":
+        if not os.getenv("ANTHROPIC_API_KEY"):
+            raise HTTPException(
+                status_code=503,
+                detail="ANTHROPIC_API_KEY não configurada. Adicione em backend/.env.",
+            )
+    else:
+        if not os.getenv("GEMINI_API_KEY"):
+            raise HTTPException(
+                status_code=503,
+                detail="GEMINI_API_KEY não configurada. Adicione em backend/.env.",
+            )
+
+    system_prompt = _build_system_prompt(request)
+
+    try:
+        if provider == "claude":
+            answer = _call_claude(system_prompt, request.messages)
+        else:
+            answer = _call_gemini(system_prompt, request.messages)
+
+        if not answer:
+            answer = "Desculpe, não consegui gerar uma resposta. Tente reformular sua pergunta."
+        return {"response": answer}
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erro ao consultar IA: {exc}") from exc
+
+
+class ActivityContentRequest(BaseModel):
+    """Requisição para extrair conteúdo de uma atividade do Moodle."""
+    username: str
+    password: str
+    subject_name: str
+    activity_url: str
+
+
+@app.post("/api/activity-content")
+async def get_activity_content(request: ActivityContentRequest):
+    """
+    Faz login no Moodle via SSO e extrai o conteúdo completo da página
+    da atividade (enunciado, instruções, critérios de avaliação).
+    """
+    with repo.get_session() as session:
+        subject = session.get(SubjectDB, request.subject_name)
+        if not subject or not subject.dof:
+            raise HTTPException(
+                status_code=404,
+                detail="Disciplina não encontrada ou sem código de acesso.",
+            )
+        dof = subject.dof
+
+    try:
+        scraper = ScraperService()
+        content = await asyncio.to_thread(
+            scraper.fetch_activity_content,
+            request.username, request.password, dof, request.activity_url,
+        )
+        if not content:
+            raise HTTPException(
+                status_code=502,
+                detail="Não foi possível extrair o conteúdo da atividade.",
+            )
+        return {"content": content}
+    except PermissionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erro ao extrair conteúdo: {exc}") from exc
+
+
+class OpenCourseRequest(BaseModel):
+    """Requisição para gerar link SSO pro Moodle."""
+    username: str
+    password: str
+    subject_name: str
+    target_url: Optional[str] = None  # URL da atividade específica (mod/quiz, mod/assign, etc.)
+
+
+@app.post("/api/open-course")
+async def open_course(request: OpenCourseRequest):
+    """
+    Faz login rápido no portal e gera um link SSO fresco para o Moodle
+    da disciplina solicitada. Retorna o SSO url + target url para o frontend
+    fazer o redirect em sequência (SSO cria sessão → redirect pra atividade).
+    """
+    # Busca o dof da disciplina no banco
+    with repo.get_session() as session:
+        subject = session.get(SubjectDB, request.subject_name)
+        if not subject or not subject.dof:
+            raise HTTPException(
+                status_code=404,
+                detail="Disciplina não encontrada ou sem código de acesso (dof). Tente atualizar os dados.",
+            )
+        dof = subject.dof
+
+    try:
+        scraper = ScraperService()
+        sso_url = await asyncio.to_thread(
+            scraper.generate_sso_link, request.username, request.password, dof
+        )
+        if not sso_url:
+            raise HTTPException(
+                status_code=502,
+                detail="Não foi possível gerar o link de acesso ao Moodle.",
+            )
+        return {"sso_url": sso_url, "target_url": request.target_url}
+    except PermissionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Erro ao gerar link: {exc}") from exc
 
 
 @app.post("/api/sync-calendar", response_model=SyncCalendarResponse)

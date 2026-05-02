@@ -122,12 +122,12 @@ echo
 echo -e "     ${GRAY}Terminal 1 (backend):${NC}"
 echo "       cd backend"
 echo "       source .venv/bin/activate"
-echo "       uvicorn app.main:app --reload --port 8000"
+echo "       uvicorn app.main:app --reload --port 8880"
 echo
 echo -e "     ${GRAY}Terminal 2 (frontend):${NC}"
 echo "       cd frontend"
 echo "       npm run dev"
 echo
-echo "  4. Abra http://localhost:5173 no navegador"
+echo "  4. Abra http://localhost:5180 no navegador"
 echo
 echo "Veja README.md para o passo a passo completo de obter as chaves."

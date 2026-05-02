@@ -13,6 +13,8 @@ interface SubjectListProps {
   onLogout: () => void;
   onClearCache: () => void;
   lastScrapedAt?: string | null;
+  onOpenPortal?: (subjectName: string, targetUrl?: string) => Promise<{ ssoUrl: string; targetUrl?: string } | null>;
+  onAskAi?: (event: AcademicEvent) => void;
 }
 
 /** Formata "X minutos atrás" / "ontem" a partir de um timestamp ISO. */
@@ -93,6 +95,8 @@ const SubjectList: React.FC<SubjectListProps> = ({
   onLogout,
   onClearCache,
   lastScrapedAt,
+  onOpenPortal,
+  onAskAi,
 }) => {
   const { isDone } = useDoneEvents();
   const lastScrapedRel = formatRelative(lastScrapedAt);
@@ -144,7 +148,7 @@ const SubjectList: React.FC<SubjectListProps> = ({
         </div>
       )}
 
-      <EventAlerts events={events} />
+      <EventAlerts events={events} onOpenPortal={onOpenPortal} onAskAi={onAskAi} />
 
       {subjects.length === 0 ? (
         <div className="empty-state">Nenhuma disciplina encontrada no portal.</div>

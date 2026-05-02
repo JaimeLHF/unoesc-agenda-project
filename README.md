@@ -95,6 +95,49 @@ A Gemini API é usada para encontrar webconferências no texto das disciplinas. 
 
 5. **Importante**: pode ser que precise habilitar a Gemini API explicitamente na primeira vez. Se ao testar o app você receber erro `SERVICE_DISABLED`, abra o link que aparece na mensagem (algo como `https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=ID_DO_PROJETO`) e clique em **"Ativar"**.
 
+> ⚠️ **Sem a chave do Gemini**, a aplicação ainda funciona parcialmente: eventos com data definida do **calendário do Moodle** (prazos de entrega, provas, etc.) continuam sendo exibidos normalmente. Porém, **webconferências e eventos mencionados apenas no texto** das disciplinas não serão detectados — essa extração depende exclusivamente da IA.
+
+---
+
+## 🤖 Configurando o Assistente de IA
+
+O app possui um assistente de IA integrado que ajuda a resolver atividades e provas. Ele suporta **dois provedores**:
+
+### Opção 1: Gemini (gratuito)
+
+Já configurado se você seguiu o passo anterior. No `backend/.env`:
+
+```
+AI_PROVIDER=gemini
+```
+
+> Recomendamos `GEMINI_MODEL=gemini-2.0-flash` (1500 req/dia grátis). O `gemini-2.5-flash` tem limite de apenas 20 req/dia.
+
+### Opção 2: Claude / Anthropic (pago, melhor qualidade)
+
+1. Crie uma conta em [console.anthropic.com](https://console.anthropic.com/)
+2. Gere uma API key em **API Keys**
+3. No `backend/.env`:
+
+```
+AI_PROVIDER=claude
+ANTHROPIC_API_KEY=sk-ant-...sua_chave
+CLAUDE_MODEL=claude-haiku-4-5-20251001
+```
+
+4. Instale a dependência (se não rodou `setup.sh` recentemente):
+```bash
+cd backend && source .venv/bin/activate && pip install anthropic
+```
+
+> **Custo estimado**: Claude Haiku custa ~$0.005 por consulta. Uso típico de estudante: menos de $2/mês.
+
+### Como funciona
+
+1. Abra um evento e clique em **"🤖 Pedir ajuda à IA"**
+2. O assistente acessa o Moodle, extrai o conteúdo da atividade e abre um chat
+3. Para provas: clique em **"📝 Respostas"**, cole o link da tentativa iniciada, e receba as respostas diretas
+
 ---
 
 ## 📅 Configurando o Google Calendar (OAuth)
@@ -110,10 +153,9 @@ A sincronização com o Google Calendar acontece **no navegador** via Google Ide
    - Em **"Test users"**, adicione seu e-mail Google (e o de qualquer colega que vai testar)
 5. **APIs e Serviços** → **Credenciais** → **+ Criar credenciais** → **ID do cliente OAuth 2.0**:
    - Tipo de aplicativo: **"Aplicativo da Web"**
-   - Em **"Origens JavaScript autorizadas"** adicione **as duas URLs** abaixo (o Vite alterna entre elas se uma estiver ocupada):
+   - Em **"Origens JavaScript autorizadas"** adicione a URL abaixo (**obrigatório** — sem isso o popup do Google é bloqueado):
      ```
-     http://localhost:5173
-     http://localhost:5174
+     http://localhost:5180
      ```
 6. Copie o **Client ID** gerado e cole em `frontend/.env`:
 
@@ -127,40 +169,54 @@ A sincronização com o Google Calendar acontece **no navegador** via Google Ide
 
 ## ▶️ Rodando a aplicação
 
-Você precisa de **dois terminais** abertos (um pro backend, um pro frontend):
+### Forma rápida (recomendada)
 
-### Terminal 1 — Backend (FastAPI)
+Um único comando sobe backend + frontend em paralelo:
 
-**Windows:**
-
-```powershell
-cd backend
-.venv\Scripts\activate
-uvicorn app.main:app --reload --port 8000
+**Linux / WSL / macOS:**
+```bash
+make dev
+# ou diretamente: ./dev.sh
 ```
 
-**Linux / macOS:**
+**Windows (PowerShell):**
+```powershell
+.\dev.ps1
+```
+
+Ctrl+C encerra os dois processos.
+
+> ⚠️ **WSL**: se o venv foi criado no Windows, ele não funciona no WSL. Apague e recrie:
+> ```bash
+> rm -rf backend/.venv
+> ./setup.sh
+> ```
+
+### Forma manual (dois terminais)
+
+Se preferir rodar cada serviço separadamente:
+
+**Terminal 1 — Backend (FastAPI):**
 
 ```bash
 cd backend
-source .venv/bin/activate
-uvicorn app.main:app --reload --port 8000
+source .venv/bin/activate   # Windows: .venv\Scripts\activate
+uvicorn app.main:app --reload --port 8880
 ```
 
-API disponível em **http://localhost:8000** · Docs Swagger em **http://localhost:8000/docs**
-
-### Terminal 2 — Frontend (Vite)
+**Terminal 2 — Frontend (Vite):**
 
 ```bash
 cd frontend
 npm run dev
 ```
 
-Abre em **http://localhost:5173** (ou 5174 se a 5173 estiver ocupada).
+API disponível em **http://localhost:8880** · Docs Swagger em **http://localhost:8880/docs**
+Frontend em **http://localhost:5180**.
 
 ### Como usar
 
-1. Acesse `http://localhost:5173` no navegador.
+1. Acesse `http://localhost:5180` no navegador.
 2. Faça login com seu **usuário (matrícula/CPF) + senha** do portal UNOESC.
 3. Aguarde 1-2 minutos enquanto o app:
    - Loga no portal
@@ -180,8 +236,11 @@ Abre em **http://localhost:5173** (ou 5174 se a 5173 estiver ocupada).
 
 | Variável | Obrigatória | Descrição |
 | --- | --- | --- |
-| `GEMINI_API_KEY` | **Sim** | Chave da Gemini API. [Como obter](#-configurando-o-gemini-extração-de-eventos-por-ia). |
-| `GEMINI_MODEL` | Não | Modelo Gemini. Padrão: `gemini-2.5-flash`. |
+| `GEMINI_API_KEY` | Opcional | Chave da Gemini API. Necessária para detectar webconferências e para o assistente IA (se `AI_PROVIDER=gemini`). [Como obter](#-configurando-o-gemini-extração-de-eventos-por-ia). |
+| `GEMINI_MODEL` | Não | Modelo Gemini. Padrão: `gemini-2.5-flash`. Recomendado: `gemini-2.0-flash` (1500 req/dia grátis). |
+| `AI_PROVIDER` | Não | Provedor do assistente de IA: `gemini` (padrão) ou `claude`. |
+| `ANTHROPIC_API_KEY` | Apenas se `AI_PROVIDER=claude` | Chave da API Anthropic. [Como obter](https://console.anthropic.com/). |
+| `CLAUDE_MODEL` | Não | Modelo Claude. Padrão: `claude-haiku-4-5-20251001`. |
 
 ### `frontend/.env`
 
@@ -245,7 +304,12 @@ A aplicação usa **SQLite** com SQLAlchemy. O arquivo `backend/agenda.db` é cr
 
 Eventos antigos **não** são removidos quando o scraper roda de novo — preserva histórico mesmo depois que somem do calendário do Moodle.
 
-Para resetar o banco: apague o arquivo `backend/agenda.db` e faça login novamente.
+Para resetar o banco:
+```bash
+make clean
+# ou manualmente: rm -f backend/agenda.db
+```
+Depois faça login novamente para recarregar os dados.
 
 ---
 
@@ -263,7 +327,7 @@ A Gemini API ainda não foi habilitada no seu projeto Google. A mensagem de erro
 ### Botão "Sincronizar com Google Calendar" não funciona
 - Verifique se o `VITE_GOOGLE_CLIENT_ID` está em `frontend/.env` (não em `.env.example`!).
 - Reinicie o `npm run dev` depois de criar/editar o `.env` (Vite só lê na inicialização).
-- Confirme que `http://localhost:5173` (e 5174) estão em **Origens JavaScript autorizadas** no Google Cloud Console.
+- Confirme que `http://localhost:5180` está em **Origens JavaScript autorizadas** no Google Cloud Console.
 - Confirme que seu e-mail Google está adicionado como **Test user** na Tela de Consentimento OAuth.
 
 ### Login no portal UNOESC falha
@@ -275,6 +339,13 @@ Algumas disciplinas só têm conteúdo após a data de início (ex: começam em 
 
 ### O `tsc` reclama de algum tipo
 Reinstale as deps do frontend: `cd frontend && rm -rf node_modules && npm install`.
+
+### Venv criado no Windows não funciona no WSL
+O `.venv` é específico do sistema operacional. Se você criou pelo Windows (`.venv\Scripts\`) e tenta usar no WSL, vai dar erro. Solução:
+```bash
+rm -rf backend/.venv
+./setup.sh
+```
 
 ### Banner "Sem conexão com o servidor"
 O backend (uvicorn) está parado ou caiu. Sobe ele de novo no terminal do backend e o banner some automaticamente.
