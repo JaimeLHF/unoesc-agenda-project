@@ -16,8 +16,34 @@ const api = axios.create({
   },
 });
 
+/* -------------------------------------------------------------------------
+ * Sessão
+ *
+ * A senha vai para o backend uma única vez, em /api/login, e o que fica no
+ * navegador é um token opaco. Ele mora só em memória — nada de localStorage,
+ * que sobreviveria ao fechar a aba e ficaria exposto a XSS. O custo é que um
+ * reload da página exige login de novo, exatamente como já acontecia quando
+ * as credenciais viviam em state do React.
+ * ----------------------------------------------------------------------- */
+
+let authToken: string | null = null;
+
+export function isAuthenticated(): boolean {
+  return authToken !== null;
+}
+
+// Anexa o token em toda requisição que sair depois do login
+api.interceptors.request.use((config) => {
+  if (authToken) {
+    config.headers.Authorization = `Bearer ${authToken}`;
+  }
+  return config;
+});
+
 // Detector simples de "backend offline": dispara CustomEvents no `window`
-// que App.tsx escuta para mostrar/ocultar um banner.
+// que App.tsx escuta para mostrar/ocultar um banner. Um 401 significa sessão
+// expirada — avisa a app para voltar à tela de login em vez de deixar o
+// usuário preso numa tela que não responde mais.
 api.interceptors.response.use(
   (response) => {
     window.dispatchEvent(new CustomEvent('backend-online'));
@@ -29,19 +55,37 @@ api.interceptors.response.use(
       window.dispatchEvent(new CustomEvent('backend-offline'));
     } else {
       window.dispatchEvent(new CustomEvent('backend-online'));
+      if (error.response.status === 401) {
+        authToken = null;
+        window.dispatchEvent(new CustomEvent('session-expired'));
+      }
     }
     return Promise.reject(error);
   },
 );
 
+/** Autentica no portal UNOESC e guarda o token da sessão. */
+export async function login(credentials: LoginCredentials): Promise<void> {
+  const { data } = await api.post<{ token: string }>('/login', credentials);
+  authToken = data.token;
+}
+
+/** Encerra a sessão no backend e descarta o token local. */
+export async function logout(): Promise<void> {
+  try {
+    if (authToken) await api.post('/logout');
+  } finally {
+    authToken = null;
+  }
+}
+
 /**
- * Faz login no portal UNOESC e retorna as disciplinas com conteúdo extraído
- * + eventos já estruturados do calendário Moodle.
+ * Extrai as disciplinas com conteúdo + eventos já estruturados do calendário
+ * Moodle. Exige sessão ativa.
  */
-export async function scrapePortal(credentials: LoginCredentials): Promise<ScrapeResponse> {
+export async function scrapePortal(): Promise<ScrapeResponse> {
   const { data } = await api.post<{ subjects: Subject[]; calendar_events: AcademicEvent[] }>(
     '/scrape',
-    credentials,
   );
   return { subjects: data.subjects, calendar_events: data.calendar_events ?? [] };
 }
@@ -130,14 +174,10 @@ export async function clearCache(): Promise<void> {
  * Extrai o conteúdo completo de uma atividade do Moodle (enunciado, critérios).
  */
 export async function fetchActivityContent(
-  username: string,
-  password: string,
   subjectName: string,
   activityUrl: string,
 ): Promise<string> {
   const { data } = await api.post<{ content: string }>('/activity-content', {
-    username,
-    password,
     subject_name: subjectName,
     activity_url: activityUrl,
   });
@@ -172,14 +212,10 @@ export async function askAiHelp(
  * Retorna sso_url (cria sessão) e target_url (atividade específica).
  */
 export async function openCourse(
-  username: string,
-  password: string,
   subjectName: string,
   targetUrl?: string,
 ): Promise<{ ssoUrl: string; targetUrl?: string }> {
   const { data } = await api.post<{ sso_url: string; target_url?: string }>('/open-course', {
-    username,
-    password,
     subject_name: subjectName,
     target_url: targetUrl,
   });

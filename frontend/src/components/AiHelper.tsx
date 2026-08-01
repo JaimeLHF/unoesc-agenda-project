@@ -5,13 +5,12 @@ import type { AiMessage } from '../services/api';
 
 interface AiHelperProps {
   event: AcademicEvent;
-  credentials: { username: string; password: string };
   onBack: () => void;
 }
 
 type LoadingState = 'idle' | 'loading-content' | 'sending';
 
-const AiHelper: React.FC<AiHelperProps> = ({ event, credentials, onBack }) => {
+const AiHelper: React.FC<AiHelperProps> = ({ event, onBack }) => {
   const [activityContent, setActivityContent] = useState<string>('');
   const [contentLoading, setContentLoading] = useState<LoadingState>('idle');
   const [contentError, setContentError] = useState<string | null>(null);
@@ -29,7 +28,7 @@ const AiHelper: React.FC<AiHelperProps> = ({ event, credentials, onBack }) => {
       return;
     }
     setContentLoading('loading-content');
-    fetchActivityContent(credentials.username, credentials.password, event.subject, event.url)
+    fetchActivityContent(event.subject, event.url)
       .then((content) => {
         setActivityContent(content);
         setContentLoading('idle');
@@ -39,7 +38,7 @@ const AiHelper: React.FC<AiHelperProps> = ({ event, credentials, onBack }) => {
         setContentError('Não foi possível carregar o conteúdo da atividade.');
         setContentLoading('idle');
       });
-  }, [event, credentials]);
+  }, [event]);
 
   // Scroll pro final do chat quando novas mensagens chegam
   useEffect(() => {
@@ -68,9 +67,7 @@ const AiHelper: React.FC<AiHelperProps> = ({ event, credentials, onBack }) => {
 
     setContentLoading('loading-content');
     try {
-      const content = await fetchActivityContent(
-        credentials.username, credentials.password, event.subject, url
-      );
+      const content = await fetchActivityContent(event.subject, url);
       if (!content) {
         setMessages([
           ...updatedMessages,
@@ -109,9 +106,7 @@ const AiHelper: React.FC<AiHelperProps> = ({ event, credentials, onBack }) => {
   const handleFetchUrl = async (url: string, updatedMessages: AiMessage[]) => {
     setContentLoading('loading-content');
     try {
-      const content = await fetchActivityContent(
-        credentials.username, credentials.password, event.subject, url
-      );
+      const content = await fetchActivityContent(event.subject, url);
       if (content) {
         setActivityContent(content);
         // Agora pede as respostas automaticamente com o novo conteúdo

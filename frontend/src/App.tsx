@@ -4,6 +4,8 @@ import SubjectList from './components/SubjectList';
 import SubjectDetail from './components/SubjectDetail';
 import AiHelper from './components/AiHelper';
 import {
+  login,
+  logout,
   scrapePortal,
   parseEvents,
   syncToCalendar,
@@ -25,8 +27,10 @@ const App: React.FC = () => {
   const [events, setEvents] = useState<AcademicEvent[]>([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState<string | null>(null);
   const [lastScrapedAt, setLastScrapedAt] = useState<string | null>(null);
-  // Credenciais em memória — só durante a sessão. Permite refresh sem relogar.
-  const [credentials, setCredentials] = useState<LoginCredentials | null>(null);
+  // A senha não fica mais aqui: vai uma vez pro backend em /api/login, que
+  // devolve um token guardado dentro de services/api. Aqui basta saber se a
+  // sessão está ativa.
+  const [authenticated, setAuthenticated] = useState(false);
 
   const [aiHelperEvent, setAiHelperEvent] = useState<AcademicEvent | null>(null);
 
@@ -45,11 +49,20 @@ const App: React.FC = () => {
   useEffect(() => {
     const onOnline = () => setBackendOffline(false);
     const onOffline = () => setBackendOffline(true);
+    // O backend respondeu 401: o token caiu (expirou, ou o backend reiniciou).
+    // Volta pro login em vez de deixar a tela travada em erro.
+    const onSessionExpired = () => {
+      setAuthenticated(false);
+      setStep('login');
+      setLoginError('Sua sessão expirou. Faça login novamente.');
+    };
     window.addEventListener('backend-online', onOnline);
     window.addEventListener('backend-offline', onOffline);
+    window.addEventListener('session-expired', onSessionExpired);
     return () => {
       window.removeEventListener('backend-online', onOnline);
       window.removeEventListener('backend-offline', onOffline);
+      window.removeEventListener('session-expired', onSessionExpired);
     };
   }, []);
 
@@ -75,9 +88,9 @@ const App: React.FC = () => {
   }, []);
 
   /** Faz scrape + parse e popula subjects/events. Usado no login e no refresh. */
-  const fetchAll = async (creds: LoginCredentials) => {
+  const fetchAll = async () => {
     setLoadingMessage('Acessando o portal UNOESC…');
-    const scrapeResult = await scrapePortal(creds);
+    const scrapeResult = await scrapePortal();
 
     setLoadingMessage('Identificando eventos com IA…');
     const mergedEvents = await parseEvents(scrapeResult.subjects, scrapeResult.calendar_events);
@@ -95,8 +108,9 @@ const App: React.FC = () => {
     setLoginLoading(true);
 
     try {
-      await fetchAll(creds);
-      setCredentials(creds);
+      await login(creds);
+      setAuthenticated(true);
+      await fetchAll();
       setLoginLoading(false);
       setStep('results');
     } catch (err: unknown) {
@@ -109,7 +123,7 @@ const App: React.FC = () => {
 
   /** Re-busca disciplinas e eventos. Pede login novamente se não tiver credenciais. */
   const handleRefresh = async () => {
-    if (!credentials) {
+    if (!authenticated) {
       // Veio do cache — precisa logar de novo pra fazer scraping
       setStep('login');
       setLoginError('Faça login novamente para atualizar os dados.');
@@ -119,7 +133,7 @@ const App: React.FC = () => {
     setRefreshing(true);
     setSelectedSubjectId(null);
     try {
-      await fetchAll(credentials);
+      await fetchAll();
     } catch (err) {
       console.error('Erro ao atualizar disciplinas:', err);
       setRefreshError(err instanceof Error ? err.message : 'Falha ao atualizar.');
@@ -128,9 +142,10 @@ const App: React.FC = () => {
     }
   };
 
-  /** Logout: volta para a tela de login e limpa estado sensível. */
+  /** Logout: encerra a sessão no backend e limpa o estado local. */
   const handleLogout = () => {
-    setCredentials(null);
+    void logout();
+    setAuthenticated(false);
     setSubjects([]);
     setEvents([]);
     setSelectedSubjectId(null);
@@ -183,12 +198,12 @@ const App: React.FC = () => {
     subjectName: string,
     targetUrl?: string,
   ): Promise<{ ssoUrl: string; targetUrl?: string } | null> => {
-    if (!credentials) {
+    if (!authenticated) {
       alert('Faça login novamente para abrir o portal.');
       return null;
     }
     try {
-      return await openCourse(credentials.username, credentials.password, subjectName, targetUrl);
+      return await openCourse(subjectName, targetUrl);
     } catch (err) {
       console.error('Erro ao gerar link SSO:', err);
       alert('Não foi possível abrir o portal. Tente novamente.');
@@ -198,7 +213,7 @@ const App: React.FC = () => {
 
   /** Abre a tela de assistente IA para uma atividade. */
   const handleAskAi = (event: AcademicEvent) => {
-    if (!credentials) {
+    if (!authenticated) {
       alert('Faça login novamente para usar o assistente de IA.');
       return;
     }
@@ -271,10 +286,9 @@ const App: React.FC = () => {
           />
         )}
 
-        {step === 'ai-helper' && aiHelperEvent && credentials && (
+        {step === 'ai-helper' && aiHelperEvent && authenticated && (
           <AiHelper
             event={aiHelperEvent}
-            credentials={credentials}
             onBack={() => {
               setAiHelperEvent(null);
               setStep('results');

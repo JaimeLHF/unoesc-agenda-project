@@ -36,6 +36,7 @@ jobs:
         run: |
           python -c "from app.database import init_db, Base, Subject, Event, DoneEvent, Meta"
           python -c "from app import repository"
+          python -c "from app import session"
           python -c "from app.scraper import ScraperService, current_semester"
           python -c "from app.calendar_sync import CalendarSyncService"
           python -c "from app.parser import ParserService"

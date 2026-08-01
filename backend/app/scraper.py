@@ -210,6 +210,18 @@ class ScraperService:
         data = response.json()
         return (data or {}).get("url")
 
+    def login(self, username: str, password: str) -> None:
+        """
+        Valida as credenciais no portal e deixa a sessão aquecida no cache.
+
+        Usado por `/api/login`: o custo do login é pago uma vez aqui e as
+        chamadas seguintes reaproveitam os cookies.
+
+        Lança PermissionError se as credenciais forem inválidas.
+        """
+        with self._authenticated(username, password):
+            pass
+
     def run(self, username: str, password: str) -> dict:
         """
         Executa o fluxo completo: login → disciplinas → conteúdo + calendário.

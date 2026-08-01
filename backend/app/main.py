@@ -9,11 +9,12 @@ import os
 from contextlib import asynccontextmanager
 from typing import Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 from app import repository as repo
+from app import session as app_session
 from app.calendar_sync import CalendarSyncService
 from app.database import Subject as SubjectDB, init_db, stable_event_key, utc_now
 from app.parser import ParserService
@@ -24,9 +25,14 @@ from app.scraper import ScraperService, clear_session_cache
 # ---------------------------------------------------------------------------
 
 class LoginCredentials(BaseModel):
-    """Credenciais do portal UNOESC."""
+    """Credenciais do portal UNOESC. Enviadas uma única vez, em /api/login."""
     username: str
     password: str
+
+
+class LoginResponse(BaseModel):
+    """Token que substitui as credenciais nas chamadas seguintes."""
+    token: str
 
 
 class SubjectModel(BaseModel):
@@ -133,6 +139,62 @@ app.add_middleware(
 )
 
 # ---------------------------------------------------------------------------
+# Autenticação
+# ---------------------------------------------------------------------------
+
+def require_session(
+    authorization: Optional[str] = Header(default=None),
+) -> app_session.PortalSession:
+    """
+    Resolve o token do header `Authorization: Bearer <token>`.
+
+    Dependência dos endpoints que precisam falar com o portal em nome do aluno.
+    """
+    token = ""
+    if authorization and authorization.lower().startswith("bearer "):
+        token = authorization[len("bearer "):].strip()
+
+    session = app_session.get(token)
+    if session is None:
+        raise HTTPException(
+            status_code=401,
+            detail="Sessão expirada ou inválida. Faça login novamente.",
+        )
+    return session
+
+
+@app.post("/api/login", response_model=LoginResponse)
+async def login(credentials: LoginCredentials):
+    """
+    Valida as credenciais no portal e devolve um token de sessão.
+
+    É o único endpoint que recebe a senha. A partir daqui o frontend usa o
+    token, e a senha não volta a trafegar nem fica guardada no navegador.
+    """
+    try:
+        scraper = ScraperService()
+        await asyncio.to_thread(
+            scraper.login, credentials.username, credentials.password
+        )
+    except PermissionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=500, detail=f"Erro ao autenticar no portal: {exc}"
+        ) from exc
+
+    return LoginResponse(token=app_session.create(credentials.username, credentials.password))
+
+
+@app.post("/api/logout", status_code=200)
+async def logout(authorization: Optional[str] = Header(default=None)):
+    """Encerra a sessão do token informado. Idempotente."""
+    if authorization and authorization.lower().startswith("bearer "):
+        app_session.revoke(authorization[len("bearer "):].strip())
+    return {"status": "ok"}
+
+
+# ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
 
@@ -191,16 +253,17 @@ async def health_check():
 
 
 @app.post("/api/scrape", response_model=ScrapeResponse)
-async def scrape_portal(credentials: LoginCredentials):
+async def scrape_portal(session: app_session.PortalSession = Depends(require_session)):
     """
-    Faz login no portal UNOESC, extrai disciplinas + calendário do Moodle,
-    e persiste tudo no banco local (cache).
+    Extrai disciplinas + calendário do Moodle e persiste tudo no banco local.
+
+    Usa as credenciais guardadas na sessão do token — nada de senha no corpo.
     """
     try:
         scraper = ScraperService()
         # Playwright sync precisa rodar fora do event loop do FastAPI
         result = await asyncio.to_thread(
-            scraper.run, credentials.username, credentials.password
+            scraper.run, session.username, session.password
         )
 
         # Persiste o cache: subjects + eventos do calendar
@@ -375,13 +438,15 @@ async def clear_cache():
     Apaga o cache local (subjects, events, meta). Mantém done_events para
     não perder o progresso do aluno ao limpar.
 
-    Descarta também a sessão do portal guardada em memória — limpar o cache
-    deve significar recomeçar do zero, inclusive o login.
+    Descarta também as sessões guardadas em memória (tokens emitidos e cookies
+    do portal) — limpar o cache deve significar recomeçar do zero, inclusive o
+    login.
     """
     with repo.get_session() as session:
         repo.clear_cache(session)
         session.commit()
     clear_session_cache()
+    app_session.revoke_all()
     return {"status": "ok", "message": "Cache limpo. Faça login para recarregar os dados."}
 
 
@@ -502,14 +567,15 @@ async def ai_help(request: AiHelpRequest):
 
 class ActivityContentRequest(BaseModel):
     """Requisição para extrair conteúdo de uma atividade do Moodle."""
-    username: str
-    password: str
     subject_name: str
     activity_url: str
 
 
 @app.post("/api/activity-content")
-async def get_activity_content(request: ActivityContentRequest):
+async def get_activity_content(
+    request: ActivityContentRequest,
+    session: app_session.PortalSession = Depends(require_session),
+):
     """
     Faz login no Moodle via SSO e extrai o conteúdo completo da página
     da atividade (enunciado, instruções, critérios de avaliação).
@@ -527,7 +593,7 @@ async def get_activity_content(request: ActivityContentRequest):
         scraper = ScraperService()
         content = await asyncio.to_thread(
             scraper.fetch_activity_content,
-            request.username, request.password, dof, request.activity_url,
+            session.username, session.password, dof, request.activity_url,
         )
         if not content:
             raise HTTPException(
@@ -545,14 +611,15 @@ async def get_activity_content(request: ActivityContentRequest):
 
 class OpenCourseRequest(BaseModel):
     """Requisição para gerar link SSO pro Moodle."""
-    username: str
-    password: str
     subject_name: str
     target_url: Optional[str] = None  # URL da atividade específica (mod/quiz, mod/assign, etc.)
 
 
 @app.post("/api/open-course")
-async def open_course(request: OpenCourseRequest):
+async def open_course(
+    request: OpenCourseRequest,
+    session: app_session.PortalSession = Depends(require_session),
+):
     """
     Faz login rápido no portal e gera um link SSO fresco para o Moodle
     da disciplina solicitada. Retorna o SSO url + target url para o frontend
@@ -571,7 +638,7 @@ async def open_course(request: OpenCourseRequest):
     try:
         scraper = ScraperService()
         sso_url = await asyncio.to_thread(
-            scraper.generate_sso_link, request.username, request.password, dof
+            scraper.generate_sso_link, session.username, session.password, dof
         )
         if not sso_url:
             raise HTTPException(
