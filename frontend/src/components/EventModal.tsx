@@ -203,8 +203,8 @@ const EventModal: React.FC<EventModalProps> = ({ event, onClose, onOpenPortal, o
 
 /** Remove espaços/tabs/nbsp do início e colapsa whitespace após bullets. */
 function normalizeLine(line: string): string {
-  const trimmed = line.replace(/^[\s ]+/, '');
-  return trimmed.replace(/^([·•\-*])[\s ]+/, '$1 ');
+  const trimmed = line.replace(/^[\s\u00A0]+/, '');
+  return trimmed.replace(/^([·•\-*])[\s\u00A0]+/, '$1 ');
 }
 
 /** Renderiza uma linha de texto convertendo URLs em links clicáveis. */

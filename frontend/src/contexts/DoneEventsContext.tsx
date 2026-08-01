@@ -6,6 +6,12 @@
  * sobrevive entre execuções.
  */
 
+/* eslint-disable react-refresh/only-export-components --
+   Padrão de contexto do React: além do provider, o arquivo exporta o hook
+   `useDoneEvents` e o helper `eventKey`. Quebrar em três arquivos só para
+   agradar o fast refresh espalharia o contexto sem ganho real — o custo é
+   um reload a mais ao editar este arquivo durante o desenvolvimento. */
+
 import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import type { AcademicEvent } from '../types';
 import { markEventDone, unmarkEventDone } from '../services/api';
