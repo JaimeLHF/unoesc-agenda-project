@@ -6,7 +6,7 @@ Configura o app, CORS e registra todos os endpoints REST da API.
 
 import asyncio
 import os
-from datetime import datetime
+from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI, HTTPException
@@ -15,9 +15,9 @@ from pydantic import BaseModel
 
 from app import repository as repo
 from app.calendar_sync import CalendarSyncService
-from app.database import Subject as SubjectDB, init_db, stable_event_key
+from app.database import Subject as SubjectDB, init_db, stable_event_key, utc_now
 from app.parser import ParserService
-from app.scraper import ScraperService
+from app.scraper import ScraperService, clear_session_cache
 
 # ---------------------------------------------------------------------------
 # Modelos de Requisição e Resposta (Pydantic)
@@ -105,17 +105,22 @@ class DoneEventsResponse(BaseModel):
 # Inicialização do app FastAPI
 # ---------------------------------------------------------------------------
 
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    """
+    Ciclo de vida do app. Substitui `@app.on_event("startup")`, deprecado no
+    FastAPI. O que vem antes do `yield` roda na subida; depois, no shutdown.
+    """
+    init_db()
+    yield
+
+
 app = FastAPI(
     title="UNOESC Agenda API",
     description="API para extração e sincronização de atividades acadêmicas da UNOESC.",
     version="1.0.0",
+    lifespan=lifespan,
 )
-
-
-@app.on_event("startup")
-def _startup() -> None:
-    """Cria as tabelas SQLite na primeira vez que o app sobe."""
-    init_db()
 
 # Permite requisições do servidor de desenvolvimento Vite (porta padrão 5180,
 # regex aceita qualquer 51xx caso o Vite caia para a próxima porta livre).
@@ -146,10 +151,15 @@ async def health_check():
     hints: list[str] = []
 
     # Playwright Chromium
-    try:
+    # A API síncrona do Playwright não pode ser usada dentro do loop asyncio —
+    # roda numa thread separada, como o scraper faz.
+    def _check_chromium() -> bool:
         from playwright.sync_api import sync_playwright
         with sync_playwright() as pw:
-            checks["playwright_chromium"] = pw.chromium.executable_path is not None
+            return os.path.exists(pw.chromium.executable_path)
+
+    try:
+        checks["playwright_chromium"] = await asyncio.to_thread(_check_chromium)
     except Exception:
         checks["playwright_chromium"] = False
 
@@ -198,7 +208,7 @@ async def scrape_portal(credentials: LoginCredentials):
             repo.upsert_subjects(session, result["subjects"])
             if result.get("calendar_events"):
                 repo.upsert_events(session, result["calendar_events"])
-            repo.set_meta(session, "last_scraped_at", datetime.utcnow().isoformat())
+            repo.set_meta(session, "last_scraped_at", utc_now().isoformat())
             session.commit()
 
         return ScrapeResponse(
@@ -230,22 +240,33 @@ def _dedupe_events(
     extraídos pelo Gemini (texto livre). Em caso de conflito, mantém o do
     calendário — datas/horários são exatos lá.
 
-    Heurística de dedup: mesma disciplina + mesma data → mesmo evento.
-    Evita duplicar uma "Atividade Avaliativa 1 - 22/03" extraída por LLM com
-    a "ENTREGA 1" do calendário Moodle (mesmo prazo).
+    Heurística de dedup: mesma disciplina + mesma data + mesmo tipo → mesmo
+    evento. Evita duplicar uma "Atividade Avaliativa 1 - 22/03" extraída por
+    LLM com a "ENTREGA 1" do calendário Moodle (mesmo prazo, ambos `deadline`),
+    sem descartar eventos de naturezas diferentes que caem no mesmo dia — uma
+    webconferência às 19h e uma entrega às 23:59 da mesma disciplina são dois
+    eventos, e a chave sem o tipo fazia o da webconferência sumir.
+
+    O título fica fora da chave de propósito: as duas fontes nomeiam a mesma
+    atividade de formas diferentes, que é justamente o caso que o dedup existe
+    para resolver.
     """
-    seen_keys: set[tuple[str, str]] = set()
+    seen_keys: set[tuple[str, str, str]] = set()
     merged: list[dict] = []
 
     # Calendário primeiro — tem prioridade
     for ev in calendar_events:
-        key = (ev.subject.strip().lower(), ev.date)
+        key = (ev.subject.strip().lower(), ev.date, ev.type)
         seen_keys.add(key)
         merged.append(ev.model_dump())
 
-    # Gemini só entra se a chave (disciplina+data) não existir
+    # Gemini só entra se a chave (disciplina+data+tipo) não existir
     for ev in gemini_events:
-        key = (ev.get("subject", "").strip().lower(), ev.get("date", ""))
+        key = (
+            ev.get("subject", "").strip().lower(),
+            ev.get("date", ""),
+            ev.get("type", "other"),
+        )
         if key in seen_keys:
             continue
         seen_keys.add(key)
@@ -268,11 +289,18 @@ async def parse_events(request: ParseEventsRequest):
         gemini_events = await parser.extract_events(request.subjects)
         merged = _dedupe_events(request.calendar_events, gemini_events)
 
-        # Persiste eventos consolidados no cache local
+        # Persiste eventos consolidados no cache local e reidrata o flag
+        # `synced` — sem isso, um refresh devolvia tudo como não-sincronizado
+        # e a próxima sincronização duplicava os eventos no Google Calendar.
         if merged:
             with repo.get_session() as session:
                 repo.upsert_events(session, merged)
                 session.commit()
+                synced_keys = set(repo.list_synced_keys(session))
+
+            for ev in merged:
+                key = stable_event_key(ev["subject"], ev["date"], ev["title"])
+                ev["synced"] = key in synced_keys
 
         return ParseEventsResponse(events=merged)
     except Exception as exc:
@@ -300,7 +328,7 @@ async def get_cache():
                 description=e.description or "",
                 subject=e.subject,
                 type=e.type,
-                synced=False,
+                synced=e.google_event_id is not None,
                 url=e.url,
             )
             for e in repo.list_events(session)
@@ -346,10 +374,14 @@ async def clear_cache():
     """
     Apaga o cache local (subjects, events, meta). Mantém done_events para
     não perder o progresso do aluno ao limpar.
+
+    Descarta também a sessão do portal guardada em memória — limpar o cache
+    deve significar recomeçar do zero, inclusive o login.
     """
     with repo.get_session() as session:
         repo.clear_cache(session)
         session.commit()
+    clear_session_cache()
     return {"status": "ok", "message": "Cache limpo. Faça login para recarregar os dados."}
 
 
@@ -560,10 +592,23 @@ async def sync_calendar(request: SyncCalendarRequest):
     """
     Recebe a lista de eventos e o token OAuth2 do Google e cria os eventos
     no Google Calendar do usuário.
+
+    Grava o ID de cada evento criado no banco — é o que faz o frontend lembrar
+    que o evento já foi sincronizado depois de um reload.
     """
     try:
         sync_service = CalendarSyncService(oauth_token=request.google_token)
-        synced_ids, links = await sync_service.sync_events(request.events)
-        return SyncCalendarResponse(synced_event_ids=synced_ids, calendar_links=links)
+        results = await sync_service.sync_events(request.events)
+
+        if results:
+            with repo.get_session() as session:
+                for r in results:
+                    repo.set_google_event_id(session, r["stable_key"], r["google_event_id"])
+                session.commit()
+
+        return SyncCalendarResponse(
+            synced_event_ids=[r["google_event_id"] for r in results],
+            calendar_links=[r["link"] for r in results],
+        )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Erro ao sincronizar com o Google Calendar: {exc}") from exc

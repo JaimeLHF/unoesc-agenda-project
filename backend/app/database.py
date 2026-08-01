@@ -5,12 +5,27 @@ A aplicação é local/single-user: cada instalação usa o próprio arquivo
 `agenda.db` no diretório do backend. Sem autenticação, sem multi-tenant.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
 from sqlalchemy import String, Text, DateTime, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
+
+
+def utc_now() -> datetime:
+    """
+    Instante atual em UTC, com timezone. Substitui `datetime.utcnow()`, que é
+    deprecado desde o Python 3.12 e devolvia um datetime ingênuo (sem tz) —
+    fonte clássica de erro de fuso ao serializar.
+
+    O SQLite descarta o offset ao gravar e devolve datetime ingênuo na leitura,
+    então o valor persistido continua sendo o mesmo de antes: hora de parede
+    em UTC. A diferença aparece no `.isoformat()`, que agora sai com `+00:00`
+    e é interpretado corretamente pelo `new Date()` do frontend.
+    """
+    return datetime.now(timezone.utc)
+
 
 # Arquivo do banco fica ao lado do package `app/`
 DB_PATH = Path(__file__).resolve().parent.parent / "agenda.db"
@@ -44,7 +59,7 @@ class Subject(Base):
     content: Mapped[Optional[str]] = mapped_column(Text)
     dof: Mapped[Optional[str]] = mapped_column(String)  # ID usado p/ gerar SSO pro Moodle
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=utc_now, onupdate=utc_now
     )
 
 
@@ -65,8 +80,13 @@ class Event(Base):
     type: Mapped[str] = mapped_column(String, nullable=False)        # webconference|deadline|exam|other
     source: Mapped[Optional[str]] = mapped_column(String)            # moodle_calendar | gemini
     url: Mapped[Optional[str]] = mapped_column(String)               # link direto pro evento no portal
+    # ID do evento correspondente no Google Calendar. Preenchido após uma
+    # sincronização bem-sucedida; é o que faz o frontend saber que o evento
+    # já foi sincronizado (antes disso o flag `synced` era sempre falso e
+    # re-sincronizar duplicava o evento na agenda do usuário).
+    google_event_id: Mapped[Optional[str]] = mapped_column(String)
     last_seen_at: Mapped[datetime] = mapped_column(
-        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow
+        DateTime, default=utc_now, onupdate=utc_now
     )
 
 
@@ -76,7 +96,7 @@ class DoneEvent(Base):
     __tablename__ = "done_events"
 
     stable_key: Mapped[str] = mapped_column(String, primary_key=True)
-    completed_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    completed_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 
 class Meta(Base):

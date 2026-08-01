@@ -5,14 +5,21 @@ Não tem lógica de negócio: só CRUD + upsert. Os endpoints do FastAPI
 chamam as funções daqui.
 """
 
-from datetime import datetime
 from typing import Iterable, Optional
 
-from sqlalchemy import delete, select
+from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
-from app.database import DoneEvent, Event, Meta, SessionLocal, Subject, stable_event_key
+from app.database import (
+    DoneEvent,
+    Event,
+    Meta,
+    SessionLocal,
+    Subject,
+    stable_event_key,
+    utc_now,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -35,14 +42,14 @@ def upsert_subjects(session: Session, subjects: list[dict]) -> None:
             name=s["name"],
             content=s.get("content"),
             dof=s.get("dof"),
-            updated_at=datetime.utcnow(),
+            updated_at=utc_now(),
         )
         stmt = stmt.on_conflict_do_update(
             index_elements=[Subject.name],
             set_={
                 "content": stmt.excluded.content,
                 "dof": stmt.excluded.dof,
-                "updated_at": datetime.utcnow(),
+                "updated_at": utc_now(),
             },
         )
         session.execute(stmt)
@@ -66,7 +73,7 @@ def upsert_events(session: Session, events: list[dict]) -> None:
             type=e["type"],
             source=e.get("source"),
             url=e.get("url"),
-            last_seen_at=datetime.utcnow(),
+            last_seen_at=utc_now(),
         )
         stmt = stmt.on_conflict_do_update(
             index_elements=[Event.stable_key],
@@ -78,10 +85,30 @@ def upsert_events(session: Session, events: list[dict]) -> None:
                 "type": stmt.excluded.type,
                 "source": stmt.excluded.source,
                 "url": stmt.excluded.url,
-                "last_seen_at": datetime.utcnow(),
+                "last_seen_at": utc_now(),
             },
         )
         session.execute(stmt)
+
+
+def set_google_event_id(session: Session, stable_key: str, google_event_id: str) -> None:
+    """
+    Registra o ID do evento criado no Google Calendar. É o que permite ao
+    frontend mostrar o evento como já sincronizado depois de um reload.
+    """
+    session.execute(
+        update(Event)
+        .where(Event.stable_key == stable_key)
+        .values(google_event_id=google_event_id)
+    )
+
+
+def list_synced_keys(session: Session) -> list[str]:
+    """`stable_key` de todo evento que já foi para o Google Calendar."""
+    rows = session.execute(
+        select(Event.stable_key).where(Event.google_event_id.is_not(None))
+    ).all()
+    return [r[0] for r in rows]
 
 
 def list_subjects(session: Session) -> list[Subject]:
@@ -108,7 +135,7 @@ def list_done_keys(session: Session) -> list[str]:
 def mark_done(session: Session, stable_key: str) -> None:
     """Idempotente — marcar duas vezes não dá erro."""
     stmt = sqlite_insert(DoneEvent).values(
-        stable_key=stable_key, completed_at=datetime.utcnow()
+        stable_key=stable_key, completed_at=utc_now()
     )
     stmt = stmt.on_conflict_do_nothing(index_elements=[DoneEvent.stable_key])
     session.execute(stmt)

@@ -14,12 +14,18 @@ Fluxo:
 Implementado com a API síncrona do Playwright para evitar incompatibilidades
 do asyncio com o uvicorn no Windows. O endpoint FastAPI deve invocar
 `ScraperService.run` via `asyncio.to_thread(...)`.
+
+Os cookies do portal são reaproveitados entre chamadas (ver `_authenticated`),
+então só o primeiro request de uma sessão paga o custo do login.
 """
 
+import hashlib
 import re
+import threading
 import uuid
+from contextlib import contextmanager
 from datetime import date, datetime, timedelta, timezone
-from typing import Optional
+from typing import Iterator, Optional
 from urllib.parse import urlparse
 
 from playwright.sync_api import sync_playwright, Page, Browser, BrowserContext
@@ -58,11 +64,151 @@ def current_semester(today: Optional[date] = None) -> str:
     return f"{today.year}/{1 if today.month <= 6 else 2}"
 
 
+# ---------------------------------------------------------------------------
+# Cache de sessão do portal
+# ---------------------------------------------------------------------------
+#
+# Cada chamada ao scraper abria um Chromium novo e refazia o login do zero.
+# Abrir uma atividade no assistente de IA custava um login inteiro; abrir três,
+# três logins. Guardamos os cookies do portal (`storage_state` do Playwright)
+# entre as chamadas e só relogamos quando a sessão realmente morreu.
+#
+# Fica só em memória de propósito — cookies de sessão não vão para o disco.
+# Reiniciar o backend descarta tudo e o próximo request faz login normalmente.
+
+# Tempo máximo que uma sessão fica no cache antes de ser descartada por idade.
+# É só um limite superior: a validade real é testada a cada uso.
+SESSION_MAX_AGE = timedelta(minutes=30)
+
+_session_cache: dict[str, dict] = {}
+_session_lock = threading.Lock()
+
+
+def _session_cache_key(username: str, password: str) -> str:
+    """
+    Identifica a sessão por usuário + hash da senha.
+
+    Incluir a senha (como hash, nunca em claro) garante que trocar de
+    credenciais force um login de verdade, em vez de reaproveitar a sessão
+    antiga e dar a impressão de que a senha nova foi aceita.
+    """
+    digest = hashlib.sha256(password.encode("utf-8")).hexdigest()
+    return f"{username}:{digest}"
+
+
+def _load_session(key: str) -> Optional[dict]:
+    """Devolve o `storage_state` guardado, se ainda estiver dentro da validade."""
+    with _session_lock:
+        entry = _session_cache.get(key)
+        if not entry:
+            return None
+        if datetime.now(timezone.utc) - entry["saved_at"] > SESSION_MAX_AGE:
+            del _session_cache[key]
+            return None
+        return entry["state"]
+
+
+def _save_session(key: str, state: dict) -> None:
+    with _session_lock:
+        _session_cache[key] = {"state": state, "saved_at": datetime.now(timezone.utc)}
+
+
+def clear_session_cache() -> None:
+    """Descarta todas as sessões guardadas. Usado ao limpar o cache local."""
+    with _session_lock:
+        _session_cache.clear()
+
+
 class ScraperService:
     """Serviço responsável pelo login e extração de conteúdo do portal UNOESC."""
 
     def __init__(self, semester: Optional[str] = None) -> None:
         self.semester = semester or current_semester()
+
+    # ------------------------------------------------------------------
+    # Sessão autenticada (reaproveitada entre chamadas)
+    # ------------------------------------------------------------------
+
+    @contextmanager
+    def _authenticated(
+        self, username: str, password: str
+    ) -> Iterator[tuple[BrowserContext, Page]]:
+        """
+        Abre um Chromium e entrega um contexto já autenticado no portal.
+
+        Reaproveita os cookies da última sessão do mesmo usuário quando eles
+        ainda valem — evita refazer o login a cada request. Se a sessão tiver
+        morrido, faz o login normalmente e guarda os cookies novos.
+
+        Lança PermissionError se as credenciais forem inválidas.
+        """
+        cache_key = _session_cache_key(username, password)
+
+        with sync_playwright() as pw:
+            browser: Browser = pw.chromium.launch(headless=True)
+            try:
+                state = _load_session(cache_key)
+                context, page = self._new_context(browser, state)
+
+                if state and self._is_logged_in(page):
+                    print("[Scraper] Sessão reaproveitada — login pulado")
+                else:
+                    if state:
+                        # Cookies velhos: joga fora o contexto e começa limpo
+                        print("[Scraper] Sessão expirada — refazendo login")
+                        context.close()
+                        context, page = self._new_context(browser, None)
+
+                    self._login(page, username, password)
+                    _save_session(cache_key, context.storage_state())
+
+                yield context, page
+            finally:
+                browser.close()
+
+    @staticmethod
+    def _new_context(
+        browser: Browser, state: Optional[dict]
+    ) -> tuple[BrowserContext, Page]:
+        """Cria um contexto (opcionalmente com cookies restaurados) e sua página."""
+        context: BrowserContext = (
+            browser.new_context(storage_state=state) if state else browser.new_context()
+        )
+        page: Page = context.new_page()
+        # Aceita silenciosamente qualquer dialog que apareça (alerts JS)
+        page.on("dialog", lambda d: d.accept())
+        return context, page
+
+    @staticmethod
+    def _is_logged_in(page: Page) -> bool:
+        """
+        Testa se os cookies restaurados ainda valem: o portal devolve o form de
+        login (com `#j_username`) quando a sessão caiu.
+        """
+        try:
+            page.goto(PORTAL_URL, wait_until="domcontentloaded", timeout=TIMEOUT_MS)
+            return page.query_selector("#j_username") is None
+        except Exception as exc:
+            print(f"[Scraper] Falha ao validar sessão em cache: {exc}")
+            return False
+
+    def _create_sso_url(self, context: BrowserContext, dof: str) -> Optional[str]:
+        """
+        Reproduz o JS `MoodleRoomsAccessID.criarLink` (POST em moodleRooms.jspa)
+        e devolve a URL de SSO para o Moodle da disciplina.
+        """
+        response = context.request.post(
+            MOODLE_LINK_URL,
+            form={"action": "criarLinkMoodleRooms", "dof": dof},
+            headers={
+                "X-Requested-With": "XMLHttpRequest",
+                "Referer": EAD_URL,
+            },
+        )
+        if response.status != 200:
+            return None
+        data = response.json()
+        return (data or {}).get("url")
 
     def run(self, username: str, password: str) -> dict:
         """
@@ -79,63 +225,52 @@ class ScraperService:
 
         Lança PermissionError em caso de credenciais inválidas.
         """
-        with sync_playwright() as pw:
-            browser: Browser = pw.chromium.launch(headless=True)
-            context: BrowserContext = browser.new_context()
-            page: Page = context.new_page()
-            # Aceita silenciosamente qualquer dialog que apareça (alerts JS)
-            page.on("dialog", lambda d: d.accept())
+        with self._authenticated(username, password) as (context, page):
+            print("[Scraper] 1/3 Sessão do portal pronta")
 
-            try:
-                print("[Scraper] 1/3 Login no portal...")
-                self._login(page, username, password)
-                print("[Scraper]      OK")
+            print("[Scraper] 2/3 Extraindo cards de disciplina...")
+            cards = self._extract_subject_cards(page)
+            print(f"[Scraper]      {len(cards)} disciplina(s) encontradas")
 
-                print("[Scraper] 2/3 Extraindo cards de disciplina...")
-                cards = self._extract_subject_cards(page)
-                print(f"[Scraper]      {len(cards)} disciplina(s) encontradas")
+            course_id_to_subject: dict[str, str] = {}
+            subjects: list[dict] = []
+            moodle_base: Optional[str] = None
 
-                course_id_to_subject: dict[str, str] = {}
-                subjects: list[dict] = []
-                moodle_base: Optional[str] = None
+            for i, card in enumerate(cards, start=1):
+                print(f"[Scraper]      [{i}/{len(cards)}] {card['name']}...")
+                content, base, course_id = self._fetch_moodle_course_text(
+                    context, card["dof"]
+                )
+                print(f"[Scraper]            -> {len(content)} chars, course_id={course_id}, base={base}")
+                if base and not moodle_base:
+                    moodle_base = base
+                if course_id:
+                    course_id_to_subject[course_id] = card["name"]
+                subjects.append({
+                    "id": str(uuid.uuid4()),
+                    "name": card["name"],
+                    "content": content,
+                    "dof": card["dof"],
+                })
 
-                for i, card in enumerate(cards, start=1):
-                    print(f"[Scraper]      [{i}/{len(cards)}] {card['name']}...")
-                    content, base, course_id = self._fetch_moodle_course_text(
-                        context, card["dof"]
+            calendar_events: list[dict] = []
+            if moodle_base:
+                print(f"[Scraper] 3/3 Lendo calendário consolidado em {moodle_base}...")
+                calendar_events = self._fetch_calendar_events(
+                    context, moodle_base, course_id_to_subject
+                )
+                print(f"[Scraper]      {len(calendar_events)} evento(s) capturado(s)")
+                # Anexa a URL do curso aos subjects (consumido pelo parser
+                # para enriquecer eventos do Gemini com link direto)
+                for subj in subjects:
+                    course_id = next(
+                        (cid for cid, name in course_id_to_subject.items() if name == subj["name"]),
+                        None,
                     )
-                    print(f"[Scraper]            -> {len(content)} chars, course_id={course_id}, base={base}")
-                    if base and not moodle_base:
-                        moodle_base = base
                     if course_id:
-                        course_id_to_subject[course_id] = card["name"]
-                    subjects.append({
-                        "id": str(uuid.uuid4()),
-                        "name": card["name"],
-                        "content": content,
-                        "dof": card["dof"],
-                    })
-
-                calendar_events: list[dict] = []
-                if moodle_base:
-                    print(f"[Scraper] 3/3 Lendo calendário consolidado em {moodle_base}...")
-                    calendar_events = self._fetch_calendar_events(
-                        context, moodle_base, course_id_to_subject
-                    )
-                    print(f"[Scraper]      {len(calendar_events)} evento(s) capturado(s)")
-                    # Anexa a URL do curso aos subjects (consumido pelo parser
-                    # para enriquecer eventos do Gemini com link direto)
-                    for subj in subjects:
-                        course_id = next(
-                            (cid for cid, name in course_id_to_subject.items() if name == subj["name"]),
-                            None,
-                        )
-                        if course_id:
-                            subj["course_url"] = PORTAL_LOGIN_URL
-                else:
-                    print("[Scraper] 3/3 Sem moodle_base detectada — pulando calendário")
-            finally:
-                browser.close()
+                        subj["course_url"] = PORTAL_LOGIN_URL
+            else:
+                print("[Scraper] 3/3 Sem moodle_base detectada — pulando calendário")
 
         return {"subjects": subjects, "calendar_events": calendar_events}
 
@@ -145,87 +280,65 @@ class ScraperService:
         da atividade para extrair o conteúdo completo (enunciado, instruções, critérios).
         Para quizzes com múltiplas páginas, percorre todas automaticamente.
         """
-        with sync_playwright() as pw:
-            browser: Browser = pw.chromium.launch(headless=True)
-            context: BrowserContext = browser.new_context()
-            page: Page = context.new_page()
-            page.on("dialog", lambda d: d.accept())
+        with self._authenticated(username, password) as (context, _page):
+            sso_url = self._create_sso_url(context, dof)
+            if not sso_url:
+                return ""
 
+            # Autentica no Moodle
+            moodle_page = context.new_page()
+            moodle_page.goto(sso_url, wait_until="domcontentloaded", timeout=60_000)
+            moodle_page.wait_for_timeout(2000)
+
+            # Navega pra atividade específica
+            moodle_page.goto(activity_url, wait_until="domcontentloaded", timeout=60_000)
             try:
-                self._login(page, username, password)
+                moodle_page.wait_for_selector("#region-main, main", timeout=45_000)
+            except Exception:
+                pass
+            moodle_page.wait_for_timeout(1000)
 
-                # Gera SSO pro Moodle
-                response = context.request.post(
-                    MOODLE_LINK_URL,
-                    form={"action": "criarLinkMoodleRooms", "dof": dof},
-                    headers={
-                        "X-Requested-With": "XMLHttpRequest",
-                        "Referer": EAD_URL,
-                    },
-                )
-                if response.status != 200:
-                    return ""
-                data = response.json()
-                sso_url = (data or {}).get("url")
-                if not sso_url:
-                    return ""
+            # Se é um quiz com páginas, percorre todas
+            all_text_parts: list[str] = []
 
-                # Autentica no Moodle
-                moodle_page = context.new_page()
-                moodle_page.goto(sso_url, wait_until="domcontentloaded", timeout=60_000)
-                moodle_page.wait_for_timeout(2000)
+            if "mod/quiz/attempt" in activity_url:
+                # Extrai a página atual
+                all_text_parts.append(self._extract_page_text(moodle_page))
 
-                # Navega pra atividade específica
-                moodle_page.goto(activity_url, wait_until="domcontentloaded", timeout=60_000)
-                try:
-                    moodle_page.wait_for_selector("#region-main, main", timeout=45_000)
-                except Exception:
-                    pass
-                moodle_page.wait_for_timeout(1000)
+                # Descobre quantas páginas existem e percorre cada uma
+                page_links = moodle_page.evaluate("""() => {
+                    const nav = document.querySelector('.qn_buttons, .othernav');
+                    if (!nav) return [];
+                    const links = nav.querySelectorAll('a[href*="page="]');
+                    const pages = new Set();
+                    for (const a of links) {
+                        const m = a.getAttribute('href').match(/page=(\\d+)/);
+                        if (m) pages.add(parseInt(m[1]));
+                    }
+                    return [...pages].sort((a, b) => a - b);
+                }""")
 
-                # Se é um quiz com páginas, percorre todas
-                all_text_parts: list[str] = []
+                # Pega a página atual da URL
+                current_page_match = re.search(r"page=(\d+)", activity_url)
+                current_page = int(current_page_match.group(1)) if current_page_match else 0
 
-                if "mod/quiz/attempt" in activity_url:
-                    # Extrai a página atual
-                    all_text_parts.append(self._extract_page_text(moodle_page))
+                for pg in page_links:
+                    if pg == current_page:
+                        continue  # Já extraímos
+                    pg_url = re.sub(r"page=\d+", f"page={pg}", activity_url)
+                    if "page=" not in activity_url:
+                        pg_url = activity_url + f"&page={pg}"
+                    try:
+                        moodle_page.goto(pg_url, wait_until="domcontentloaded", timeout=60_000)
+                        moodle_page.wait_for_timeout(1500)
+                        all_text_parts.append(self._extract_page_text(moodle_page))
+                    except Exception as exc:
+                        print(f"[Scraper] Falha ao carregar página {pg} do quiz: {exc}")
+            else:
+                all_text_parts.append(self._extract_page_text(moodle_page))
 
-                    # Descobre quantas páginas existem e percorre cada uma
-                    page_links = moodle_page.evaluate("""() => {
-                        const nav = document.querySelector('.qn_buttons, .othernav');
-                        if (!nav) return [];
-                        const links = nav.querySelectorAll('a[href*="page="]');
-                        const pages = new Set();
-                        for (const a of links) {
-                            const m = a.getAttribute('href').match(/page=(\\d+)/);
-                            if (m) pages.add(parseInt(m[1]));
-                        }
-                        return [...pages].sort((a, b) => a - b);
-                    }""")
-
-                    # Pega a página atual da URL
-                    current_page_match = re.search(r"page=(\d+)", activity_url)
-                    current_page = int(current_page_match.group(1)) if current_page_match else 0
-
-                    for pg in page_links:
-                        if pg == current_page:
-                            continue  # Já extraímos
-                        pg_url = re.sub(r"page=\d+", f"page={pg}", activity_url)
-                        if "page=" not in activity_url:
-                            pg_url = activity_url + f"&page={pg}"
-                        try:
-                            moodle_page.goto(pg_url, wait_until="domcontentloaded", timeout=60_000)
-                            moodle_page.wait_for_timeout(1500)
-                            all_text_parts.append(self._extract_page_text(moodle_page))
-                        except Exception as exc:
-                            print(f"[Scraper] Falha ao carregar página {pg} do quiz: {exc}")
-                else:
-                    all_text_parts.append(self._extract_page_text(moodle_page))
-
-                moodle_page.close()
-                return "\n\n---\n\n".join(all_text_parts).strip()
-            finally:
-                browser.close()
+            moodle_page.close()
+            return "\n\n---\n\n".join(all_text_parts).strip()
 
     @staticmethod
     def _extract_page_text(page: Page) -> str:
@@ -242,29 +355,8 @@ class ScraperService:
         Retorna a URL que, ao ser aberta no navegador do usuário, o loga
         diretamente no curso sem precisar digitar credenciais.
         """
-        with sync_playwright() as pw:
-            browser: Browser = pw.chromium.launch(headless=True)
-            context: BrowserContext = browser.new_context()
-            page: Page = context.new_page()
-            page.on("dialog", lambda d: d.accept())
-
-            try:
-                self._login(page, username, password)
-
-                response = context.request.post(
-                    MOODLE_LINK_URL,
-                    form={"action": "criarLinkMoodleRooms", "dof": dof},
-                    headers={
-                        "X-Requested-With": "XMLHttpRequest",
-                        "Referer": EAD_URL,
-                    },
-                )
-                if response.status != 200:
-                    return None
-                data = response.json()
-                return (data or {}).get("url")
-            finally:
-                browser.close()
+        with self._authenticated(username, password) as (context, _page):
+            return self._create_sso_url(context, dof)
 
     # ------------------------------------------------------------------
     # Login
@@ -341,25 +433,14 @@ class ScraperService:
         self, context: BrowserContext, dof: str
     ) -> tuple[str, Optional[str], Optional[str]]:
         """
-        Reproduz o JS MoodleRoomsAccessID.criarLink (POST em moodleRooms.jspa)
-        para obter a URL SSO, navega no Moodle e extrai o texto + identificadores.
+        Gera a URL SSO da disciplina, navega no Moodle e extrai o texto
+        + identificadores.
 
         Retorna:
             (texto_da_area_principal, moodle_base_url, course_id_do_moodle)
         """
         try:
-            response = context.request.post(
-                MOODLE_LINK_URL,
-                form={"action": "criarLinkMoodleRooms", "dof": dof},
-                headers={
-                    "X-Requested-With": "XMLHttpRequest",
-                    "Referer": EAD_URL,
-                },
-            )
-            if response.status != 200:
-                return "", None, None
-            data = response.json()
-            sso_url = (data or {}).get("url")
+            sso_url = self._create_sso_url(context, dof)
             if not sso_url:
                 return "", None, None
 
