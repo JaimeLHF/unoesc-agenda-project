@@ -10,7 +10,7 @@ interface SubjectDetailProps {
   onSync: () => void;
   syncing: boolean;
   error?: string | null;
-  onOpenPortal?: (subjectName: string, targetUrl?: string) => Promise<{ ssoUrl: string; targetUrl?: string } | null>;
+  onOpenPortal?: (subjectName: string, targetUrl?: string) => Promise<string | null>;
   onAskAi?: (event: AcademicEvent) => void;
 }
 

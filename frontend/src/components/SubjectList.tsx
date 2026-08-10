@@ -13,7 +13,7 @@ interface SubjectListProps {
   onLogout: () => void;
   onClearCache: () => void;
   lastScrapedAt?: string | null;
-  onOpenPortal?: (subjectName: string, targetUrl?: string) => Promise<{ ssoUrl: string; targetUrl?: string } | null>;
+  onOpenPortal?: (subjectName: string, targetUrl?: string) => Promise<string | null>;
   onAskAi?: (event: AcademicEvent) => void;
 }
 

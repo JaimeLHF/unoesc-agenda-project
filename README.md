@@ -3,11 +3,10 @@
 ![CI](https://github.com/SEU_USUARIO/unoesc-agenda-project/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
-Aplicação web que automatiza a busca de atividades acadêmicas (webconferências, prazos de entrega, provas, etc.) no portal do aluno da UNOESC e as sincroniza com o Google Calendar.
+Aplicação web que reúne as atividades acadêmicas (prazos de entrega, provas, webconferências) de todas as disciplinas do Moodle da UNOESC numa agenda só, e sincroniza com o Google Calendar.
 
-- **Login automático** no portal acadêmico via Playwright
-- **SSO automático** para o Moodle e leitura do calendário consolidado
-- **Detecção de webconferências** no texto de cada disciplina via Google Gemini
+- **Login direto no Moodle** por HTTP — sem navegador headless, sem SSO pelo portal
+- **Calendário via API** do Moodle: data, hora, disciplina e link já estruturados
 - **Assistente de IA** para resolver atividades e provas (Gemini gratuito ou Claude pago)
 - **Respostas de provas** — extrai automaticamente as questões do quiz e retorna as respostas
 - **Cache local** em SQLite — abre sem refazer scraping
@@ -37,9 +36,11 @@ Veja **[docs/SETUP.md](docs/SETUP.md)** para o passo a passo completo de cada et
 > **Windows**: Python 3.13 e 3.14 funcionam (já testados). No Linux/macOS, qualquer 3.11+ também.
 
 Você também vai precisar:
-- Conta no **Google AI Studio** (chave da Gemini API — gratuita)
-- Conta no **Google Cloud Console** (Client ID OAuth do Google Calendar — gratuita)
-- Credenciais do **portal UNOESC** (matrícula/CPF + senha)
+- Credenciais do **Moodle da UNOESC** (`<matrícula>@unoesc.edu.br` + senha)
+
+Opcionais, só para recursos extras:
+- Conta no **Google Cloud Console** — Client ID OAuth, para sincronizar com o Google Calendar
+- Chave de **IA** (Gemini ou Claude) — só para o assistente; a agenda funciona sem ela
 
 ---
 
@@ -69,13 +70,12 @@ chmod +x setup.sh
 
 O script faz tudo:
 - Cria o `venv` Python e instala dependências
-- Baixa o Chromium do Playwright
 - Instala dependências do frontend (`npm install`)
 - Copia os arquivos `.env.example` para `.env`
 
 ### 3. Configure as chaves de API
 
-Você precisa preencher **2 arquivos `.env`** com chaves do Google:
+> A agenda já funciona sem configurar chave nenhuma. As chaves abaixo são para os recursos opcionais (Google Calendar e assistente de IA).
 - `backend/.env` — chave do **Gemini** (uma só)
 - `frontend/.env` — **Client ID OAuth** do Google Calendar
 
@@ -83,22 +83,11 @@ As próximas duas seções mostram como obter cada uma. **Faça as duas antes de
 
 ---
 
-## 🔑 Configurando o Gemini (extração de eventos por IA)
+## 🔑 Sobre as chaves de IA
 
-A Gemini API é usada para encontrar webconferências no texto das disciplinas. Tem **free tier generoso** (15 requisições/minuto, 1500/dia) — não precisa cartão de crédito.
+**A agenda funciona sem nenhuma chave de API.** Os eventos vêm estruturados do calendário do Moodle — data, hora, disciplina e link já prontos, sem LLM no caminho.
 
-1. Acesse [https://aistudio.google.com/](https://aistudio.google.com/) e faça login com sua conta Google.
-2. Clique em **"Get API key"** (canto superior esquerdo) → **"Create API key"**.
-3. Copie a chave gerada (algo como `AIzaSy...`).
-4. Abra `backend/.env` e cole:
-
-   ```
-   GEMINI_API_KEY=AIzaSy...sua_chave_aqui
-   ```
-
-5. **Importante**: pode ser que precise habilitar a Gemini API explicitamente na primeira vez. Se ao testar o app você receber erro `SERVICE_DISABLED`, abra o link que aparece na mensagem (algo como `https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=ID_DO_PROJETO`) e clique em **"Ativar"**.
-
-> ⚠️ **Sem a chave do Gemini**, a aplicação ainda funciona parcialmente: eventos com data definida do **calendário do Moodle** (prazos de entrega, provas, etc.) continuam sendo exibidos normalmente. Porém, **webconferências e eventos mencionados apenas no texto** das disciplinas não serão detectados — essa extração depende exclusivamente da IA.
+Antes o app usava o Gemini para garimpar eventos no texto das disciplinas, porque o scraping devolvia HTML solto. Com a API do Moodle isso deixou de ser necessário: `GEMINI_API_KEY` passou de obrigatória a opcional, e serve apenas ao assistente de IA descrito abaixo.
 
 ---
 
@@ -275,7 +264,7 @@ Frontend em **http://localhost:5180**.
 
 | Variável | Obrigatória | Descrição |
 | --- | --- | --- |
-| `GEMINI_API_KEY` | Opcional | Chave da Gemini API. Necessária para detectar webconferências e para o assistente IA (se `AI_PROVIDER=gemini`). [Como obter](#-configurando-o-gemini-extração-de-eventos-por-ia). |
+| `GEMINI_API_KEY` | Opcional | Chave da Gemini API. Usada **apenas** pelo assistente de IA (se `AI_PROVIDER=gemini`). A agenda funciona sem ela. |
 | `GEMINI_MODEL` | Não | Modelo Gemini. Padrão: `gemini-2.5-flash`. Recomendado: `gemini-2.0-flash` (1500 req/dia grátis). |
 | `AI_PROVIDER` | Não | Provedor do assistente de IA: `gemini` (padrão) ou `claude`. |
 | `ANTHROPIC_API_KEY` | Apenas se `AI_PROVIDER=claude` | Chave da API Anthropic. [Como obter](https://console.anthropic.com/). |
@@ -296,8 +285,7 @@ unoesc-agenda-project/
 ├── backend/
 │   ├── app/
 │   │   ├── main.py              # FastAPI: endpoints REST
-│   │   ├── scraper.py           # Playwright: login + Moodle + calendário
-│   │   ├── parser.py            # Gemini: extração de webconferências
+│   │   ├── moodle.py            # Cliente HTTP do Moodle: login + disciplinas + calendário
 │   │   ├── calendar_sync.py     # Google Calendar API
 │   │   ├── database.py          # SQLAlchemy + modelos SQLite
 │   │   └── repository.py        # CRUD/upsert do cache
@@ -357,8 +345,8 @@ Depois faça login novamente para recarregar os dados.
 ### `ModuleNotFoundError: No module named 'X'`
 Você esqueceu de ativar o `venv` ou de rodar `pip install -r requirements.txt`. O `setup.ps1`/`setup.sh` faz isso por você.
 
-### `NotImplementedError` ao fazer scraping (Windows)
-Já tratado no código (Playwright sync mode). Se ainda assim aparecer, rode com `python -m uvicorn app.main:app` em vez de `uvicorn` direto.
+### Login no Moodle falha
+Use a matrícula no formato `294833@unoesc.edu.br` (com o domínio), e a mesma senha do portal acadêmico. Confirme que consegue entrar em https://on.unoesc.edu.br pelo navegador.
 
 ### Erro `SERVICE_DISABLED` ao usar a IA
 A Gemini API ainda não foi habilitada no seu projeto Google. A mensagem de erro contém um link `https://console.developers.google.com/apis/...` — abra ele e clique em **"Ativar"**. Espere 1-2 minutos.
@@ -400,9 +388,8 @@ Para apagar **tudo** (incluindo concluídos), apague o arquivo `backend/agenda.d
 
 | Camada | Tecnologia |
 | --- | --- |
-| Scraping + login | Python + Playwright (sync API) |
-| Calendário consolidado | Moodle `view.php?view=upcoming` (HTML estruturado) |
-| Detecção de webconferências | Google Gemini 2.5 Flash |
+| Acesso ao Moodle | Python + httpx (login HTTP + API AJAX interna) |
+| Calendário | `core_calendar_get_calendar_monthly_view` (JSON) |
 | Sincronização | Google Calendar API + Google Identity Services |
 | Backend API | FastAPI + Uvicorn |
 | Persistência | SQLite + SQLAlchemy 2.x |

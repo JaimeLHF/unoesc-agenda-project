@@ -26,9 +26,18 @@ interface DoneEventsContextValue {
 
 const DoneEventsContext = createContext<DoneEventsContextValue | null>(null);
 
-/** Chave estável entre sessões (mesma fórmula do backend). */
+/**
+ * Chave estável entre sessões.
+ *
+ * O backend manda `stable_key` pronto (derivado do id do evento no Moodle) —
+ * usar esse valor evita manter duas fórmulas idênticas na mão, uma aqui e uma
+ * no Python. O fallback cobre eventos guardados antes dessa mudança.
+ */
 export function eventKey(event: AcademicEvent): string {
-  return `${event.subject}|${event.date}|${event.title}`.toLowerCase().trim();
+  return (
+    event.stable_key ??
+    `${event.subject}|${event.date}|${event.title}`.toLowerCase().trim()
+  );
 }
 
 export const DoneEventsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {

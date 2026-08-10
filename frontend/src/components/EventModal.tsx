@@ -5,7 +5,7 @@ import { useDoneEvents } from '../contexts/DoneEventsContext';
 interface EventModalProps {
   event: AcademicEvent | null;
   onClose: () => void;
-  onOpenPortal?: (subjectName: string, targetUrl?: string) => Promise<{ ssoUrl: string; targetUrl?: string } | null>;
+  onOpenPortal?: (subjectName: string, targetUrl?: string) => Promise<string | null>;
   onAskAi?: (event: AcademicEvent) => void;
 }
 
@@ -133,38 +133,16 @@ const EventModal: React.FC<EventModalProps> = ({ event, onClose, onOpenPortal, o
               type="button"
               className="btn-secondary"
               disabled={openingPortal}
-              title="Fazer login automático e abrir a atividade no Moodle"
+              title="Abrir a atividade no Moodle"
               onClick={async () => {
-                // Abre a janela imediatamente no clique (evita bloqueio de popup)
+                // A aba é aberta no próprio clique para o navegador não tratar
+                // como popup — o link só chega depois, na resposta do backend.
                 const newTab = window.open('about:blank', '_blank');
                 setOpeningPortal(true);
                 try {
-                  const result = await onOpenPortal(event.subject, event.url);
-                  if (result && newTab) {
-                    // Mostra loading enquanto o SSO carrega
-                    newTab.document.write(`
-                      <html>
-                        <head><title>Abrindo atividade...</title></head>
-                        <body style="margin:0;display:flex;align-items:center;justify-content:center;height:100vh;font-family:system-ui,sans-serif;background:#f8f9fa;">
-                          <div style="text-align:center;">
-                            <div style="width:40px;height:40px;border:4px solid #e0e0e0;border-top-color:#4f46e5;border-radius:50%;animation:spin 0.8s linear infinite;margin:0 auto 16px;"></div>
-                            <p style="color:#374151;font-size:16px;margin:0;">Fazendo login e abrindo a atividade…</p>
-                            <p style="color:#6b7280;font-size:13px;margin-top:8px;">Aguarde alguns segundos.</p>
-                          </div>
-                          <style>@keyframes spin{to{transform:rotate(360deg)}}</style>
-                        </body>
-                      </html>
-                    `);
-                    newTab.document.close();
-
-                    if (result.targetUrl) {
-                      newTab.location.href = result.ssoUrl;
-                      setTimeout(() => {
-                        newTab.location.href = result.targetUrl!;
-                      }, 3000);
-                    } else {
-                      newTab.location.href = result.ssoUrl;
-                    }
+                  const url = await onOpenPortal(event.subject, event.url);
+                  if (url && newTab) {
+                    newTab.location.href = url;
                   } else {
                     newTab?.close();
                   }
@@ -175,7 +153,7 @@ const EventModal: React.FC<EventModalProps> = ({ event, onClose, onOpenPortal, o
                 }
               }}
             >
-              {openingPortal ? '⏳ Abrindo…' : '🔗 Abrir no portal'}
+              {openingPortal ? '⏳ Abrindo…' : '🔗 Abrir no Moodle'}
             </button>
           )}
           <button

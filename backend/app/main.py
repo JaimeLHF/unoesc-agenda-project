@@ -16,9 +16,8 @@ from pydantic import BaseModel
 from app import repository as repo
 from app import session as app_session
 from app.calendar_sync import CalendarSyncService
-from app.database import Subject as SubjectDB, init_db, stable_event_key, utc_now
-from app.parser import ParserService
-from app.scraper import ScraperService, clear_session_cache
+from app.database import Subject as SubjectDB, event_key, init_db, utc_now
+from app.moodle import MoodleClient, clear_session_cache
 
 # ---------------------------------------------------------------------------
 # Modelos de Requisição e Resposta (Pydantic)
@@ -43,7 +42,7 @@ class SubjectModel(BaseModel):
 
 
 class AcademicEvent(BaseModel):
-    """Representa um evento acadêmico extraído pelo Gemini."""
+    """Evento acadêmico vindo do calendário do Moodle."""
     id: str
     title: str
     date: str                # ISO 8601 (ex: "2025-06-10")
@@ -52,26 +51,19 @@ class AcademicEvent(BaseModel):
     subject: str
     type: str                # webconference | deadline | exam | other
     synced: Optional[bool] = False
-    url: Optional[str] = None  # link direto pro evento no portal Moodle
+    url: Optional[str] = None  # link direto pra atividade no Moodle
+    # Identidade do evento, calculada no backend a partir do id do Moodle.
+    # O frontend usa este valor em vez de recalcular a chave por conta própria
+    # — antes as duas fórmulas precisavam ser mantidas idênticas na mão.
+    stable_key: Optional[str] = None
+    event_type: Optional[str] = None  # due | open | close
+    module: Optional[str] = None      # assign | quiz | ...
 
 
 class ScrapeResponse(BaseModel):
     """Resposta do endpoint /api/scrape."""
     subjects: list[SubjectModel]
     calendar_events: list[AcademicEvent] = []
-
-
-class ParseEventsRequest(BaseModel):
-    """Requisição para o endpoint /api/parse-events."""
-    subjects: list[SubjectModel]
-    # Eventos já extraídos do calendário Moodle (fonte estruturada).
-    # Mesclados aos eventos identificados pelo Gemini, com dedup.
-    calendar_events: list[AcademicEvent] = []
-
-
-class ParseEventsResponse(BaseModel):
-    """Resposta do endpoint /api/parse-events."""
-    events: list[AcademicEvent]
 
 
 class SyncCalendarRequest(BaseModel):
@@ -172,15 +164,15 @@ async def login(credentials: LoginCredentials):
     token, e a senha não volta a trafegar nem fica guardada no navegador.
     """
     try:
-        scraper = ScraperService()
-        await asyncio.to_thread(
-            scraper.login, credentials.username, credentials.password
-        )
+        with MoodleClient() as moodle:
+            await asyncio.to_thread(
+                moodle.login, credentials.username, credentials.password
+            )
     except PermissionError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(
-            status_code=500, detail=f"Erro ao autenticar no portal: {exc}"
+            status_code=500, detail=f"Erro ao autenticar no Moodle: {exc}"
         ) from exc
 
     return LoginResponse(token=app_session.create(credentials.username, credentials.password))
@@ -204,26 +196,29 @@ async def health_check():
     Diagnóstico das dependências externas. Útil para identificar rapidamente
     o que está faltando configurar ao subir o app pela primeira vez.
     """
+    provider = os.getenv("AI_PROVIDER", "gemini").lower()
+    ai_key = "ANTHROPIC_API_KEY" if provider == "claude" else "GEMINI_API_KEY"
+
     checks = {
         "api": True,
-        "gemini_api_key": bool(os.getenv("GEMINI_API_KEY")),
-        "playwright_chromium": False,
+        # A chave de IA deixou de ser obrigatória: os eventos vêm estruturados
+        # do calendário do Moodle, sem LLM. Ela só serve para o assistente.
+        "ai_key_optional": bool(os.getenv(ai_key)),
+        "moodle": False,
         "database": False,
     }
     hints: list[str] = []
 
-    # Playwright Chromium
-    # A API síncrona do Playwright não pode ser usada dentro do loop asyncio —
-    # roda numa thread separada, como o scraper faz.
-    def _check_chromium() -> bool:
-        from playwright.sync_api import sync_playwright
-        with sync_playwright() as pw:
-            return os.path.exists(pw.chromium.executable_path)
-
+    # Moodle acessível (não valida credencial — só se o serviço responde)
     try:
-        checks["playwright_chromium"] = await asyncio.to_thread(_check_chromium)
+        import httpx as _httpx
+        from app.moodle import MOODLE_BASE
+        resp = await asyncio.to_thread(
+            lambda: _httpx.get(f"{MOODLE_BASE}/login/index.php", timeout=10.0)
+        )
+        checks["moodle"] = resp.status_code == 200
     except Exception:
-        checks["playwright_chromium"] = False
+        checks["moodle"] = False
 
     # Banco
     try:
@@ -234,15 +229,14 @@ async def health_check():
     except Exception:
         checks["database"] = False
 
-    if not checks["gemini_api_key"]:
+    if not checks["ai_key_optional"]:
         hints.append(
-            "GEMINI_API_KEY não configurada. Edite backend/.env. "
-            "Veja README.md → 'Configurando o Gemini'."
+            f"{ai_key} não configurada — a agenda funciona normalmente, "
+            "só o assistente de IA fica indisponível."
         )
-    if not checks["playwright_chromium"]:
+    if not checks["moodle"]:
         hints.append(
-            "Chromium do Playwright não instalado. "
-            "Rode: cd backend && playwright install chromium (com o venv ativo)."
+            "Sem resposta do Moodle (on.unoesc.edu.br). Verifique sua conexão."
         )
 
     return {
@@ -260,114 +254,34 @@ async def scrape_portal(session: app_session.PortalSession = Depends(require_ses
     Usa as credenciais guardadas na sessão do token — nada de senha no corpo.
     """
     try:
-        scraper = ScraperService()
-        # Playwright sync precisa rodar fora do event loop do FastAPI
-        result = await asyncio.to_thread(
-            scraper.run, session.username, session.password
-        )
+        # O cliente é síncrono; roda fora do event loop do FastAPI.
+        with MoodleClient() as moodle:
+            result = await asyncio.to_thread(
+                moodle.run, session.username, session.password
+            )
 
-        # Persiste o cache: subjects + eventos do calendar
-        with repo.get_session() as session:
-            repo.upsert_subjects(session, result["subjects"])
-            if result.get("calendar_events"):
-                repo.upsert_events(session, result["calendar_events"])
-            repo.set_meta(session, "last_scraped_at", utc_now().isoformat())
-            session.commit()
+        events = result.get("calendar_events", [])
 
-        return ScrapeResponse(
-            subjects=result["subjects"],
-            calendar_events=result.get("calendar_events", []),
-        )
+        with repo.get_session() as db:
+            repo.upsert_subjects(db, result["subjects"])
+            if events:
+                # Preenche `stable_key` em cada evento — o frontend usa esse
+                # valor para marcar concluído.
+                repo.upsert_events(db, events)
+            repo.set_meta(db, "last_scraped_at", utc_now().isoformat())
+            synced_keys = set(repo.list_synced_keys(db))
+            db.commit()
+
+        for ev in events:
+            ev["synced"] = ev.get("stable_key") in synced_keys
+
+        return ScrapeResponse(subjects=result["subjects"], calendar_events=events)
     except PermissionError as exc:
-        # Credenciais inválidas ou acesso negado
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except Exception as exc:
-        msg = str(exc)
-        # Erro típico quando o Chromium do Playwright não foi instalado
-        if "Executable doesn't exist" in msg or "playwright install" in msg.lower():
-            detail = (
-                "Chromium do Playwright não está instalado. "
-                "Ative o venv e rode: playwright install chromium. "
-                "Veja README.md, seção 'Setup rápido'."
-            )
-            raise HTTPException(status_code=500, detail=detail) from exc
-        raise HTTPException(status_code=500, detail=f"Erro ao extrair dados do portal: {exc}") from exc
-
-
-def _dedupe_events(
-    calendar_events: list[AcademicEvent],
-    gemini_events: list[dict],
-) -> list[dict]:
-    """
-    Mescla eventos do calendário Moodle (fonte primária, estruturada) com os
-    extraídos pelo Gemini (texto livre). Em caso de conflito, mantém o do
-    calendário — datas/horários são exatos lá.
-
-    Heurística de dedup: mesma disciplina + mesma data + mesmo tipo → mesmo
-    evento. Evita duplicar uma "Atividade Avaliativa 1 - 22/03" extraída por
-    LLM com a "ENTREGA 1" do calendário Moodle (mesmo prazo, ambos `deadline`),
-    sem descartar eventos de naturezas diferentes que caem no mesmo dia — uma
-    webconferência às 19h e uma entrega às 23:59 da mesma disciplina são dois
-    eventos, e a chave sem o tipo fazia o da webconferência sumir.
-
-    O título fica fora da chave de propósito: as duas fontes nomeiam a mesma
-    atividade de formas diferentes, que é justamente o caso que o dedup existe
-    para resolver.
-    """
-    seen_keys: set[tuple[str, str, str]] = set()
-    merged: list[dict] = []
-
-    # Calendário primeiro — tem prioridade
-    for ev in calendar_events:
-        key = (ev.subject.strip().lower(), ev.date, ev.type)
-        seen_keys.add(key)
-        merged.append(ev.model_dump())
-
-    # Gemini só entra se a chave (disciplina+data+tipo) não existir
-    for ev in gemini_events:
-        key = (
-            ev.get("subject", "").strip().lower(),
-            ev.get("date", ""),
-            ev.get("type", "other"),
-        )
-        if key in seen_keys:
-            continue
-        seen_keys.add(key)
-        merged.append(ev)
-
-    # Ordena cronologicamente
-    merged.sort(key=lambda e: (e.get("date", ""), e.get("time") or ""))
-    return merged
-
-
-@app.post("/api/parse-events", response_model=ParseEventsResponse)
-async def parse_events(request: ParseEventsRequest):
-    """
-    Mescla eventos do calendário Moodle (fonte estruturada) com eventos
-    extraídos pelo Gemini do conteúdo de cada disciplina (captura
-    webconferências e outros eventos não publicados como prazo no Moodle).
-    """
-    try:
-        parser = ParserService()
-        gemini_events = await parser.extract_events(request.subjects)
-        merged = _dedupe_events(request.calendar_events, gemini_events)
-
-        # Persiste eventos consolidados no cache local e reidrata o flag
-        # `synced` — sem isso, um refresh devolvia tudo como não-sincronizado
-        # e a próxima sincronização duplicava os eventos no Google Calendar.
-        if merged:
-            with repo.get_session() as session:
-                repo.upsert_events(session, merged)
-                session.commit()
-                synced_keys = set(repo.list_synced_keys(session))
-
-            for ev in merged:
-                key = stable_event_key(ev["subject"], ev["date"], ev["title"])
-                ev["synced"] = key in synced_keys
-
-        return ParseEventsResponse(events=merged)
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Erro ao interpretar eventos: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"Erro ao extrair dados do Moodle: {exc}"
+        ) from exc
 
 
 @app.get("/api/cache", response_model=CacheResponse)
@@ -385,6 +299,7 @@ async def get_cache():
         events = [
             AcademicEvent(
                 id=e.stable_key,
+                stable_key=e.stable_key,
                 title=e.title,
                 date=e.date,
                 time=e.time,
@@ -577,24 +492,18 @@ async def get_activity_content(
     session: app_session.PortalSession = Depends(require_session),
 ):
     """
-    Faz login no Moodle via SSO e extrai o conteúdo completo da página
-    da atividade (enunciado, instruções, critérios de avaliação).
-    """
-    with repo.get_session() as session:
-        subject = session.get(SubjectDB, request.subject_name)
-        if not subject or not subject.dof:
-            raise HTTPException(
-                status_code=404,
-                detail="Disciplina não encontrada ou sem código de acesso.",
-            )
-        dof = subject.dof
+    Extrai o conteúdo da página da atividade (enunciado, instruções, critérios).
 
+    O `subject_name` não é mais necessário para chegar lá — a sessão do Moodle
+    dá acesso a qualquer atividade em que o aluno esteja matriculado. Continua
+    aceito para não quebrar o frontend antigo.
+    """
     try:
-        scraper = ScraperService()
-        content = await asyncio.to_thread(
-            scraper.fetch_activity_content,
-            session.username, session.password, dof, request.activity_url,
-        )
+        with MoodleClient() as moodle:
+            content = await asyncio.to_thread(
+                moodle.fetch_activity_content,
+                session.username, session.password, request.activity_url,
+            )
         if not content:
             raise HTTPException(
                 status_code=502,
@@ -603,6 +512,8 @@ async def get_activity_content(
         return {"content": content}
     except PermissionError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except HTTPException:
         raise
     except Exception as exc:
@@ -610,48 +521,33 @@ async def get_activity_content(
 
 
 class OpenCourseRequest(BaseModel):
-    """Requisição para gerar link SSO pro Moodle."""
+    """Requisição para obter o link de uma atividade/disciplina no Moodle."""
     subject_name: str
     target_url: Optional[str] = None  # URL da atividade específica (mod/quiz, mod/assign, etc.)
 
 
 @app.post("/api/open-course")
-async def open_course(
-    request: OpenCourseRequest,
-    session: app_session.PortalSession = Depends(require_session),
-):
+async def open_course(request: OpenCourseRequest):
     """
-    Faz login rápido no portal e gera um link SSO fresco para o Moodle
-    da disciplina solicitada. Retorna o SSO url + target url para o frontend
-    fazer o redirect em sequência (SSO cria sessão → redirect pra atividade).
+    Devolve o link direto da atividade (ou da disciplina) no Moodle.
+
+    Antes isso gerava um link SSO pelo portal, para o aluno cair já autenticado.
+    Com o login direto no Moodle o backend tem sessão, mas o navegador do aluno
+    não — e transferir a sessão do servidor para o navegador não seria seguro.
+    Então devolvemos a URL real: na primeira vez o Moodle pede login, e o cookie
+    dele vale 8 horas. Foi o que permitiu apagar o portal e o Playwright.
     """
-    # Busca o dof da disciplina no banco
-    with repo.get_session() as session:
-        subject = session.get(SubjectDB, request.subject_name)
-        if not subject or not subject.dof:
+    if request.target_url:
+        return {"url": request.target_url}
+
+    with repo.get_session() as db:
+        subject = db.get(SubjectDB, request.subject_name)
+        if not subject or not subject.course_url:
             raise HTTPException(
                 status_code=404,
-                detail="Disciplina não encontrada ou sem código de acesso (dof). Tente atualizar os dados.",
+                detail="Disciplina não encontrada. Tente atualizar os dados.",
             )
-        dof = subject.dof
-
-    try:
-        scraper = ScraperService()
-        sso_url = await asyncio.to_thread(
-            scraper.generate_sso_link, session.username, session.password, dof
-        )
-        if not sso_url:
-            raise HTTPException(
-                status_code=502,
-                detail="Não foi possível gerar o link de acesso ao Moodle.",
-            )
-        return {"sso_url": sso_url, "target_url": request.target_url}
-    except PermissionError as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
-    except HTTPException:
-        raise
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Erro ao gerar link: {exc}") from exc
+        return {"url": subject.course_url}
 
 
 @app.post("/api/sync-calendar", response_model=SyncCalendarResponse)

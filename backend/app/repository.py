@@ -17,7 +17,7 @@ from app.database import (
     Meta,
     SessionLocal,
     Subject,
-    stable_event_key,
+    event_key,
     utc_now,
 )
 
@@ -42,6 +42,8 @@ def upsert_subjects(session: Session, subjects: list[dict]) -> None:
             name=s["name"],
             content=s.get("content"),
             dof=s.get("dof"),
+            course_id=str(s["course_id"]) if s.get("course_id") else None,
+            course_url=s.get("course_url"),
             updated_at=utc_now(),
         )
         stmt = stmt.on_conflict_do_update(
@@ -49,6 +51,8 @@ def upsert_subjects(session: Session, subjects: list[dict]) -> None:
             set_={
                 "content": stmt.excluded.content,
                 "dof": stmt.excluded.dof,
+                "course_id": stmt.excluded.course_id,
+                "course_url": stmt.excluded.course_url,
                 "updated_at": utc_now(),
             },
         )
@@ -62,7 +66,8 @@ def upsert_events(session: Session, events: list[dict]) -> None:
     — preserva histórico.
     """
     for e in events:
-        key = stable_event_key(e["subject"], e["date"], e["title"])
+        key = event_key(e)
+        e["stable_key"] = key  # devolvido ao frontend, que não recalcula mais
         stmt = sqlite_insert(Event).values(
             stable_key=key,
             title=e["title"],

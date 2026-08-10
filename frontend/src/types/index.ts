@@ -16,7 +16,7 @@ export interface Subject {
 /** Tipos possíveis de evento acadêmico */
 export type EventType = 'webconference' | 'deadline' | 'exam' | 'other';
 
-/** Representa um evento acadêmico identificado pelo Gemini */
+/** Representa um evento acadêmico vindo do calendário do Moodle */
 export interface AcademicEvent {
   id: string;
   title: string;
@@ -26,7 +26,15 @@ export interface AcademicEvent {
   subject: string;
   type: EventType;
   synced?: boolean;     // Indica se já foi sincronizado com o Google Calendar
-  url?: string;         // Link direto pro evento no portal (Moodle)
+  url?: string;         // Link direto pra atividade no Moodle
+  /**
+   * Identidade do evento, calculada no backend a partir do id do Moodle.
+   * Use sempre que existir: é imutável, ao contrário da chave derivada de
+   * título + data, que mudava quando o professor renomeava a atividade.
+   */
+  stable_key?: string;
+  event_type?: 'due' | 'open' | 'close';
+  module?: string;      // assign | quiz | ...
 }
 
 /** Resposta do endpoint /api/scrape */

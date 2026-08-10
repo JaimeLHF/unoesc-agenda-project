@@ -91,22 +91,6 @@ export async function scrapePortal(): Promise<ScrapeResponse> {
 }
 
 /**
- * Envia disciplinas + eventos do calendário ao backend.
- * O backend mescla eventos do calendário Moodle (fonte estruturada) com
- * eventos extraídos do texto pelo Gemini (webconferências), deduplicando.
- */
-export async function parseEvents(
-  subjects: Subject[],
-  calendarEvents: AcademicEvent[],
-): Promise<AcademicEvent[]> {
-  const { data } = await api.post<{ events: AcademicEvent[] }>('/parse-events', {
-    subjects,
-    calendar_events: calendarEvents,
-  });
-  return data.events;
-}
-
-/**
  * Sincroniza os eventos acadêmicos com o Google Calendar do usuário.
  * @param events - Lista de eventos a sincronizar
  * @param googleToken - Access token OAuth2 do Google (obtido via GIS)
@@ -208,16 +192,19 @@ export async function askAiHelp(
 }
 
 /**
- * Gera um link SSO fresco para abrir o Moodle da disciplina.
- * Retorna sso_url (cria sessão) e target_url (atividade específica).
+ * Devolve o link direto da atividade (ou da disciplina) no Moodle.
+ *
+ * Antes isso era um link SSO gerado pelo portal, que abria já autenticado.
+ * Agora é a URL real: o Moodle pede login na primeira vez e guarda o cookie
+ * por 8 horas.
  */
 export async function openCourse(
   subjectName: string,
   targetUrl?: string,
-): Promise<{ ssoUrl: string; targetUrl?: string }> {
-  const { data } = await api.post<{ sso_url: string; target_url?: string }>('/open-course', {
+): Promise<string> {
+  const { data } = await api.post<{ url: string }>('/open-course', {
     subject_name: subjectName,
     target_url: targetUrl,
   });
-  return { ssoUrl: data.sso_url, targetUrl: data.target_url ?? undefined };
+  return data.url;
 }

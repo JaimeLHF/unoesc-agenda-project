@@ -57,3 +57,9 @@ service_account.json
 # OS
 .DS_Store
 Thumbs.db
+
+# Token gerado pelos scripts de sondagem (backend/scripts/probes/)
+moodle_token.txt
+
+# Screenshots do Playwright MCP
+.playwright-mcp/

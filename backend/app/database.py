@@ -57,7 +57,9 @@ class Subject(Base):
 
     name: Mapped[str] = mapped_column(String, primary_key=True)
     content: Mapped[Optional[str]] = mapped_column(Text)
-    dof: Mapped[Optional[str]] = mapped_column(String)  # ID usado p/ gerar SSO pro Moodle
+    dof: Mapped[Optional[str]] = mapped_column(String)  # código da disciplina no portal
+    course_id: Mapped[Optional[str]] = mapped_column(String)   # id do curso no Moodle
+    course_url: Mapped[Optional[str]] = mapped_column(String)  # link direto pra disciplina
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=utc_now, onupdate=utc_now
     )
@@ -114,10 +116,32 @@ class Meta(Base):
 
 def stable_event_key(subject: str, date: str, title: str) -> str:
     """
-    Chave estável para um evento entre execuções do scraper.
-    Mesma fórmula usada no frontend para identidade entre sessões.
+    Chave derivada do conteúdo do evento. Fallback para eventos sem id próprio.
+
+    Frágil por natureza: renomear a atividade ou mudar a data gera uma chave
+    nova, e o evento perde a marcação de concluído e o vínculo com o Google
+    Calendar. Prefira `event_key()`.
     """
     return f"{subject}|{date}|{title}".lower().strip()
+
+
+def moodle_event_key(moodle_event_id: int | str) -> str:
+    """Chave a partir do id do evento no Moodle — imutável."""
+    return f"moodle:{moodle_event_id}"
+
+
+def event_key(event: dict) -> str:
+    """
+    Identidade de um evento, preferindo o id do Moodle.
+
+    Só cai no hash de conteúdo quando o evento não tem id — o que hoje não
+    acontece, já que tudo vem do calendário, mas mantém o caminho aberto para
+    eventos de outra origem.
+    """
+    moodle_id = event.get("moodle_event_id")
+    if moodle_id:
+        return moodle_event_key(moodle_id)
+    return stable_event_key(event["subject"], event["date"], event["title"])
 
 
 def init_db() -> None:

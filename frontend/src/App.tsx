@@ -7,7 +7,6 @@ import {
   login,
   logout,
   scrapePortal,
-  parseEvents,
   syncToCalendar,
   fetchCache,
   clearCache,
@@ -87,16 +86,13 @@ const App: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /** Faz scrape + parse e popula subjects/events. Usado no login e no refresh. */
+  /** Busca disciplinas e eventos. Usado no login e no refresh. */
   const fetchAll = async () => {
-    setLoadingMessage('Acessando o portal UNOESC…');
+    setLoadingMessage('Consultando o Moodle…');
     const scrapeResult = await scrapePortal();
 
-    setLoadingMessage('Identificando eventos com IA…');
-    const mergedEvents = await parseEvents(scrapeResult.subjects, scrapeResult.calendar_events);
-
     setSubjects(scrapeResult.subjects);
-    setEvents(mergedEvents);
+    setEvents(scrapeResult.calendar_events);
     setLastScrapedAt(new Date().toISOString());
   };
 
@@ -193,20 +189,20 @@ const App: React.FC = () => {
     }
   };
 
-  /** Gera link SSO fresco pro Moodle da disciplina (login automático). */
+  /** Devolve o link direto da atividade no Moodle. */
   const handleOpenPortal = async (
     subjectName: string,
     targetUrl?: string,
-  ): Promise<{ ssoUrl: string; targetUrl?: string } | null> => {
+  ): Promise<string | null> => {
     if (!authenticated) {
-      alert('Faça login novamente para abrir o portal.');
+      alert('Faça login novamente para abrir o Moodle.');
       return null;
     }
     try {
       return await openCourse(subjectName, targetUrl);
     } catch (err) {
-      console.error('Erro ao gerar link SSO:', err);
-      alert('Não foi possível abrir o portal. Tente novamente.');
+      console.error('Erro ao obter link do Moodle:', err);
+      alert('Não foi possível abrir o Moodle. Tente novamente.');
       return null;
     }
   };

@@ -3,7 +3,7 @@
 # Roda da raiz do projeto:
 #   .\setup.ps1
 #
-# Cria venv, instala deps Python + Node, baixa Chromium do Playwright,
+# Cria venv, instala deps Python + Node,
 # e prepara os arquivos .env (sem preencher chaves — você precisa editar
 # manualmente, veja README.md).
 
@@ -64,10 +64,6 @@ Write-Host "  Instalando dependências Python (pode demorar 1-2 min)..." -Foregr
 & .\.venv\Scripts\python.exe -m pip install --upgrade pip --quiet
 & .\.venv\Scripts\pip.exe install -r requirements.txt --quiet
 Write-OK "dependências instaladas"
-
-Write-Host "  Baixando Chromium do Playwright (~150MB, pode demorar)..." -ForegroundColor Gray
-& .\.venv\Scripts\playwright.exe install chromium | Out-Null
-Write-OK "Chromium instalado"
 
 if (-not (Test-Path .env)) {
     Copy-Item .env.example .env

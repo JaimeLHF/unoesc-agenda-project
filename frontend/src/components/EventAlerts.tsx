@@ -6,7 +6,7 @@ import { useDoneEvents } from '../contexts/DoneEventsContext';
 interface EventAlertsProps {
   events: AcademicEvent[];
   maxAlerts?: number;
-  onOpenPortal?: (subjectName: string, targetUrl?: string) => Promise<{ ssoUrl: string; targetUrl?: string } | null>;
+  onOpenPortal?: (subjectName: string, targetUrl?: string) => Promise<string | null>;
   onAskAi?: (event: AcademicEvent) => void;
 }
 
