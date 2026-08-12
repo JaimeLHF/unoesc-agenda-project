@@ -33,8 +33,24 @@ declare global {
   }
 }
 
-/** Aguarda o script do GIS carregar (até 10s). */
+const GIS_SRC = 'https://accounts.google.com/gsi/client';
+
+/**
+ * Carrega o script do GIS sob demanda e espera ele ficar pronto (até 10s).
+ *
+ * Antes a tag vinha fixa no `index.html`, e toda visita — inclusive a tela de
+ * login — batia no servidor do Google mesmo com a sincronização desligada.
+ * Num app que promete não compartilhar dados, essa requisição não se justifica
+ * antes de o aluno pedir para sincronizar.
+ */
 async function waitForGis(): Promise<GoogleAccountsOAuth2> {
+  if (!document.querySelector(`script[src="${GIS_SRC}"]`)) {
+    const script = document.createElement('script');
+    script.src = GIS_SRC;
+    script.async = true;
+    document.head.appendChild(script);
+  }
+
   const start = Date.now();
   while (Date.now() - start < 10_000) {
     if (window.google?.accounts?.oauth2) return window.google.accounts.oauth2;

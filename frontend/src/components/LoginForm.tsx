@@ -29,22 +29,6 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, loading, error }) => {
         segundos suas entregas, provas e webconferências aparecem numa lista só.
       </p>
 
-      {/*
-        Aviso antes do campo de senha, não depois: o aluno precisa saber o que
-        acontece com a credencial dele antes de digitá-la. O texto diz o que o
-        sistema faz de verdade — guarda a senha cifrada — porque a alternativa
-        seria pedir a senha de novo várias vezes ao dia.
-      */}
-      <div className="privacy-notice">
-        <strong>Antes de continuar:</strong> guardamos sua senha de forma cifrada no
-        servidor para manter você conectado ao Moodle durante o uso. Ela nunca fica
-        salva no seu navegador e não é compartilhada com ninguém. Você pode apagar
-        tudo a qualquer momento em <em>Excluir conta</em>.
-        <br />
-        Este é um projeto independente, feito por alunos. Não é um serviço oficial da
-        UNOESC.
-      </div>
-
       <form onSubmit={handleSubmit} className="login-form">
         <div className="form-group">
           <label htmlFor="username">Usuário do Moodle</label>
@@ -53,12 +37,27 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, loading, error }) => {
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="sua matrícula@unoesc.edu.br"
+            placeholder="codigo_do_aluno@unoesc.edu.br"
             disabled={loading}
             required
             autoComplete="username"
-            className="input-blurred"
           />
+          {/*
+            A dúvida mais comum de quem entra pela primeira vez é o formato do
+            usuário — só o código não funciona, o domínio faz parte do login.
+          */}
+          <small className="form-hint">
+            É o seu código de aluno com o domínio:{' '}
+            <code>&lt;codigo_aluno&gt;@unoesc.edu.br</code>
+          </small>
+
+          <details className="form-help">
+            <summary>Como encontrar meu código de aluno?</summary>
+            <p>
+              É o número da sua matrícula na UNOESC — o mesmo que você usa para entrar
+              no Moodle e no portal acadêmico.
+            </p>
+          </details>
         </div>
 
         <div className="form-group">
@@ -95,6 +94,17 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, loading, error }) => {
           )}
         </button>
       </form>
+
+      {/*
+        Aviso de privacidade no rodapé do card, discreto mas ainda na mesma
+        tela do campo de senha — o aluno precisa poder ler o que acontece com
+        a credencial dele sem sair daqui.
+      */}
+      <p className="login-footnote">
+        Guardamos sua senha cifrada no servidor para manter você conectado ao Moodle
+        durante o uso; ela nunca fica salva no navegador. Você apaga tudo quando quiser
+        em <em>Excluir conta</em>.
+      </p>
     </div>
   );
 };
