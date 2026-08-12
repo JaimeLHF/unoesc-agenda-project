@@ -6,7 +6,6 @@ interface EventModalProps {
   event: AcademicEvent | null;
   onClose: () => void;
   onOpenPortal?: (subjectName: string, targetUrl?: string) => Promise<string | null>;
-  onAskAi?: (event: AcademicEvent) => void;
 }
 
 const TYPE_LABELS: Record<EventType, string> = {
@@ -54,7 +53,7 @@ function relativeDays(iso: string, time?: string): string {
   }
 }
 
-const EventModal: React.FC<EventModalProps> = ({ event, onClose, onOpenPortal, onAskAi }) => {
+const EventModal: React.FC<EventModalProps> = ({ event, onClose, onOpenPortal }) => {
   const { isDone, toggleDone } = useDoneEvents();
   const [openingPortal, setOpeningPortal] = useState(false);
 
@@ -163,16 +162,6 @@ const EventModal: React.FC<EventModalProps> = ({ event, onClose, onOpenPortal, o
           >
             {done ? '↺ Marcar como pendente' : '✓ Marcar como concluído'}
           </button>
-          {onAskAi && event.url && (
-            <button
-              type="button"
-              className="btn-ai"
-              onClick={() => onAskAi(event)}
-              title="Pedir ajuda à IA para resolver esta atividade"
-            >
-              🤖 Pedir ajuda à IA
-            </button>
-          )}
         </div>
       </div>
     </div>

@@ -1,22 +1,28 @@
 """
 Ponto de entrada da aplicação FastAPI — UNOESC Agenda.
 
-Configura o app, CORS e registra todos os endpoints REST da API.
+Configura o app, CORS, os endpoints REST sob `/api` e — em produção — a
+entrega do frontend já compilado. Um processo só serve as duas coisas: um
+deploy, um domínio, sem CORS entre front e back.
 """
 
 import asyncio
 import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 from typing import Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from app import assistant
+from app import ratelimit
 from app import repository as repo
 from app import session as app_session
 from app.calendar_sync import CalendarSyncService
-from app.database import Subject as SubjectDB, event_key, init_db, utc_now
+from app.database import init_db, utc_now
 from app.moodle import MoodleClient, clear_session_cache
 
 # ---------------------------------------------------------------------------
@@ -24,7 +30,7 @@ from app.moodle import MoodleClient, clear_session_cache
 # ---------------------------------------------------------------------------
 
 class LoginCredentials(BaseModel):
-    """Credenciais do portal UNOESC. Enviadas uma única vez, em /api/login."""
+    """Credenciais do Moodle. Enviadas uma única vez, em /api/login."""
     username: str
     password: str
 
@@ -99,6 +105,31 @@ class DoneEventsResponse(BaseModel):
     done_keys: list[str]
 
 
+class MeResponse(BaseModel):
+    """Quem está logado, em que plano, e quanto resta do assistente."""
+    username: str
+    plan: str
+    assistant_available: bool
+    assistant_used: int
+    assistant_limit: int
+
+
+class AssistantMessage(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+
+class AssistantRequest(BaseModel):
+    """Pergunta de organização + histórico da conversa."""
+    messages: list[AssistantMessage]
+
+
+class AssistantResponse(BaseModel):
+    response: str
+    used: int
+    limit: int
+
+
 # ---------------------------------------------------------------------------
 # Inicialização do app FastAPI
 # ---------------------------------------------------------------------------
@@ -110,21 +141,27 @@ async def lifespan(_app: FastAPI):
     FastAPI. O que vem antes do `yield` roda na subida; depois, no shutdown.
     """
     init_db()
+    removidas = app_session.purge_expired()
+    if removidas:
+        print(f"[startup] {removidas} sessão(ões) expirada(s) removida(s).")
     yield
 
 
 app = FastAPI(
     title="UNOESC Agenda API",
-    description="API para extração e sincronização de atividades acadêmicas da UNOESC.",
-    version="1.0.0",
+    description="API para extração e organização de atividades acadêmicas da UNOESC.",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
-# Permite requisições do servidor de desenvolvimento Vite (porta padrão 5180,
-# regex aceita qualquer 51xx caso o Vite caia para a próxima porta livre).
+# Em produção o frontend é servido por este mesmo processo (mesma origem), e
+# não há CORS a liberar. `ALLOWED_ORIGINS` existe para o desenvolvimento, onde
+# o Vite roda em outra porta, e para um eventual front hospedado à parte.
+_origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origin_regex=r"http://localhost:51\d{2}",
+    allow_origins=_origins,
+    allow_origin_regex=None if _origins else r"http://localhost:51\d{2}",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -140,7 +177,9 @@ def require_session(
     """
     Resolve o token do header `Authorization: Bearer <token>`.
 
-    Dependência dos endpoints que precisam falar com o portal em nome do aluno.
+    Dependência de **todo** endpoint que lê ou escreve dados do aluno. Num app
+    multi-usuário não existe endpoint sem sessão: é a sessão que diz de quem
+    são as linhas a devolver.
     """
     token = ""
     if authorization and authorization.lower().startswith("bearer "):
@@ -158,23 +197,36 @@ def require_session(
 @app.post("/api/login", response_model=LoginResponse)
 async def login(credentials: LoginCredentials):
     """
-    Valida as credenciais no portal e devolve um token de sessão.
+    Valida as credenciais no Moodle e devolve um token de sessão. Cria o
+    usuário no primeiro acesso.
 
     É o único endpoint que recebe a senha. A partir daqui o frontend usa o
     token, e a senha não volta a trafegar nem fica guardada no navegador.
     """
+    chave = credentials.username.strip().lower()
+
+    espera = ratelimit.seconds_until_allowed(chave)
+    if espera:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Muitas tentativas de login. Tente de novo em {espera // 60 + 1} min.",
+            headers={"Retry-After": str(espera)},
+        )
+
     try:
         with MoodleClient() as moodle:
             await asyncio.to_thread(
                 moodle.login, credentials.username, credentials.password
             )
     except PermissionError as exc:
+        ratelimit.register_failure(chave)
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except Exception as exc:
         raise HTTPException(
             status_code=500, detail=f"Erro ao autenticar no Moodle: {exc}"
         ) from exc
 
+    ratelimit.reset(chave)
     return LoginResponse(token=app_session.create(credentials.username, credentials.password))
 
 
@@ -184,6 +236,37 @@ async def logout(authorization: Optional[str] = Header(default=None)):
     if authorization and authorization.lower().startswith("bearer "):
         app_session.revoke(authorization[len("bearer "):].strip())
     return {"status": "ok"}
+
+
+@app.get("/api/me", response_model=MeResponse)
+async def me(session: app_session.PortalSession = Depends(require_session)):
+    """Dados da conta logada — plano e saldo do assistente."""
+    with repo.get_session() as db:
+        user = repo.get_user(db, session.user_id)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Conta não encontrada.")
+        quota = assistant.current_quota(user)
+        return MeResponse(
+            username=user.moodle_username,
+            plan=user.plan,
+            assistant_available=assistant.is_configured(),
+            assistant_used=quota.used,
+            assistant_limit=quota.limit,
+        )
+
+
+@app.delete("/api/account")
+async def delete_account(session: app_session.PortalSession = Depends(require_session)):
+    """
+    Apaga a conta e todos os dados do aluno — cache, concluídos e credenciais.
+
+    Direito de exclusão da LGPD. Sem volta: o próximo login recria a conta do
+    zero e refaz o scrape.
+    """
+    with repo.get_session() as db:
+        repo.delete_user(db, session.user_id)
+        db.commit()
+    return {"status": "ok", "message": "Conta e dados apagados."}
 
 
 # ---------------------------------------------------------------------------
@@ -196,14 +279,12 @@ async def health_check():
     Diagnóstico das dependências externas. Útil para identificar rapidamente
     o que está faltando configurar ao subir o app pela primeira vez.
     """
-    provider = os.getenv("AI_PROVIDER", "gemini").lower()
-    ai_key = "ANTHROPIC_API_KEY" if provider == "claude" else "GEMINI_API_KEY"
-
     checks = {
         "api": True,
-        # A chave de IA deixou de ser obrigatória: os eventos vêm estruturados
-        # do calendário do Moodle, sem LLM. Ela só serve para o assistente.
-        "ai_key_optional": bool(os.getenv(ai_key)),
+        # A chave de IA nunca foi obrigatória: os eventos vêm estruturados do
+        # calendário do Moodle, sem LLM. Ela só serve ao assistente de
+        # organização, que é opcional.
+        "ai_key_optional": assistant.is_configured(),
         "moodle": False,
         "database": False,
     }
@@ -231,8 +312,8 @@ async def health_check():
 
     if not checks["ai_key_optional"]:
         hints.append(
-            f"{ai_key} não configurada — a agenda funciona normalmente, "
-            "só o assistente de IA fica indisponível."
+            "Chave de IA não configurada — a agenda funciona normalmente, "
+            "só o assistente de organização fica indisponível."
         )
     if not checks["moodle"]:
         hints.append(
@@ -249,7 +330,8 @@ async def health_check():
 @app.post("/api/scrape", response_model=ScrapeResponse)
 async def scrape_portal(session: app_session.PortalSession = Depends(require_session)):
     """
-    Extrai disciplinas + calendário do Moodle e persiste tudo no banco local.
+    Extrai disciplinas + calendário do Moodle e persiste tudo no banco, sob o
+    `user_id` da sessão.
 
     Usa as credenciais guardadas na sessão do token — nada de senha no corpo.
     """
@@ -263,13 +345,13 @@ async def scrape_portal(session: app_session.PortalSession = Depends(require_ses
         events = result.get("calendar_events", [])
 
         with repo.get_session() as db:
-            repo.upsert_subjects(db, result["subjects"])
+            repo.upsert_subjects(db, session.user_id, result["subjects"])
             if events:
                 # Preenche `stable_key` em cada evento — o frontend usa esse
                 # valor para marcar concluído.
-                repo.upsert_events(db, events)
-            repo.set_meta(db, "last_scraped_at", utc_now().isoformat())
-            synced_keys = set(repo.list_synced_keys(db))
+                repo.upsert_events(db, session.user_id, events)
+            repo.set_meta(db, session.user_id, "last_scraped_at", utc_now().isoformat())
+            synced_keys = set(repo.list_synced_keys(db, session.user_id))
             db.commit()
 
         for ev in events:
@@ -285,16 +367,15 @@ async def scrape_portal(session: app_session.PortalSession = Depends(require_ses
 
 
 @app.get("/api/cache", response_model=CacheResponse)
-async def get_cache():
+async def get_cache(session: app_session.PortalSession = Depends(require_session)):
     """
-    Retorna disciplinas + eventos persistidos do último scraping bem-sucedido,
-    junto com a lista de eventos marcados como concluídos. Usado pelo frontend
-    para abrir a app sem precisar logar novamente.
+    Retorna disciplinas + eventos persistidos do último scraping bem-sucedido
+    **do aluno logado**, junto com a lista de eventos marcados como concluídos.
     """
-    with repo.get_session() as session:
+    with repo.get_session() as db:
         subjects = [
             SubjectModel(id=s.name, name=s.name, content=s.content)
-            for s in repo.list_subjects(session)
+            for s in repo.list_subjects(db, session.user_id)
         ]
         events = [
             AcademicEvent(
@@ -309,10 +390,10 @@ async def get_cache():
                 synced=e.google_event_id is not None,
                 url=e.url,
             )
-            for e in repo.list_events(session)
+            for e in repo.list_events(db, session.user_id)
         ]
-        done_keys = repo.list_done_keys(session)
-        last_scraped_at = repo.get_meta(session, "last_scraped_at")
+        done_keys = repo.list_done_keys(db, session.user_id)
+        last_scraped_at = repo.get_meta(db, session.user_id, "last_scraped_at")
 
     return CacheResponse(
         subjects=subjects,
@@ -323,201 +404,102 @@ async def get_cache():
 
 
 @app.get("/api/done-events", response_model=DoneEventsResponse)
-async def list_done_events():
+async def list_done_events(session: app_session.PortalSession = Depends(require_session)):
     """Lista as `stable_keys` de todos os eventos marcados como concluídos."""
-    with repo.get_session() as session:
-        return DoneEventsResponse(done_keys=repo.list_done_keys(session))
+    with repo.get_session() as db:
+        return DoneEventsResponse(done_keys=repo.list_done_keys(db, session.user_id))
 
 
 @app.post("/api/done-events", response_model=DoneEventsResponse, status_code=200)
-async def mark_event_done(request: DoneEventRequest):
+async def mark_event_done(
+    request: DoneEventRequest,
+    session: app_session.PortalSession = Depends(require_session),
+):
     """Marca um evento como concluído (idempotente)."""
-    with repo.get_session() as session:
-        repo.mark_done(session, request.stable_key)
-        session.commit()
-        return DoneEventsResponse(done_keys=repo.list_done_keys(session))
+    with repo.get_session() as db:
+        repo.mark_done(db, session.user_id, request.stable_key)
+        db.commit()
+        return DoneEventsResponse(done_keys=repo.list_done_keys(db, session.user_id))
 
 
 @app.delete("/api/done-events", response_model=DoneEventsResponse)
-async def unmark_event_done(request: DoneEventRequest):
+async def unmark_event_done(
+    request: DoneEventRequest,
+    session: app_session.PortalSession = Depends(require_session),
+):
     """Desmarca um evento como concluído."""
-    with repo.get_session() as session:
-        repo.unmark_done(session, request.stable_key)
-        session.commit()
-        return DoneEventsResponse(done_keys=repo.list_done_keys(session))
+    with repo.get_session() as db:
+        repo.unmark_done(db, session.user_id, request.stable_key)
+        db.commit()
+        return DoneEventsResponse(done_keys=repo.list_done_keys(db, session.user_id))
 
 
 @app.delete("/api/cache")
-async def clear_cache():
+async def clear_cache(session: app_session.PortalSession = Depends(require_session)):
     """
-    Apaga o cache local (subjects, events, meta). Mantém done_events para
-    não perder o progresso do aluno ao limpar.
+    Apaga o cache do aluno (subjects, events, meta). Mantém done_events para
+    não perder o progresso ao limpar.
 
-    Descarta também as sessões guardadas em memória (tokens emitidos e cookies
-    do portal) — limpar o cache deve significar recomeçar do zero, inclusive o
-    login.
+    Encerra também as sessões abertas dele — limpar o cache significa
+    recomeçar do zero, inclusive o login. As sessões dos outros alunos não são
+    tocadas.
     """
-    with repo.get_session() as session:
-        repo.clear_cache(session)
-        session.commit()
+    with repo.get_session() as db:
+        repo.clear_cache(db, session.user_id)
+        db.commit()
     clear_session_cache()
-    app_session.revoke_all()
+    app_session.revoke_for_user(session.user_id)
     return {"status": "ok", "message": "Cache limpo. Faça login para recarregar os dados."}
 
 
-class AiHelpMessage(BaseModel):
-    role: str  # "user" | "assistant"
-    content: str
-
-
-class AiHelpRequest(BaseModel):
-    """Requisição para pedir ajuda da IA sobre uma atividade."""
-    activity_content: str
-    activity_title: str
-    subject_name: str
-    messages: list[AiHelpMessage]  # histórico da conversa
-
-
-def _build_system_prompt(request: AiHelpRequest) -> str:
-    return f"""Você é um assistente acadêmico direto e eficiente. Seu papel é ajudar o aluno a resolver a atividade da forma mais completa e objetiva possível.
-
-Atividade: "{request.activity_title}"
-Disciplina: "{request.subject_name}"
-
-Conteúdo completo da atividade (extraído do Moodle):
-\"\"\"
-{request.activity_content[:50000]}
-\"\"\"
-
-REGRAS:
-- Forneça as respostas de forma clara e direta
-- Se for um quiz com alternativas, indique a resposta correta e explique brevemente o porquê
-- Se for uma atividade dissertativa, escreva a resposta completa que o aluno pode usar como base
-- Sempre justifique brevemente a resposta para que o aluno entenda o raciocínio
-- Use linguagem clara em português brasileiro
-- Formate com markdown quando útil (listas, negrito, código)
-- Se não tiver informação suficiente para responder, peça mais detalhes ao aluno
-"""
-
-
-def _call_gemini(system_prompt: str, messages: list[AiHelpMessage]) -> str:
-    from google import genai
-    from google.genai import types as genai_types
-
-    client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-    model = os.getenv("GEMINI_MODEL", "gemini-2.5-flash")
-
-    contents = []
-    for msg in messages:
-        role = "user" if msg.role == "user" else "model"
-        contents.append(genai_types.Content(
-            role=role,
-            parts=[genai_types.Part(text=msg.content)],
-        ))
-
-    response = client.models.generate_content(
-        model=model,
-        contents=contents,
-        config=genai_types.GenerateContentConfig(
-            system_instruction=system_prompt,
-        ),
-    )
-    return (response.text or "").strip()
-
-
-def _call_claude(system_prompt: str, messages: list[AiHelpMessage]) -> str:
-    import anthropic
-
-    client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
-    model = os.getenv("CLAUDE_MODEL", "claude-haiku-4-5-20251001")
-
-    api_messages = []
-    for msg in messages:
-        api_messages.append({"role": msg.role, "content": msg.content})
-
-    response = client.messages.create(
-        model=model,
-        max_tokens=4096,
-        system=system_prompt,
-        messages=api_messages,
-    )
-    return response.content[0].text
-
-
-@app.post("/api/ai-help")
-async def ai_help(request: AiHelpRequest):
-    """
-    Envia o conteúdo da atividade + histórico de conversa para a IA configurada
-    (Gemini ou Claude). Retorna a resposta.
-    """
-    provider = os.getenv("AI_PROVIDER", "gemini").lower()
-
-    if provider == "claude":
-        if not os.getenv("ANTHROPIC_API_KEY"):
-            raise HTTPException(
-                status_code=503,
-                detail="ANTHROPIC_API_KEY não configurada. Adicione em backend/.env.",
-            )
-    else:
-        if not os.getenv("GEMINI_API_KEY"):
-            raise HTTPException(
-                status_code=503,
-                detail="GEMINI_API_KEY não configurada. Adicione em backend/.env.",
-            )
-
-    system_prompt = _build_system_prompt(request)
-
-    try:
-        if provider == "claude":
-            answer = _call_claude(system_prompt, request.messages)
-        else:
-            answer = _call_gemini(system_prompt, request.messages)
-
-        if not answer:
-            answer = "Desculpe, não consegui gerar uma resposta. Tente reformular sua pergunta."
-        return {"response": answer}
-    except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Erro ao consultar IA: {exc}") from exc
-
-
-class ActivityContentRequest(BaseModel):
-    """Requisição para extrair conteúdo de uma atividade do Moodle."""
-    subject_name: str
-    activity_url: str
-
-
-@app.post("/api/activity-content")
-async def get_activity_content(
-    request: ActivityContentRequest,
+@app.post("/api/assistant", response_model=AssistantResponse)
+async def ask_assistant(
+    request: AssistantRequest,
     session: app_session.PortalSession = Depends(require_session),
 ):
     """
-    Extrai o conteúdo da página da atividade (enunciado, instruções, critérios).
+    Assistente de organização: prioridades, plano de estudo, acúmulo de prazos.
 
-    O `subject_name` não é mais necessário para chegar lá — a sessão do Moodle
-    dá acesso a qualquer atividade em que o aluno esteja matriculado. Continua
-    aceito para não quebrar o frontend antigo.
+    Só recebe metadados dos eventos já em cache — título, data, disciplina.
+    Não abre atividade no Moodle e não responde questão de prova; ver o prompt
+    em `assistant.build_system_prompt`.
     """
-    try:
-        with MoodleClient() as moodle:
-            content = await asyncio.to_thread(
-                moodle.fetch_activity_content,
-                session.username, session.password, request.activity_url,
-            )
-        if not content:
+    if not request.messages:
+        raise HTTPException(status_code=400, detail="Envie ao menos uma mensagem.")
+
+    with repo.get_session() as db:
+        user = repo.get_user(db, session.user_id)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Conta não encontrada.")
+
+        if not assistant.is_configured():
             raise HTTPException(
-                status_code=502,
-                detail="Não foi possível extrair o conteúdo da atividade.",
+                status_code=503,
+                detail="O assistente não está disponível no momento.",
             )
-        return {"content": content}
-    except PermissionError as exc:
-        raise HTTPException(status_code=401, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=400, detail=str(exc)) from exc
-    except HTTPException:
-        raise
+
+        try:
+            quota = assistant.consume_quota(user)
+        except assistant.QuotaExceededError as exc:
+            raise HTTPException(status_code=429, detail=str(exc)) from exc
+
+        context = assistant.build_context(db, session.user_id)
+        # Grava o consumo antes de chamar o modelo: numa falha da API o aluno
+        # perde uma pergunta do saldo, o que é preferível a deixar a chamada
+        # sair de graça quando a resposta chega e o commit não.
+        db.commit()
+
+    system_prompt = assistant.build_system_prompt(context)
+    messages = [{"role": m.role, "content": m.content} for m in request.messages]
+
+    try:
+        answer = await asyncio.to_thread(assistant.ask, system_prompt, messages)
+    except assistant.AssistantUnavailableError as exc:
+        raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Erro ao extrair conteúdo: {exc}") from exc
+        raise HTTPException(status_code=500, detail=f"Erro ao consultar a IA: {exc}") from exc
+
+    return AssistantResponse(response=answer, used=quota.used, limit=quota.limit)
 
 
 class OpenCourseRequest(BaseModel):
@@ -527,7 +509,10 @@ class OpenCourseRequest(BaseModel):
 
 
 @app.post("/api/open-course")
-async def open_course(request: OpenCourseRequest):
+async def open_course(
+    request: OpenCourseRequest,
+    session: app_session.PortalSession = Depends(require_session),
+):
     """
     Devolve o link direto da atividade (ou da disciplina) no Moodle.
 
@@ -541,7 +526,7 @@ async def open_course(request: OpenCourseRequest):
         return {"url": request.target_url}
 
     with repo.get_session() as db:
-        subject = db.get(SubjectDB, request.subject_name)
+        subject = repo.get_subject(db, session.user_id, request.subject_name)
         if not subject or not subject.course_url:
             raise HTTPException(
                 status_code=404,
@@ -551,23 +536,32 @@ async def open_course(request: OpenCourseRequest):
 
 
 @app.post("/api/sync-calendar", response_model=SyncCalendarResponse)
-async def sync_calendar(request: SyncCalendarRequest):
+async def sync_calendar(
+    request: SyncCalendarRequest,
+    session: app_session.PortalSession = Depends(require_session),
+):
     """
     Recebe a lista de eventos e o token OAuth2 do Google e cria os eventos
     no Google Calendar do usuário.
 
     Grava o ID de cada evento criado no banco — é o que faz o frontend lembrar
     que o evento já foi sincronizado depois de um reload.
+
+    Fora do ar na v1 pública: o frontend não expõe o botão enquanto a tela de
+    consentimento OAuth não passar pela verificação do Google. O endpoint fica
+    de pé para o dia em que passar.
     """
     try:
         sync_service = CalendarSyncService(oauth_token=request.google_token)
         results = await sync_service.sync_events(request.events)
 
         if results:
-            with repo.get_session() as session:
+            with repo.get_session() as db:
                 for r in results:
-                    repo.set_google_event_id(session, r["stable_key"], r["google_event_id"])
-                session.commit()
+                    repo.set_google_event_id(
+                        db, session.user_id, r["stable_key"], r["google_event_id"]
+                    )
+                db.commit()
 
         return SyncCalendarResponse(
             synced_event_ids=[r["google_event_id"] for r in results],
@@ -575,3 +569,19 @@ async def sync_calendar(request: SyncCalendarRequest):
         )
     except Exception as exc:
         raise HTTPException(status_code=500, detail=f"Erro ao sincronizar com o Google Calendar: {exc}") from exc
+
+
+# ---------------------------------------------------------------------------
+# Frontend compilado
+#
+# Registrado por último de propósito: o mount em "/" captura qualquer caminho,
+# e as rotas acima precisam ser resolvidas primeiro. `html=True` faz a raiz
+# servir o index.html; caminhos desconhecidos continuam dando 404, o que basta
+# porque a interface não usa rotas de URL — a navegação é toda em estado.
+# ---------------------------------------------------------------------------
+
+_dist = Path(os.getenv("FRONTEND_DIST", Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"))
+if (_dist / "index.html").exists():
+    app.mount("/", StaticFiles(directory=str(_dist), html=True), name="frontend")
+else:
+    print(f"[startup] frontend não encontrado em {_dist} — servindo só a API.")

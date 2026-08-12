@@ -3,258 +3,162 @@
 ![CI](https://github.com/SEU_USUARIO/unoesc-agenda-project/actions/workflows/ci.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
-Aplicação web que reúne as atividades acadêmicas (prazos de entrega, provas, webconferências) de todas as disciplinas do Moodle da UNOESC numa agenda só, e sincroniza com o Google Calendar.
+Aplicação web que reúne as atividades acadêmicas (prazos de entrega, provas, webconferências) de todas as disciplinas do Moodle da UNOESC numa agenda só.
+
+O aluno entra com a conta do Moodle e vê tudo numa lista. Não instala nada, não configura chave de API, não cria conta.
+
+> Projeto independente, feito por alunos. **Não é um serviço oficial da UNOESC.**
 
 - **Login direto no Moodle** por HTTP — sem navegador headless, sem SSO pelo portal
 - **Calendário via API** do Moodle: data, hora, disciplina e link já estruturados
-- **Assistente de IA** para resolver atividades e provas (Gemini gratuito ou Claude pago)
-- **Respostas de provas** — extrai automaticamente as questões do quiz e retorna as respostas
-- **Cache local** em SQLite — abre sem refazer scraping
-- **Marcar como concluído**, **alertas de eventos próximos** e **link direto** pra cada atividade no portal
-- **Sincronização com Google Calendar** via popup OAuth (sem secrets no servidor)
+- **Multi-usuário** — cada aluno vê apenas a própria agenda
+- **Assistente de organização** (opcional) — prioridades, plano de estudo, acúmulo de prazos
+- **Marcar como concluído**, **alertas de eventos próximos** e **link direto** pra cada atividade
+- **Deploy único** — um container serve a API e a interface
 - **Responsivo** — funciona no celular
 
 ---
 
-## 📖 Guia de configuração detalhado
+## 📖 Índice
 
-Veja **[docs/SETUP.md](docs/SETUP.md)** para o passo a passo completo de cada etapa (clone, scripts, Gemini API e Google Calendar OAuth).
-
-> _Screenshots e vídeos serão adicionados em breve._
-
----
-
-## 📋 Pré-requisitos
-
-| Ferramenta | Versão mínima | Como verificar |
-| --- | --- | --- |
-| **Python** | 3.11+ | `python --version` |
-| **Node.js** | 18+ | `node --version` |
-| **npm** | 9+ | `npm --version` |
-| **Git** | qualquer | `git --version` |
-
-> **Windows**: Python 3.13 e 3.14 funcionam (já testados). No Linux/macOS, qualquer 3.11+ também.
-
-Você também vai precisar:
-- Credenciais do **Moodle da UNOESC** (`<matrícula>@unoesc.edu.br` + senha)
-
-Opcionais, só para recursos extras:
-- Conta no **Google Cloud Console** — Client ID OAuth, para sincronizar com o Google Calendar
-- Chave de **IA** (Gemini ou Claude) — só para o assistente; a agenda funciona sem ela
+- [O que o app não faz](#-o-que-o-app-não-faz)
+- [Rodando localmente](#-rodando-localmente)
+- [Assistente de organização](#-assistente-de-organização)
+- [Publicando num domínio](#-publicando-num-domínio)
+- [Privacidade e credenciais](#-privacidade-e-credenciais)
+- [Variáveis de ambiente](#-variáveis-de-ambiente)
+- [Estrutura do projeto](#-estrutura-do-projeto)
+- [Testes](#-testes)
+- [Troubleshooting](#-troubleshooting)
 
 ---
 
-## 🚀 Setup rápido (recomendado)
+## 🚫 O que o app não faz
 
-### 1. Clone o repositório
+O projeto já teve um assistente que baixava o enunciado das atividades e devolvia as respostas de provas. **Isso foi removido** quando ele passou a ser hospedado publicamente: distribuir uma ferramenta dessas sob um domínio próprio esbarra no regulamento acadêmico, e o risco recai sobre quem hospeda.
+
+O que ficou é um assistente que só enxerga **título, data e disciplina** — o suficiente para ajudar a planejar, insuficiente para responder qualquer coisa.
+
+A sincronização com o **Google Calendar** está desligada nesta versão. O código continua no repositório; o que falta é a verificação da tela de consentimento OAuth pelo Google, exigida para escopos sensíveis. Sem `VITE_GOOGLE_CLIENT_ID` configurado, os botões não aparecem.
+
+---
+
+## 🚀 Rodando localmente
+
+### Pré-requisitos
+
+| Ferramenta | Versão mínima |
+| --- | --- |
+| **Python** | 3.11+ |
+| **Node.js** | 18+ |
+| **Git** | qualquer |
+
+Você vai precisar das suas credenciais do Moodle (`<matrícula>@unoesc.edu.br` + senha). **Nenhuma chave de API é necessária.**
+
+### 1. Clone e rode o setup
 
 ```bash
 git clone https://github.com/SEU_USUARIO/unoesc-agenda-project.git
 cd unoesc-agenda-project
+./setup.sh          # Windows: .\setup.ps1
 ```
 
-### 2. Rode o script de setup
+O script cria o `venv`, instala as dependências dos dois lados e copia os `.env.example`.
 
-**Windows (PowerShell):**
-
-```powershell
-.\setup.ps1
-```
-
-**Linux / macOS:**
+### 2. Suba os dois serviços
 
 ```bash
-chmod +x setup.sh
-./setup.sh
+make dev            # Windows: .\dev.ps1
 ```
 
-O script faz tudo:
-- Cria o `venv` Python e instala dependências
-- Instala dependências do frontend (`npm install`)
-- Copia os arquivos `.env.example` para `.env`
+Frontend em **http://localhost:5180** · API em **http://localhost:8880** · Swagger em **/docs**.
 
-### 3. Configure as chaves de API
+### 3. Use
 
-> A agenda já funciona sem configurar chave nenhuma. As chaves abaixo são para os recursos opcionais (Google Calendar e assistente de IA).
-- `backend/.env` — chave do **Gemini** (uma só)
-- `frontend/.env` — **Client ID OAuth** do Google Calendar
-
-As próximas duas seções mostram como obter cada uma. **Faça as duas antes de rodar o app.**
+1. Entre com usuário e senha do Moodle.
+2. O primeiro acesso lê todas as disciplinas — leva cerca de um minuto.
+3. Nas próximas vezes a agenda abre na hora, do cache, e atualiza em segundo plano.
+4. Clique num evento para ver detalhes e abrir a atividade no Moodle.
+5. Marque o que já entregou como concluído.
 
 ---
 
-## 🔑 Sobre as chaves de IA
+## 🧠 Assistente de organização
 
-**A agenda funciona sem nenhuma chave de API.** Os eventos vêm estruturados do calendário do Moodle — data, hora, disciplina e link já prontos, sem LLM no caminho.
+Opcional. Sem chave configurada, o botão não aparece e o resto do app funciona igual.
 
-Antes o app usava o Gemini para garimpar eventos no texto das disciplinas, porque o scraping devolvia HTML solto. Com a API do Moodle isso deixou de ser necessário: `GEMINI_API_KEY` passou de obrigatória a opcional, e serve apenas ao assistente de IA descrito abaixo.
+Ele responde coisas como *"o que eu preciso entregar essa semana?"*, *"monte um plano de estudo até a prova"* ou *"tem algum dia com entregas acumuladas?"*.
 
----
+**O que ele recebe**: a lista de atividades pendentes — data, hora, disciplina, tipo e título. Nada mais. O prompt em `backend/app/assistant.py` recusa pedidos de resolver questões, mesmo se o aluno colar o enunciado.
 
-## 🤖 Configurando o Assistente de IA
+### Configurar
 
-O app possui um **assistente de IA integrado** que ajuda a resolver atividades acadêmicas e provas. Você pode escolher entre dois provedores — basta configurar uma variável no `backend/.env`.
-
-### Comparação de provedores
-
-| | **Gemini (Google)** | **Claude (Anthropic)** |
-| --- | --- | --- |
-| **Custo** | Gratuito (com limites) | Pago (~R$ 0,03 por consulta no Haiku) |
-| **Limite diário** | 1.500 req/dia (gemini-2.0-flash) | Sem limite (enquanto tiver crédito) |
-| **Qualidade** | Boa para a maioria das atividades | Excelente, especialmente em questões complexas |
-| **Modelo recomendado** | `gemini-2.0-flash` | `claude-haiku-4-5-20251001` (rápido e barato) |
-| **Custo mensal estimado** | R$ 0 | R$ 5–15 (uso moderado de estudante) |
-| **Precisa de cartão?** | Não | Sim (para adicionar créditos) |
-
-> **Dica**: comece com o Gemini (grátis). Se as respostas não estiverem boas ou a cota estourar, mude para o Claude.
-
-### Opção 1: Gemini (gratuito) — Recomendado para começar
-
-Se você já configurou a Gemini API no passo anterior, o assistente já funciona. Só certifique-se de usar o modelo com mais cota:
+No `backend/.env`:
 
 ```env
-GEMINI_API_KEY=AIzaSy...sua_chave
+AI_PROVIDER=gemini
+GEMINI_API_KEY=AIzaSy...
 GEMINI_MODEL=gemini-2.0-flash
-AI_PROVIDER=gemini
 ```
 
-> ⚠️ **Não use** `gemini-2.5-flash` para o assistente — ele tem limite de apenas 20 requisições/dia. O `gemini-2.0-flash` tem 1.500 req/dia grátis.
+Chave gratuita em [aistudio.google.com](https://aistudio.google.com/). Para usar Claude, troque `AI_PROVIDER=claude` e preencha `ANTHROPIC_API_KEY`.
 
-### Opção 2: Claude / Anthropic (pago, melhor qualidade)
+### Cota
 
-1. Acesse [console.anthropic.com](https://console.anthropic.com/) e crie uma conta
-2. Vá em **Settings → API Keys** e crie uma nova chave
-3. Adicione créditos em **Settings → Billing** (mínimo: $5 USD)
-4. No `backend/.env`, adicione:
+Como quem hospeda paga a conta, cada aluno tem um limite mensal — `FREE_AI_QUOTA` (padrão 5) e `PRO_AI_QUOTA` (padrão 200), com o plano gravado na coluna `plan` da tabela `users`. Só metadados vão no contexto, então cada pergunta custa fração de centavo.
 
-```env
-AI_PROVIDER=claude
-ANTHROPIC_API_KEY=sk-ant-api03-...sua_chave_aqui
-CLAUDE_MODEL=claude-haiku-4-5-20251001
-```
-
-5. Instale o pacote (necessário apenas na primeira vez ou se não rodou `setup.sh` recentemente):
-```bash
-cd backend && source .venv/bin/activate && pip install anthropic
-```
-
-**Modelos disponíveis do Claude (do mais barato ao mais caro):**
-
-| Modelo | Custo por consulta | Quando usar |
-| --- | --- | --- |
-| `claude-haiku-4-5-20251001` | ~R$ 0,03 | Quizzes, perguntas objetivas — rápido e barato |
-| `claude-sonnet-4-6` | ~R$ 0,15 | Atividades dissertativas, textos complexos |
-
-### Como trocar de provedor
-
-Basta alterar `AI_PROVIDER` no `backend/.env` e reiniciar o backend:
-
-```env
-# Para usar Gemini:
-AI_PROVIDER=gemini
-
-# Para usar Claude:
-AI_PROVIDER=claude
-```
-
-### Como usar o assistente
-
-1. Abra qualquer evento e clique em **"🤖 Pedir ajuda à IA"**
-2. O sistema acessa o Moodle automaticamente, extrai o conteúdo completo da atividade e abre um chat
-3. Pergunte o que quiser — a IA tem acesso ao enunciado, critérios e materiais da atividade
-4. **Para provas/quizzes**: clique no botão **"📝 Respostas"**, cole o link da tentativa iniciada no navegador, e receba todas as respostas de uma vez
-
-> ⚠️ **Importante**: para provas, você precisa **iniciar a tentativa no Moodle primeiro** (no seu navegador). Só depois de iniciar, copie a URL (algo como `https://on.unoesc.edu.br/mod/quiz/attempt.php?attempt=123&cmid=456`) e cole no campo que aparece ao clicar "Respostas".
+> A cobrança em si (gateway de pagamento, nota fiscal) ainda não existe — ver `docs/PLANO_PUBLICO.md`, fase 7.
 
 ---
 
-## 📅 Configurando o Google Calendar (OAuth)
+## 🌐 Publicando num domínio
 
-A sincronização com o Google Calendar acontece **no navegador** via Google Identity Services (popup). Você só precisa de um Client ID — **não há Client Secret nem redirect URI**.
+O `Dockerfile` compila o frontend e o serve pelo próprio FastAPI: **um container, um domínio, sem CORS**.
 
-1. Acesse [Google Cloud Console](https://console.cloud.google.com/).
-2. Crie um novo projeto (canto superior, *"Selecione um projeto"* → *"Novo projeto"*). Nome: `unoesc-agenda` (ou qualquer um).
-3. No menu lateral: **APIs e Serviços** → **Biblioteca** → procure por **"Google Calendar API"** e clique em **"Ativar"**.
-4. **APIs e Serviços** → **Tela de consentimento OAuth**:
-   - Tipo de usuário: **Externo**
-   - Preencha nome do app, e-mail de suporte, e-mail do desenvolvedor
-   - Em **"Test users"**, adicione seu e-mail Google (e o de qualquer colega que vai testar)
-5. **APIs e Serviços** → **Credenciais** → **+ Criar credenciais** → **ID do cliente OAuth 2.0**:
-   - Tipo de aplicativo: **"Aplicativo da Web"**
-   - Em **"Origens JavaScript autorizadas"** adicione a URL abaixo (**obrigatório** — sem isso o popup do Google é bloqueado):
-     ```
-     http://localhost:5180
-     ```
-6. Copie o **Client ID** gerado e cole em `frontend/.env`:
+```bash
+make docker         # build local
+docker run -p 8080:8080 -v agenda-dados:/data \
+  -e SESSION_SECRET="$(openssl rand -base64 32)" agenda-unoesc
+```
 
-   ```
-   VITE_GOOGLE_CLIENT_ID=000000000000-xxxxxxxxxxxx.apps.googleusercontent.com
-   ```
+### Fly.io
 
-> ℹ️ Se tiver mais de uma pessoa usando, você pode reusar **o mesmo Client ID** entre todos — basta adicionar cada e-mail como Test user da tela de consentimento.
+```bash
+fly launch --no-deploy
+fly volumes create dados --size 1 --region gru
+fly secrets set SESSION_SECRET="$(openssl rand -base64 32)"
+fly deploy
+```
+
+Ajuste o nome do app em `fly.toml` antes.
+
+> ⚠️ **O volume não é opcional.** O SQLite vive em `/data/agenda.db`; sem volume montado, cada deploy apaga a agenda de todo mundo.
+
+> ⚠️ **Uma instância só.** SQLite exige que todas as requisições cheguem ao mesmo disco. Para crescer além disso, troque por Postgres — não suba réplicas.
+
+### Backup
+
+O banco é um arquivo. Um cron diário copiando `/data/agenda.db` para um bucket resolve; não há réplica.
 
 ---
 
-## ▶️ Rodando a aplicação
+## 🔒 Privacidade e credenciais
 
-### Forma rápida (recomendada)
+Este é o ponto mais sensível do projeto, e vale entender antes de hospedar para outras pessoas.
 
-Um único comando sobe backend + frontend em paralelo:
+**A senha do Moodle é guardada, cifrada, no servidor.** O cliente do Moodle precisa relogar sozinho quando a sessão de lá expira — guardar só o cookie obrigaria o aluno a redigitar a senha várias vezes por dia. O raciocínio completo está em `backend/app/crypto.py`.
 
-**Linux / WSL / macOS:**
-```bash
-make dev
-# ou diretamente: ./dev.sh
-```
+Isso protege contra vazamento do banco: um dump do SQLite não entrega senha nenhuma sem a `SESSION_SECRET`, que fica nas variáveis de ambiente. **Não** protege contra comprometimento do servidor rodando — quem tem o processo tem a chave e o banco juntos.
 
-**Windows (PowerShell):**
-```powershell
-.\dev.ps1
-```
+A solução real é o Moodle emitir um token de web service por aluno, o que tiraria a senha do fluxo inteiro. É o item de maior impacto no `docs/PLANO_PUBLICO.md` e depende de conversar com a TI da UNOESC.
 
-Ctrl+C encerra os dois processos.
+O que já está no código:
 
-> ⚠️ **WSL**: se o venv foi criado no Windows, ele não funciona no WSL. Apague e recrie:
-> ```bash
-> rm -rf backend/.venv
-> ./setup.sh
-> ```
-
-### Forma manual (dois terminais)
-
-Se preferir rodar cada serviço separadamente:
-
-**Terminal 1 — Backend (FastAPI):**
-
-```bash
-cd backend
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
-uvicorn app.main:app --reload --port 8880
-```
-
-**Terminal 2 — Frontend (Vite):**
-
-```bash
-cd frontend
-npm run dev
-```
-
-API disponível em **http://localhost:8880** · Docs Swagger em **http://localhost:8880/docs**
-Frontend em **http://localhost:5180**.
-
-### Como usar
-
-1. Acesse `http://localhost:5180` no navegador.
-2. Faça login com seu **usuário (matrícula/CPF) + senha** do portal UNOESC.
-3. Aguarde 1-2 minutos enquanto o app:
-   - Loga no portal
-   - Acessa o Moodle de cada disciplina (SSO)
-   - Lê o calendário consolidado
-   - Roda o Gemini para webconferências
-4. Veja os eventos agrupados por disciplina, ordenados por data.
-5. Clique em **um evento** pra abrir o modal com detalhes + link para o portal.
-6. **Marque eventos como concluídos** com o checkbox (sincronizado com o banco local).
-7. **Sincronize com Google Calendar** clicando no botão dentro de cada disciplina.
+- Token de sessão gravado **hasheado** — ler o banco não permite se passar por um usuário logado
+- Sessão expira após 8h de inatividade
+- Rate limit no `/api/login` — sem ele, o servidor viraria ferramenta de força bruta contra o Moodle
+- Aviso de privacidade **antes** do campo de senha
+- Botão **Excluir conta**, que apaga dados, marcações e credenciais
 
 ---
 
@@ -264,17 +168,22 @@ Frontend em **http://localhost:5180**.
 
 | Variável | Obrigatória | Descrição |
 | --- | --- | --- |
-| `GEMINI_API_KEY` | Opcional | Chave da Gemini API. Usada **apenas** pelo assistente de IA (se `AI_PROVIDER=gemini`). A agenda funciona sem ela. |
-| `GEMINI_MODEL` | Não | Modelo Gemini. Padrão: `gemini-2.5-flash`. Recomendado: `gemini-2.0-flash` (1500 req/dia grátis). |
-| `AI_PROVIDER` | Não | Provedor do assistente de IA: `gemini` (padrão) ou `claude`. |
-| `ANTHROPIC_API_KEY` | Apenas se `AI_PROVIDER=claude` | Chave da API Anthropic. [Como obter](https://console.anthropic.com/). |
-| `CLAUDE_MODEL` | Não | Modelo Claude. Padrão: `claude-haiku-4-5-20251001`. |
+| `SESSION_SECRET` | Em produção | Cifra as senhas guardadas em sessão. Gere com `openssl rand -base64 32`. Trocar derruba as sessões abertas. |
+| `APP_ENV` | Não | `production` torna a `SESSION_SECRET` obrigatória. Padrão: `development`. |
+| `DATABASE_PATH` | Não | Caminho do SQLite. Em produção, aponte para o volume persistente. |
+| `FRONTEND_DIST` | Não | Pasta do frontend compilado. Se existir, o FastAPI serve a interface no mesmo domínio. |
+| `ALLOWED_ORIGINS` | Não | Origens do CORS, separadas por vírgula. Vazio = padrão de desenvolvimento (Vite em `localhost:51xx`). |
+| `AI_PROVIDER` | Não | `gemini` (padrão) ou `claude`. |
+| `GEMINI_API_KEY` | Não | Só para o assistente de organização. |
+| `ANTHROPIC_API_KEY` | Se `AI_PROVIDER=claude` | Idem. |
+| `FREE_AI_QUOTA` / `PRO_AI_QUOTA` | Não | Perguntas por mês em cada plano. Padrão: 5 e 200. |
+| `LOGIN_MAX_ATTEMPTS` / `LOGIN_WINDOW_MINUTES` | Não | Rate limit do login. Padrão: 5 tentativas / 15 min. |
 
 ### `frontend/.env`
 
 | Variável | Obrigatória | Descrição |
 | --- | --- | --- |
-| `VITE_GOOGLE_CLIENT_ID` | Apenas para sincronizar com Google Calendar | Client ID OAuth. [Como obter](#-configurando-o-google-calendar-oauth). |
+| `VITE_GOOGLE_CLIENT_ID` | Não | Deixe vazio: com o Google Calendar desligado, os botões de sincronizar não aparecem. |
 
 ---
 
@@ -282,105 +191,101 @@ Frontend em **http://localhost:5180**.
 
 ```
 unoesc-agenda-project/
+├── Dockerfile                   # frontend compilado + API num container só
+├── fly.toml                     # deploy no Fly.io (volume obrigatório)
 ├── backend/
 │   ├── app/
-│   │   ├── main.py              # FastAPI: endpoints REST
+│   │   ├── main.py              # FastAPI: endpoints REST + entrega do frontend
 │   │   ├── moodle.py            # Cliente HTTP do Moodle: login + disciplinas + calendário
-│   │   ├── calendar_sync.py     # Google Calendar API
-│   │   ├── database.py          # SQLAlchemy + modelos SQLite
-│   │   └── repository.py        # CRUD/upsert do cache
-│   ├── requirements.txt
-│   ├── .env.example
-│   ├── agenda.db                # SQLite (criado automaticamente, ignorado pelo git)
-│   └── .venv/                   # Ambiente virtual Python
+│   │   ├── database.py          # SQLAlchemy + modelos (todos com user_id)
+│   │   ├── repository.py        # CRUD/upsert do cache, sempre filtrado por aluno
+│   │   ├── session.py           # Sessões em banco, token hasheado
+│   │   ├── crypto.py            # Cifragem das senhas guardadas
+│   │   ├── ratelimit.py         # Proteção do /api/login
+│   │   ├── assistant.py         # Assistente de organização + cota
+│   │   └── calendar_sync.py     # Google Calendar (desligado na v1)
+│   ├── tests/
+│   │   └── test_isolamento.py   # Critério de aceite do multi-tenant
+│   └── requirements.txt
 ├── frontend/
 │   ├── src/
 │   │   ├── components/
-│   │   │   ├── LoginForm.tsx
+│   │   │   ├── LoginForm.tsx         # Login + aviso de privacidade
 │   │   │   ├── SubjectList.tsx       # Grid de disciplinas
 │   │   │   ├── SubjectDetail.tsx     # Eventos de uma disciplina
 │   │   │   ├── EventModal.tsx        # Modal de detalhes
-│   │   │   └── EventAlerts.tsx       # Banner de alertas urgentes
-│   │   ├── contexts/
-│   │   │   └── DoneEventsContext.tsx # "Concluídos" via API
-│   │   ├── services/
-│   │   │   ├── api.ts                # Chamadas REST
-│   │   │   └── googleAuth.ts         # Google Identity Services
-│   │   ├── types/
-│   │   ├── App.tsx
-│   │   └── main.tsx
-│   ├── package.json
-│   ├── vite.config.ts
-│   └── .env.example
-├── setup.ps1                    # Setup automatizado Windows
-├── setup.sh                     # Setup automatizado Linux/macOS
-├── .gitignore
-└── README.md
+│   │   │   ├── EventAlerts.tsx       # Banner de alertas urgentes
+│   │   │   └── Assistant.tsx         # Chat de organização
+│   │   ├── contexts/DoneEventsContext.tsx
+│   │   ├── services/api.ts
+│   │   └── App.tsx
+│   └── package.json
+└── docs/
+    ├── SETUP.md
+    └── PLANO_PUBLICO.md         # Plano da versão pública, por fases
 ```
 
 ---
 
-## 🗃️ Banco local (SQLite)
+## 🗃️ Banco (SQLite)
 
-A aplicação usa **SQLite** com SQLAlchemy. O arquivo `backend/agenda.db` é criado automaticamente no primeiro login. Tabelas:
+Criado automaticamente no primeiro login. Tabelas:
 
-- `subjects` — cache do conteúdo bruto de cada disciplina
-- `events` — cache dos eventos extraídos (chave estável `subject|date|title`)
-- `done_events` — quais eventos foram marcados como concluídos
-- `meta` — metadados livres (ex: timestamp do último scraping)
+- `users` — um por aluno, criado no primeiro login bem-sucedido no Moodle
+- `sessions` — token hasheado + senha cifrada, com TTL de 8h
+- `subjects` / `events` / `done_events` / `meta` — cache por aluno, PK composta com `user_id`
 
-Eventos antigos **não** são removidos quando o scraper roda de novo — preserva histórico mesmo depois que somem do calendário do Moodle.
+Eventos antigos **não** são removidos quando o scrape roda de novo — preserva histórico mesmo depois que somem do calendário do Moodle.
 
-Para resetar o banco:
+> Um banco vindo da versão single-user é detectado no startup e as tabelas de cache são recriadas com `user_id`. Tudo se reconstrói no próximo login; a única perda são as marcações de "concluído" antigas.
+
+Para resetar:
+
 ```bash
 make clean
-# ou manualmente: rm -f backend/agenda.db
 ```
-Depois faça login novamente para recarregar os dados.
+
+---
+
+## 🧪 Testes
+
+```bash
+make test
+```
+
+Roda `backend/tests/test_isolamento.py` contra um Moodle falso, sem rede. Verifica que dois alunos logados ao mesmo tempo não enxergam nada um do outro, que nenhum endpoint de dados responde sem sessão, que o rate limit do login funciona e que excluir a conta apaga tudo.
+
+É o critério de aceite da versão pública — roda no CI a cada push.
 
 ---
 
 ## 🐛 Troubleshooting
 
-### `ModuleNotFoundError: No module named 'X'`
-Você esqueceu de ativar o `venv` ou de rodar `pip install -r requirements.txt`. O `setup.ps1`/`setup.sh` faz isso por você.
-
 ### Login no Moodle falha
-Use a matrícula no formato `294833@unoesc.edu.br` (com o domínio), e a mesma senha do portal acadêmico. Confirme que consegue entrar em https://on.unoesc.edu.br pelo navegador.
+Use a matrícula no formato `294833@unoesc.edu.br` (com o domínio). Confirme que consegue entrar em https://on.unoesc.edu.br pelo navegador.
 
-### Erro `SERVICE_DISABLED` ao usar a IA
-A Gemini API ainda não foi habilitada no seu projeto Google. A mensagem de erro contém um link `https://console.developers.google.com/apis/...` — abra ele e clique em **"Ativar"**. Espere 1-2 minutos.
+### "Muitas tentativas de login"
+O rate limit bloqueou após 5 tentativas erradas. Espere 15 minutos ou ajuste `LOGIN_MAX_ATTEMPTS`.
 
-### Botão "Sincronizar com Google Calendar" não funciona
-- Verifique se o `VITE_GOOGLE_CLIENT_ID` está em `frontend/.env` (não em `.env.example`!).
-- Reinicie o `npm run dev` depois de criar/editar o `.env` (Vite só lê na inicialização).
-- Confirme que `http://localhost:5180` está em **Origens JavaScript autorizadas** no Google Cloud Console.
-- Confirme que seu e-mail Google está adicionado como **Test user** na Tela de Consentimento OAuth.
+### Todo mundo é deslogado a cada deploy
+Falta `SESSION_SECRET` fixa. Sem ela o backend gera uma chave efêmera a cada boot, e as senhas cifradas com a chave antiga não são mais legíveis.
 
-### Login no portal UNOESC falha
-- Confirme as credenciais fazendo login direto em https://acad.unoesc.edu.br
-- Use sua matrícula (números) ou CPF + senha de acesso ao portal
+### A agenda some depois do deploy
+O volume não está montado. Confirme que `DATABASE_PATH` aponta para dentro dele.
 
-### "Não vem nada" ao atualizar uma disciplina
-Algumas disciplinas só têm conteúdo após a data de início (ex: começam em maio). Se o Moodle mostrar *"O acesso ao componente curricular ainda não está disponível"*, é normal o app capturar pouco conteúdo dela.
+### "Não vem nada" numa disciplina
+Algumas só têm conteúdo após a data de início. Se o Moodle mostra *"O acesso ao componente curricular ainda não está disponível"*, é normal.
 
-### O `tsc` reclama de algum tipo
-Reinstale as deps do frontend: `cd frontend && rm -rf node_modules && npm install`.
+### Agenda vazia mesmo com disciplinas
+Curso presencial normalmente não usa `assign`/`quiz` no Moodle, e sem isso não há o que listar no calendário. O app serve bem quem faz EAD.
 
 ### Venv criado no Windows não funciona no WSL
-O `.venv` é específico do sistema operacional. Se você criou pelo Windows (`.venv\Scripts\`) e tenta usar no WSL, vai dar erro. Solução:
 ```bash
-rm -rf backend/.venv
-./setup.sh
+rm -rf backend/.venv && ./setup.sh
 ```
 
 ### Banner "Sem conexão com o servidor"
-O backend (uvicorn) está parado ou caiu. Sobe ele de novo no terminal do backend e o banner some automaticamente.
-
-### Quero começar do zero (apagar cache)
-Na tela do grid de disciplinas, clique em **"Limpar cache"** no canto superior direito. Subjects e eventos são apagados; eventos marcados como concluídos são preservados. Depois faça login para refazer o scraping.
-
-Para apagar **tudo** (incluindo concluídos), apague o arquivo `backend/agenda.db`.
+O backend está parado. Suba de novo e o banner some sozinho.
 
 ---
 
@@ -390,25 +295,19 @@ Para apagar **tudo** (incluindo concluídos), apague o arquivo `backend/agenda.d
 | --- | --- |
 | Acesso ao Moodle | Python + httpx (login HTTP + API AJAX interna) |
 | Calendário | `core_calendar_get_calendar_monthly_view` (JSON) |
-| Sincronização | Google Calendar API + Google Identity Services |
 | Backend API | FastAPI + Uvicorn |
 | Persistência | SQLite + SQLAlchemy 2.x |
+| Cifragem | `cryptography` (Fernet) |
 | Frontend | React 18 + TypeScript + Vite |
-
----
-
-## ⚠️ Notas importantes
-
-- **Credenciais UNOESC**: usadas **apenas em memória** durante o scraping. Não são gravadas em disco nem em banco.
-- **Uso pessoal**: respeite os termos de uso do portal UNOESC. A aplicação foi pensada para uso individual.
-- **Arquivos `.env`**: nunca commite. Já estão no `.gitignore`.
-- **Banco local**: `agenda.db` também está no `.gitignore` — cada usuário tem o próprio.
+| Deploy | Docker (multi-stage) + Fly.io |
 
 ---
 
 ## 🤝 Contribuindo
 
-Pull requests são bem-vindos. Para mudanças grandes, abra uma *issue* primeiro pra discutir o que mudar.
+Pull requests são bem-vindos. Para mudanças grandes, abra uma *issue* primeiro.
+
+Qualquer mudança em `repository.py` precisa passar por `make test` — é o que garante que um aluno não vê os dados de outro.
 
 ---
 

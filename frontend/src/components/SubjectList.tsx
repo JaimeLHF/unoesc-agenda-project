@@ -14,7 +14,9 @@ interface SubjectListProps {
   onClearCache: () => void;
   lastScrapedAt?: string | null;
   onOpenPortal?: (subjectName: string, targetUrl?: string) => Promise<string | null>;
-  onAskAi?: (event: AcademicEvent) => void;
+  onOpenAssistant?: () => void;
+  assistantAvailable?: boolean;
+  onDeleteAccount: () => void;
 }
 
 /** Formata "X minutos atrás" / "ontem" a partir de um timestamp ISO. */
@@ -96,7 +98,9 @@ const SubjectList: React.FC<SubjectListProps> = ({
   onClearCache,
   lastScrapedAt,
   onOpenPortal,
-  onAskAi,
+  onOpenAssistant,
+  assistantAvailable,
+  onDeleteAccount,
 }) => {
   const { isDone } = useDoneEvents();
   const lastScrapedRel = formatRelative(lastScrapedAt);
@@ -128,16 +132,34 @@ const SubjectList: React.FC<SubjectListProps> = ({
               '🔄 Atualizar'
             )}
           </button>
+          {assistantAvailable && onOpenAssistant && (
+            <button
+              type="button"
+              className="btn-secondary"
+              onClick={onOpenAssistant}
+              title="Pedir ajuda para organizar seus prazos"
+            >
+              🧠 Organizar
+            </button>
+          )}
           <button
             type="button"
             className="btn-link"
             onClick={onClearCache}
-            title="Apaga subjects e eventos do banco local"
+            title="Apaga suas disciplinas e eventos salvos"
           >
             Limpar cache
           </button>
           <button type="button" className="btn-link" onClick={onLogout}>
             Sair
+          </button>
+          <button
+            type="button"
+            className="btn-link btn-link--danger"
+            onClick={onDeleteAccount}
+            title="Apaga sua conta e todos os seus dados"
+          >
+            Excluir conta
           </button>
         </div>
       </div>
@@ -148,7 +170,7 @@ const SubjectList: React.FC<SubjectListProps> = ({
         </div>
       )}
 
-      <EventAlerts events={events} onOpenPortal={onOpenPortal} onAskAi={onAskAi} />
+      <EventAlerts events={events} onOpenPortal={onOpenPortal} />
 
       {subjects.length === 0 ? (
         <div className="empty-state">Nenhuma disciplina encontrada no portal.</div>

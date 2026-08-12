@@ -1,0 +1,48 @@
+# Deploy no Fly.io. Ajuste `app` e `primary_region` antes do primeiro deploy.
+#
+#   fly launch --no-deploy        # cria o app com este arquivo
+#   fly volumes create dados --size 1 --region gru
+#   fly secrets set SESSION_SECRET="$(openssl rand -base64 32)"
+#   fly deploy
+#
+# `gru` é São Paulo — o mais perto dos alunos e do Moodle da UNOESC.
+
+app = "agenda-unoesc"
+primary_region = "gru"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  APP_ENV = "production"
+  DATABASE_PATH = "/data/agenda.db"
+  FRONTEND_DIST = "/app/static"
+
+# O SQLite exige que todas as requisições cheguem à mesma máquina com o mesmo
+# disco. Uma instância só, sem auto-scale: duas máquinas significariam dois
+# bancos divergentes. Para crescer além disso, o passo é trocar por Postgres,
+# não subir mais réplicas.
+[[mounts]]
+  source = "dados"
+  destination = "/data"
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Escala a zero: sem ninguém acessando, a máquina suspende e para de custar.
+  # A primeira requisição depois de ocioso acorda ela em ~1s, porque `suspend`
+  # preserva a memória em vez de desligar. Enquanto não se sabe se alguém vai
+  # usar o app, esse é o ajuste que mantém a conta perto de zero — sobra só o
+  # volume, que é cobrado por existir.
+  auto_stop_machines = "suspend"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [http_service.concurrency]
+    type = "requests"
+    soft_limit = 40
+    hard_limit = 60
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

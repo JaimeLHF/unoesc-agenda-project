@@ -2,22 +2,32 @@ import React, { useEffect, useState } from 'react';
 import LoginForm from './components/LoginForm';
 import SubjectList from './components/SubjectList';
 import SubjectDetail from './components/SubjectDetail';
-import AiHelper from './components/AiHelper';
+import Assistant from './components/Assistant';
 import {
   login,
   logout,
   scrapePortal,
   syncToCalendar,
   fetchCache,
+  fetchAccount,
+  deleteAccount,
   clearCache,
   openCourse,
 } from './services/api';
+import type { Account } from './services/api';
 import { requestGoogleAccessToken } from './services/googleAuth';
 import { useDoneEvents } from './contexts/DoneEventsContext';
 import type { Subject, AcademicEvent, LoginCredentials } from './types';
 import './index.css';
 
-type AppStep = 'login' | 'results' | 'ai-helper';
+type AppStep = 'login' | 'results' | 'assistant';
+
+/**
+ * O Google Calendar fica fora do ar enquanto a tela de consentimento OAuth não
+ * passa pela verificação do Google (escopo sensível). Sem Client ID
+ * configurado, os botões de sincronizar simplesmente não aparecem.
+ */
+const calendarEnabled = Boolean(import.meta.env.VITE_GOOGLE_CLIENT_ID);
 
 const App: React.FC = () => {
   const [step, setStep] = useState<AppStep>('login');
@@ -30,8 +40,7 @@ const App: React.FC = () => {
   // devolve um token guardado dentro de services/api. Aqui basta saber se a
   // sessão está ativa.
   const [authenticated, setAuthenticated] = useState(false);
-
-  const [aiHelperEvent, setAiHelperEvent] = useState<AcademicEvent | null>(null);
+  const [account, setAccount] = useState<Account | null>(null);
 
   const [loadingMessage, setLoadingMessage] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -43,7 +52,7 @@ const App: React.FC = () => {
 
   const { hydrate } = useDoneEvents();
 
-  // Banner de "backend offline": axios interceptor dispatcha eventos
+  // Banner de "servidor fora do ar": axios interceptor dispatcha eventos
   // 'backend-online'/'backend-offline' a cada request.
   useEffect(() => {
     const onOnline = () => setBackendOffline(false);
@@ -52,6 +61,7 @@ const App: React.FC = () => {
     // Volta pro login em vez de deixar a tela travada em erro.
     const onSessionExpired = () => {
       setAuthenticated(false);
+      setAccount(null);
       setStep('login');
       setLoginError('Sua sessão expirou. Faça login novamente.');
     };
@@ -65,28 +75,10 @@ const App: React.FC = () => {
     };
   }, []);
 
-  /** Boot — tenta carregar cache do backend; se vazio, fica na tela de login. */
-  useEffect(() => {
-    let cancelled = false;
-    fetchCache()
-      .then((cache) => {
-        if (cancelled) return;
-        hydrate(cache.doneKeys);
-        if (cache.subjects.length > 0 || cache.events.length > 0) {
-          setSubjects(cache.subjects);
-          setEvents(cache.events);
-          setLastScrapedAt(cache.lastScrapedAt);
-          setStep('results');
-        }
-      })
-      .catch((err) => console.warn('Cache indisponível, indo pro login:', err));
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Não há mais carga de cache antes do login: num app multi-usuário o cache
+  // pertence a alguém, e o backend precisa da sessão para saber a quem.
 
-  /** Busca disciplinas e eventos. Usado no login e no refresh. */
+  /** Busca disciplinas e eventos no Moodle. Usado no login e no refresh. */
   const fetchAll = async () => {
     setLoadingMessage('Consultando o Moodle…');
     const scrapeResult = await scrapePortal();
@@ -96,31 +88,53 @@ const App: React.FC = () => {
     setLastScrapedAt(new Date().toISOString());
   };
 
-  /** Login inicial — captura credenciais e busca dados. */
+  /** Login inicial — autentica, mostra o que já existe e atualiza. */
   const [loginLoading, setLoginLoading] = useState(false);
 
   const handleLogin = async (creds: LoginCredentials) => {
     setLoginError(null);
     setLoginLoading(true);
+    setLoadingMessage('Entrando…');
 
     try {
       await login(creds);
       setAuthenticated(true);
+      void fetchAccount().then(setAccount).catch(() => setAccount(null));
+
+      // Se o aluno já usou o app antes, o cache abre a tela na hora e o
+      // Moodle é consultado em seguida. No primeiro acesso não há cache, e aí
+      // a espera pelo scrape é inevitável.
+      setLoadingMessage('Carregando sua agenda…');
+      const cache = await fetchCache().catch(() => null);
+      const temCache = Boolean(cache && (cache.subjects.length > 0 || cache.events.length > 0));
+
+      if (cache) hydrate(cache.doneKeys);
+      if (cache && temCache) {
+        setSubjects(cache.subjects);
+        setEvents(cache.events);
+        setLastScrapedAt(cache.lastScrapedAt);
+        setStep('results');
+        setLoginLoading(false);
+        // Atualiza em segundo plano — a tela já está utilizável.
+        setRefreshing(true);
+        fetchAll()
+          .catch((err) => console.warn('Falha ao atualizar em segundo plano:', err))
+          .finally(() => setRefreshing(false));
+        return;
+      }
+
       await fetchAll();
       setLoginLoading(false);
       setStep('results');
     } catch (err: unknown) {
       setLoginLoading(false);
-      setLoginError(
-        err instanceof Error ? err.message : 'Ocorreu um erro inesperado. Tente novamente.',
-      );
+      setLoginError(mensagemDeErro(err));
     }
   };
 
-  /** Re-busca disciplinas e eventos. Pede login novamente se não tiver credenciais. */
+  /** Re-busca disciplinas e eventos. Pede login novamente se a sessão caiu. */
   const handleRefresh = async () => {
     if (!authenticated) {
-      // Veio do cache — precisa logar de novo pra fazer scraping
       setStep('login');
       setLoginError('Faça login novamente para atualizar os dados.');
       return;
@@ -132,16 +146,16 @@ const App: React.FC = () => {
       await fetchAll();
     } catch (err) {
       console.error('Erro ao atualizar disciplinas:', err);
-      setRefreshError(err instanceof Error ? err.message : 'Falha ao atualizar.');
+      setRefreshError(mensagemDeErro(err));
     } finally {
       setRefreshing(false);
     }
   };
 
-  /** Logout: encerra a sessão no backend e limpa o estado local. */
-  const handleLogout = () => {
-    void logout();
+  /** Limpa o estado local da sessão. */
+  const resetLocalState = () => {
     setAuthenticated(false);
+    setAccount(null);
     setSubjects([]);
     setEvents([]);
     setSelectedSubjectId(null);
@@ -151,10 +165,16 @@ const App: React.FC = () => {
     setStep('login');
   };
 
-  /** Apaga o cache local (no banco) e volta pro login. Útil pra debugar. */
+  /** Logout: encerra a sessão no backend e limpa o estado local. */
+  const handleLogout = () => {
+    void logout();
+    resetLocalState();
+  };
+
+  /** Apaga o cache do aluno e volta pro login. */
   const handleClearCache = async () => {
     const confirmed = window.confirm(
-      'Limpar o cache local? Subjects e eventos serão apagados; eventos marcados como concluídos serão mantidos. Você precisará fazer login novamente.',
+      'Limpar seus dados salvos? As disciplinas e eventos serão apagados; o que você marcou como concluído é mantido. Você precisará fazer login novamente.',
     );
     if (!confirmed) return;
     try {
@@ -162,7 +182,23 @@ const App: React.FC = () => {
       handleLogout();
     } catch (err) {
       console.error('Erro ao limpar cache:', err);
-      alert('Falha ao limpar o cache. Verifique se o backend está rodando.');
+      alert('Não foi possível limpar seus dados agora. Tente de novo em instantes.');
+    }
+  };
+
+  /** Exclusão de conta — direito da LGPD, sem volta. */
+  const handleDeleteAccount = async () => {
+    const confirmed = window.confirm(
+      'Excluir sua conta? Apagamos seus dados, suas marcações de concluído e as credenciais guardadas. Isso não pode ser desfeito.',
+    );
+    if (!confirmed) return;
+    try {
+      await deleteAccount();
+      resetLocalState();
+      setLoginError('Conta excluída. Seus dados foram apagados.');
+    } catch (err) {
+      console.error('Erro ao excluir conta:', err);
+      alert('Não foi possível excluir a conta agora. Tente de novo em instantes.');
     }
   };
 
@@ -183,7 +219,7 @@ const App: React.FC = () => {
       );
     } catch (err) {
       console.error('Erro ao sincronizar:', err);
-      setSyncError(err instanceof Error ? err.message : 'Falha ao sincronizar.');
+      setSyncError(mensagemDeErro(err));
     } finally {
       setSyncing(false);
     }
@@ -207,16 +243,6 @@ const App: React.FC = () => {
     }
   };
 
-  /** Abre a tela de assistente IA para uma atividade. */
-  const handleAskAi = (event: AcademicEvent) => {
-    if (!authenticated) {
-      alert('Faça login novamente para usar o assistente de IA.');
-      return;
-    }
-    setAiHelperEvent(event);
-    setStep('ai-helper');
-  };
-
   const selectedSubject = subjects.find((s) => s.id === selectedSubjectId) ?? null;
   const eventsForSelected = selectedSubject
     ? events.filter((e) => e.subject === selectedSubject.name)
@@ -227,19 +253,18 @@ const App: React.FC = () => {
       <header className="app-header">
         <h1 className="app-title">📚 Agenda UNOESC</h1>
         <p className="app-subtitle">
-          Encontre suas atividades acadêmicas e sincronize com o Google Calendar
+          Todas as suas entregas, provas e webconferências numa lista só
         </p>
       </header>
 
       {backendOffline && (
         <div className="backend-offline-banner" role="alert">
-          ⚠️ Sem conexão com o servidor. Confira se o backend (uvicorn) está rodando em
-          {' '}<code>http://localhost:8880</code>.
+          ⚠️ Sem conexão com o servidor. Verifique sua internet e tente de novo em instantes.
         </div>
       )}
 
       <main className="app-main">
-        {step === 'login' && (
+        {step === 'login' && !loginLoading && (
           <LoginForm onSubmit={handleLogin} loading={loginLoading} error={loginError} />
         )}
 
@@ -247,6 +272,10 @@ const App: React.FC = () => {
           <div className="loading-screen">
             <div className="loading-spinner" aria-label="Carregando" />
             <p className="loading-message">{loadingMessage}</p>
+            <p className="loading-hint">
+              Na primeira vez isso leva cerca de um minuto — estamos lendo todas as suas
+              disciplinas.
+            </p>
           </div>
         )}
 
@@ -260,9 +289,11 @@ const App: React.FC = () => {
             refreshError={refreshError}
             onLogout={handleLogout}
             onClearCache={handleClearCache}
+            onDeleteAccount={handleDeleteAccount}
             lastScrapedAt={lastScrapedAt}
             onOpenPortal={handleOpenPortal}
-            onAskAi={handleAskAi}
+            onOpenAssistant={() => setStep('assistant')}
+            assistantAvailable={account?.assistantAvailable ?? false}
           />
         )}
 
@@ -274,26 +305,48 @@ const App: React.FC = () => {
               setSelectedSubjectId(null);
               setSyncError(null);
             }}
-            onSync={() => handleSyncSubject(selectedSubject.name)}
+            onSync={
+              calendarEnabled ? () => handleSyncSubject(selectedSubject.name) : undefined
+            }
             syncing={syncing}
             error={syncError}
             onOpenPortal={handleOpenPortal}
-            onAskAi={handleAskAi}
           />
         )}
 
-        {step === 'ai-helper' && aiHelperEvent && authenticated && (
-          <AiHelper
-            event={aiHelperEvent}
-            onBack={() => {
-              setAiHelperEvent(null);
-              setStep('results');
-            }}
+        {step === 'assistant' && account && (
+          <Assistant
+            onBack={() => setStep('results')}
+            used={account.assistantUsed}
+            limit={account.assistantLimit}
+            onQuotaChange={(used, limit) =>
+              setAccount((prev) =>
+                prev ? { ...prev, assistantUsed: used, assistantLimit: limit } : prev,
+              )
+            }
           />
         )}
       </main>
+
+      <footer className="app-footer">
+        <span>
+          Projeto independente de alunos — não é um serviço oficial da UNOESC.
+        </span>
+      </footer>
     </div>
   );
 };
+
+/**
+ * Mensagem de erro em português para o aluno. O backend manda o motivo em
+ * `detail`; o `message` do axios ("Request failed with status code 401") não
+ * diz nada para quem não é programador.
+ */
+function mensagemDeErro(err: unknown): string {
+  const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+  if (detail) return detail;
+  if (err instanceof Error && err.message) return err.message;
+  return 'Ocorreu um erro inesperado. Tente novamente.';
+}
 
 export default App;

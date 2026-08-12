@@ -1,8 +1,8 @@
 # 🛠️ Guia de configuração
 
-Este guia complementa o [README](../README.md) com o passo a passo detalhado de cada etapa. Se você seguir do início ao fim, vai ter o app rodando do zero.
+Passo a passo detalhado. Para o resumo, veja o [README](../README.md).
 
-> **Antes de começar**, certifique-se de ter [Python 3.11+](https://python.org), [Node.js 18+](https://nodejs.org) e [Git](https://git-scm.com) instalados.
+> **A agenda funciona sem configurar chave de API nenhuma.** Os eventos vêm estruturados do calendário do Moodle. As seções 3 e 4 são opcionais.
 
 ---
 
@@ -22,228 +22,173 @@ cd unoesc-agenda-project
 **Linux / macOS / WSL:**
 
 ```bash
-make setup
-# ou diretamente: chmod +x setup.sh && ./setup.sh
+chmod +x setup.sh && ./setup.sh
 ```
 
-O script cria o `venv`, instala as dependências, baixa o Chromium do Playwright e cria os arquivos `.env`. Aguarde até ver "Setup concluído!".
-
-> ⚠️ **WSL**: se você já rodou `.\setup.ps1` no Windows antes, o venv criado não funciona no WSL. Apague com `rm -rf backend/.venv` e rode `./setup.sh` novamente.
+O script cria o `venv` Python, instala as dependências dos dois lados e copia os arquivos `.env.example` para `.env`.
 
 ---
 
-## 2. Configurando a Gemini API (extração de eventos)
+## 2. Rodando
 
-A Gemini API é gratuita (15 req/min, 1500/dia) e não pede cartão de crédito.
+### 2.1. Um comando só
 
-### 2.1. Acessar o Google AI Studio
-
-Abra **https://aistudio.google.com/** e faça login com sua conta Google.
-
-### 2.2. Criar a API key
-
-Clique em **"Get API key"** no canto superior esquerdo, depois em **"Create API key"**. Na primeira vez ele cria um projeto Google Cloud por baixo dos panos automaticamente.
-
-### 2.3. Copiar a chave
-
-A chave gerada começa com `AIzaSy...`. **Copie e guarde com cuidado** — quem tiver ela usa sua cota.
-
-### 2.4. Colar em `backend/.env`
-
-Abra `backend/.env` no editor e preencha:
-
-```
-GEMINI_API_KEY=AIzaSy...sua_chave_aqui
-GEMINI_MODEL=gemini-2.5-flash
-```
-
-Salve o arquivo.
-
-### 2.5. Se aparecer erro `SERVICE_DISABLED`
-
-Na primeira execução, pode ser que precise habilitar a API explicitamente. O erro mostra um link tipo `https://console.developers.google.com/apis/api/generativelanguage.googleapis.com/overview?project=ID`. Abra e clique em **"Ativar"**. Espere 1-2 minutos.
-
-### 2.6. E se eu não configurar o Gemini?
-
-A aplicação funciona **parcialmente** sem a chave do Gemini:
-
-| O que funciona | O que NÃO funciona |
-| --- | --- |
-| Eventos do **calendário do Moodle** (prazos, provas, entregas) — dados estruturados extraídos direto do HTML | **Webconferências** e eventos mencionados apenas no corpo de texto das disciplinas — dependem da IA para serem identificados |
-
-Ou seja: se você só precisa ver prazos e datas de avaliação, pode usar o app normalmente sem Gemini. Mas para ter a visão completa (incluindo encontros síncronos/lives), configure a chave.
-
----
-
-## 3. Configurando o Assistente de IA (resolver atividades)
-
-O assistente de IA permite resolver atividades e provas diretamente pelo app. Ele suporta dois provedores: **Gemini** (grátis) e **Claude** (pago, melhor qualidade).
-
-### 3.1. Usando Gemini (grátis)
-
-Se você já configurou a `GEMINI_API_KEY` no passo 2, basta garantir que o modelo é o `gemini-2.0-flash` (maior cota gratuita):
-
-```
-GEMINI_MODEL=gemini-2.0-flash
-AI_PROVIDER=gemini
-```
-
-> O `gemini-2.0-flash` tem **1.500 requisições/dia** grátis. O `gemini-2.5-flash` tem apenas 20/dia — evite usá-lo para o assistente.
-
-### 3.2. Usando Claude (pago)
-
-Para melhor qualidade nas respostas:
-
-1. Acesse [console.anthropic.com](https://console.anthropic.com/) e crie uma conta
-2. Vá em **Settings → API Keys** → crie uma chave
-3. Adicione créditos em **Settings → Billing** (mínimo $5 USD, dura meses com uso normal)
-4. No `backend/.env`:
-
-```
-AI_PROVIDER=claude
-ANTHROPIC_API_KEY=sk-ant-api03-...sua_chave
-CLAUDE_MODEL=claude-haiku-4-5-20251001
-```
-
-5. Instale o pacote:
 ```bash
-cd backend
-source .venv/bin/activate
-pip install anthropic
+make dev          # ou: ./dev.sh
 ```
 
-### 3.3. Custos estimados
+**Windows:**
 
-| Provedor | Modelo | Custo por consulta | Custo mensal estimado |
-| --- | --- | --- | --- |
-| Gemini | `gemini-2.0-flash` | R$ 0 (grátis até 1500/dia) | R$ 0 |
-| Claude | `claude-haiku-4-5-20251001` | ~R$ 0,03 | R$ 5–15 |
-| Claude | `claude-sonnet-4-6` | ~R$ 0,15 | R$ 20–50 |
-
-### 3.4. Como trocar de provedor
-
-Altere `AI_PROVIDER` no `backend/.env` e reinicie o backend:
-
-```
-AI_PROVIDER=gemini   # ou claude
-```
-
----
-
-## 4. Configurando o Google Calendar (OAuth)
-
-A sincronização com o Google Calendar é feita via popup OAuth no navegador. Você precisa criar um **Client ID** no Google Cloud Console. Não há Client Secret nem redirect URI — fica tudo no frontend.
-
-### 4.1. Criar um novo projeto
-
-Acesse **https://console.cloud.google.com/** e clique no seletor de projeto no topo → **"Novo projeto"**. Nome sugerido: `unoesc-agenda`.
-
-### 4.2. Habilitar a Google Calendar API
-
-No menu lateral, vá em **APIs e Serviços → Biblioteca**, busque por *"Google Calendar API"* e clique em **"Ativar"**.
-
-### 4.3. Configurar a Tela de consentimento OAuth
-
-**APIs e Serviços → Tela de consentimento OAuth**:
-
-- **Tipo de usuário**: Externo
-- **Nome do app**: `Agenda UNOESC` (ou o que quiser)
-- **E-mail de suporte**: o seu
-- **E-mail do desenvolvedor**: o seu
-
-### 4.4. Adicionar Test Users
-
-Na mesma tela de consentimento, role até **"Test users"** e adicione **seu e-mail Google** (e o de qualquer colega que vai usar o app).
-
-> ⚠️ Apenas e-mails listados aqui podem usar a sincronização. Se um colega tentar e não estiver na lista, o popup do Google vai bloquear a autenticação.
-
-### 4.5. Criar o OAuth Client ID
-
-**APIs e Serviços → Credenciais → + Criar credenciais → ID do cliente OAuth 2.0**:
-
-- **Tipo de aplicativo**: Aplicativo da Web
-- **Nome**: qualquer um (ex: `Agenda UNOESC Web`)
-- **Origens JavaScript autorizadas** (**obrigatório**):
-  - `http://localhost:5180`
-- **URIs de redirecionamento autorizados**: deixe vazio
-
-> ⚠️ **Atenção**: a origem `http://localhost:5180` **precisa** estar cadastrada aqui. Sem ela, o popup de autenticação do Google será bloqueado e a sincronização com o Calendar não vai funcionar. Se você mudar a porta do Vite, atualize aqui também.
-
-### 4.6. Copiar o Client ID
-
-A janela final mostra o **Client ID** gerado. Copie ele todo (termina com `.apps.googleusercontent.com`).
-
-### 4.7. Colar em `frontend/.env`
-
-```
-VITE_GOOGLE_CLIENT_ID=000000000000-xxxxxxxxxxxx.apps.googleusercontent.com
-```
-
-Salve o arquivo. Se o `npm run dev` já estava rodando, **reinicie** — o Vite só lê `.env` na inicialização.
-
----
-
-## 5. Rodando a aplicação
-
-### 5.1. Forma rápida (um comando só)
-
-Sobe backend + frontend em paralelo com um único comando:
-
-**Linux / WSL / macOS:**
-```bash
-make dev
-# ou diretamente: ./dev.sh
-```
-
-**Windows (PowerShell):**
 ```powershell
 .\dev.ps1
 ```
 
-Ctrl+C encerra os dois processos. Você deve ver as URLs:
-- Backend: `http://localhost:8880`
-- Frontend: `http://localhost:5180`
+`Ctrl+C` encerra os dois processos.
 
-### 5.2. Forma manual (dois terminais separados)
+### 2.2. Dois terminais separados
 
-Se preferir controlar cada processo individualmente:
-
-**Terminal 1 — Backend:**
+**Terminal 1 — backend:**
 
 ```bash
 cd backend
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+source .venv/bin/activate      # Windows: .venv\Scripts\activate
 uvicorn app.main:app --reload --port 8880
 ```
 
-**Terminal 2 — Frontend:**
+**Terminal 2 — frontend:**
 
 ```bash
 cd frontend
 npm run dev
 ```
 
-### 5.3. Acessar no navegador
+### 2.3. Acessar
 
-Abra **http://localhost:5180**. Se chegar até a tela de login, está tudo certo.
+Abra **http://localhost:5180** e entre com seu usuário e senha do Moodle (`<matrícula>@unoesc.edu.br`).
+
+O primeiro acesso lê todas as disciplinas e leva cerca de um minuto. Depois disso a agenda abre na hora, do cache, e atualiza em segundo plano.
 
 ---
 
-## 6. Solução de problemas comuns
+## 3. Assistente de organização (opcional)
+
+Ajuda a planejar: o que entregar primeiro, como dividir o estudo até o prazo, onde há acúmulo de entregas.
+
+Ele recebe **apenas** título, data e disciplina das atividades pendentes. Não abre atividade no Moodle e recusa pedidos de resolver questões — inclusive quando o aluno cola o enunciado na pergunta.
+
+### 3.1. Gemini (gratuito)
+
+1. Acesse [aistudio.google.com](https://aistudio.google.com/).
+2. Faça login com sua conta Google.
+3. Clique em **"Get API key"** → **"Create API key"**.
+4. Copie a chave (começa com `AIza...`).
+5. Cole em `backend/.env`:
+
+```env
+AI_PROVIDER=gemini
+GEMINI_API_KEY=AIzaSy...sua_chave
+GEMINI_MODEL=gemini-2.0-flash
+```
+
+> Use `gemini-2.0-flash`: são 1.500 requisições/dia grátis. O `gemini-2.5-flash` tem cota de apenas 20/dia.
+
+6. Reinicie o backend.
+
+Se aparecer erro `SERVICE_DISABLED`, a Gemini API ainda não foi habilitada no seu projeto Google. A mensagem traz um link `console.developers.google.com/apis/...` — abra, clique em **Ativar** e espere 1-2 minutos.
+
+### 3.2. Claude (pago)
+
+1. Crie conta em [console.anthropic.com](https://console.anthropic.com/).
+2. **Settings → API Keys** → crie uma chave.
+3. **Settings → Billing** → adicione créditos (mínimo US$ 5).
+4. Em `backend/.env`:
+
+```env
+AI_PROVIDER=claude
+ANTHROPIC_API_KEY=sk-ant-api03-...
+CLAUDE_MODEL=claude-haiku-4-5-20251001
+```
+
+### 3.3. Custos
+
+Como o contexto é só metadados (algumas centenas de tokens), cada pergunta custa fração de centavo em qualquer um dos dois. O que controla o gasto quando há vários alunos é a cota mensal:
+
+```env
+FREE_AI_QUOTA=5
+PRO_AI_QUOTA=200
+```
+
+---
+
+## 4. Google Calendar (desligado nesta versão)
+
+A sincronização está fora do ar na v1 pública. O escopo do Google Calendar é sensível, e usar fora do modo "Testing" (limitado a 100 usuários adicionados na mão) exige passar pela verificação do Google — processo que inclui vídeo demonstrativo e leva semanas.
+
+O código continua em `backend/app/calendar_sync.py` e o endpoint `/api/sync-calendar` segue de pé. Com `VITE_GOOGLE_CLIENT_ID` vazio em `frontend/.env`, os botões simplesmente não aparecem na interface.
+
+Para reativar em ambiente próprio, preencha o Client ID OAuth e recompile o frontend.
+
+---
+
+## 5. Publicando para outras pessoas
+
+Detalhes no [README](../README.md#-publicando-num-domínio) e o plano completo por fases em [PLANO_PUBLICO.md](PLANO_PUBLICO.md).
+
+O essencial:
+
+1. Gere a chave de sessão e guarde como secret do provedor:
+
+```bash
+openssl rand -base64 32
+```
+
+2. Configure `SESSION_SECRET` e `APP_ENV=production`. Sem a primeira, o backend recusa subir em produção.
+
+3. Monte um volume persistente e aponte `DATABASE_PATH` para dentro dele. Sem volume, cada deploy apaga a agenda de todos.
+
+4. Rode `make test` antes de cada deploy — é o que garante que um aluno não vê os dados de outro.
+
+---
+
+## 6. Solução de problemas
 
 ### Venv criado no Windows não funciona no WSL
 
-O `.venv` é específico do sistema operacional. Se você criou pelo Windows e tenta usar no WSL (ou vice-versa), vai dar erro. Solução:
+O `.venv` é específico do sistema. Apague e recrie:
 
 ```bash
 rm -rf backend/.venv
 ./setup.sh
 ```
 
-### Outros problemas
+### `ModuleNotFoundError`
 
-Veja o [README → Troubleshooting](../README.md#-troubleshooting) para erros frequentes.
+Falta ativar o `venv` ou instalar as dependências:
 
----
+```bash
+cd backend && source .venv/bin/activate && pip install -r requirements.txt
+```
 
-[← Voltar para o README](../README.md)
+### Login falha
+
+Use a matrícula com domínio (`294833@unoesc.edu.br`) e a mesma senha do Moodle. Confirme que consegue entrar em https://on.unoesc.edu.br pelo navegador.
+
+### "Muitas tentativas de login"
+
+O rate limit bloqueou após 5 erros seguidos. Espere 15 minutos, ou ajuste `LOGIN_MAX_ATTEMPTS` e `LOGIN_WINDOW_MINUTES` no `.env`.
+
+### Sessões caem a cada restart
+
+Em desenvolvimento isso é esperado: sem `SESSION_SECRET` definida, o backend gera uma chave efêmera e avisa no log. Defina uma chave fixa no `.env` para as sessões sobreviverem.
+
+### Agenda vazia
+
+Curso presencial normalmente não usa `assign`/`quiz` no Moodle, e sem isso o calendário não tem o que listar. O app atende bem quem faz EAD.
+
+### Quero começar do zero
+
+```bash
+make clean
+```
+
+Ou, dentro do app, **Limpar cache** (mantém os concluídos) / **Excluir conta** (apaga tudo).

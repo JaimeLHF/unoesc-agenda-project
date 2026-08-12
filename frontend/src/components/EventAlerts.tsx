@@ -7,7 +7,6 @@ interface EventAlertsProps {
   events: AcademicEvent[];
   maxAlerts?: number;
   onOpenPortal?: (subjectName: string, targetUrl?: string) => Promise<string | null>;
-  onAskAi?: (event: AcademicEvent) => void;
 }
 
 type Urgency = 'today' | 'tomorrow' | 'soon' | 'week';
@@ -92,7 +91,7 @@ function buildMessage(alert: Alert): { icon: string; text: string } {
   }
 }
 
-const EventAlerts: React.FC<EventAlertsProps> = ({ events, maxAlerts = 6, onOpenPortal, onAskAi }) => {
+const EventAlerts: React.FC<EventAlertsProps> = ({ events, maxAlerts = 6, onOpenPortal }) => {
   const [openEvent, setOpenEvent] = useState<AcademicEvent | null>(null);
   const { isDone } = useDoneEvents();
 
@@ -127,7 +126,7 @@ const EventAlerts: React.FC<EventAlertsProps> = ({ events, maxAlerts = 6, onOpen
         })}
       </ul>
 
-      <EventModal event={openEvent} onClose={() => setOpenEvent(null)} onOpenPortal={onOpenPortal} onAskAi={onAskAi} />
+      <EventModal event={openEvent} onClose={() => setOpenEvent(null)} onOpenPortal={onOpenPortal} />
     </section>
   );
 };

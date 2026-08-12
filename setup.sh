@@ -69,7 +69,7 @@ ok "dependências instaladas"
 if [ ! -f .env ]; then
     cp .env.example .env
     ok ".env criado a partir do .env.example"
-    warn "Edite backend/.env e adicione sua GEMINI_API_KEY (veja README)"
+    ok "nenhuma chave é obrigatória para rodar local — veja backend/.env.example"
 else
     ok ".env já existe"
 fi
@@ -92,7 +92,7 @@ ok "dependências instaladas"
 if [ ! -f .env ]; then
     cp .env.example .env
     ok ".env criado a partir do .env.example"
-    warn "Edite frontend/.env e adicione seu VITE_GOOGLE_CLIENT_ID (veja README)"
+    ok "VITE_GOOGLE_CLIENT_ID fica vazio: o Google Calendar está desligado na v1"
 else
     ok ".env já existe"
 fi
@@ -107,13 +107,14 @@ step "Setup concluído!"
 echo
 echo "Próximos passos:"
 echo
-echo "  1. Edite backend/.env  — preencha GEMINI_API_KEY"
+echo "  1. Rode: make dev   (ou ./dev.sh)"
+echo "     A agenda funciona sem configurar chave nenhuma."
+echo
+echo "  2. Opcional — assistente de organização:"
+echo "     preencha GEMINI_API_KEY em backend/.env"
 echo "     Obtenha em: https://aistudio.google.com/"
 echo
-echo "  2. Edite frontend/.env — preencha VITE_GOOGLE_CLIENT_ID"
-echo "     Obtenha em: https://console.cloud.google.com/"
-echo
-echo "  3. Rode em dois terminais:"
+echo "  3. Ou rode em dois terminais:"
 echo
 echo -e "     ${GRAY}Terminal 1 (backend):${NC}"
 echo "       cd backend"
@@ -126,4 +127,4 @@ echo "       npm run dev"
 echo
 echo "  4. Abra http://localhost:5180 no navegador"
 echo
-echo "Veja README.md para o passo a passo completo de obter as chaves."
+echo "Veja README.md e docs/SETUP.md para os detalhes."

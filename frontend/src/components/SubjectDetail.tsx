@@ -7,11 +7,15 @@ interface SubjectDetailProps {
   subject: Subject;
   events: AcademicEvent[];
   onBack: () => void;
-  onSync: () => void;
+  /**
+   * Ausente enquanto o Google Calendar estiver desligado — o botão some junto.
+   * A integração volta quando a tela de consentimento OAuth passar pela
+   * verificação do Google.
+   */
+  onSync?: () => void;
   syncing: boolean;
   error?: string | null;
   onOpenPortal?: (subjectName: string, targetUrl?: string) => Promise<string | null>;
-  onAskAi?: (event: AcademicEvent) => void;
 }
 
 const SECTIONS: { type: EventType; label: string; emoji: string }[] = [
@@ -80,7 +84,6 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
   syncing,
   error,
   onOpenPortal,
-  onAskAi,
 }) => {
   const [openEvent, setOpenEvent] = useState<AcademicEvent | null>(null);
   const [hideDone, setHideDone] = useState(false);
@@ -113,22 +116,24 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
         <button type="button" className="btn-link" onClick={onBack}>
           ← Voltar
         </button>
-        <button
-          type="button"
-          className="btn-primary btn-sync"
-          onClick={onSync}
-          disabled={syncing || allSynced || events.length === 0}
-        >
-          {syncing ? (
-            <>
-              <span className="spinner" aria-hidden="true" /> Sincronizando…
-            </>
-          ) : allSynced ? (
-            '✅ Tudo sincronizado'
-          ) : (
-            '📅 Sincronizar todos com Google Calendar'
-          )}
-        </button>
+        {onSync && (
+          <button
+            type="button"
+            className="btn-primary btn-sync"
+            onClick={onSync}
+            disabled={syncing || allSynced || events.length === 0}
+          >
+            {syncing ? (
+              <>
+                <span className="spinner" aria-hidden="true" /> Sincronizando…
+              </>
+            ) : allSynced ? (
+              '✅ Tudo sincronizado'
+            ) : (
+              '📅 Sincronizar todos com Google Calendar'
+            )}
+          </button>
+        )}
       </div>
 
       <div className="subject-detail__header">
@@ -254,7 +259,7 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
         </div>
       )}
 
-      <EventModal event={openEvent} onClose={() => setOpenEvent(null)} onOpenPortal={onOpenPortal} onAskAi={onAskAi} />
+      <EventModal event={openEvent} onClose={() => setOpenEvent(null)} onOpenPortal={onOpenPortal} />
     </section>
   );
 };

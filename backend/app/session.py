@@ -1,26 +1,26 @@
 """
-Sessões de aplicação — troca a senha do portal por um token opaco.
+Sessões de aplicação — troca a senha do Moodle por um token opaco.
 
-Antes, usuário e senha viajavam no corpo de `/api/scrape`,
-`/api/activity-content` e `/api/open-course`, e ficavam guardados em state do
-React durante toda a sessão. Agora as credenciais são enviadas uma única vez
-em `/api/login`; o backend devolve um token que os demais endpoints exigem no
-header `Authorization: Bearer <token>`.
+As credenciais são enviadas uma única vez em `/api/login`; o backend devolve um
+token que os demais endpoints exigem no header `Authorization: Bearer <token>`.
 
-As credenciais continuam na memória do processo, e não só os cookies, porque o
-scraper precisa delas para relogar sozinho quando a sessão do portal expira
-(ver `ScraperService._authenticated`). Guardar apenas os cookies obrigaria o
-aluno a digitar a senha de novo no meio do uso.
-
-Nada disso vai para o disco: reiniciar o backend derruba todas as sessões.
+O que mudou ao virar app hospedado: a sessão agora vive no banco, não num
+`dict` de processo. Antes, todo deploy deslogava todo mundo e uma segunda
+instância não reconhecia os tokens da primeira. O token é gravado **hasheado**
+(SHA-256) — ler o banco não permite se passar por ninguém — e a senha vai
+cifrada, ver `crypto.py`.
 """
 
+import hashlib
 import secrets
-import threading
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 
-from app.database import utc_now
+from sqlalchemy import delete, select
+
+from app import crypto
+from app.database import AppSession, SessionLocal, User, utc_now
+from app.repository import get_or_create_user
 
 # Tempo de inatividade após o qual a sessão é descartada. Cada uso renova.
 SESSION_IDLE_TTL = timedelta(hours=8)
@@ -28,23 +28,39 @@ SESSION_IDLE_TTL = timedelta(hours=8)
 
 @dataclass
 class PortalSession:
-    """Credenciais do portal associadas a um token emitido pelo backend."""
+    """Dados do aluno associados a um token emitido pelo backend."""
 
+    user_id: str
     username: str
     password: str
-    created_at: datetime = field(default_factory=utc_now)
-    last_used_at: datetime = field(default_factory=utc_now)
 
 
-_sessions: dict[str, PortalSession] = {}
-_lock = threading.Lock()
+def _hash(token: str) -> str:
+    """
+    SHA-256 puro, sem salt. O token já é 256 bits de aleatoriedade vinda do
+    `secrets` — não há o que um ataque de dicionário faça contra ele, que é o
+    problema que salt+KDF resolvem para senhas escolhidas por gente.
+    """
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 def create(username: str, password: str) -> str:
-    """Emite um token novo para as credenciais informadas."""
+    """
+    Emite um token novo, criando o usuário se for o primeiro login dele.
+    """
     token = secrets.token_urlsafe(32)
-    with _lock:
-        _sessions[token] = PortalSession(username=username, password=password)
+
+    with SessionLocal() as db:
+        user = get_or_create_user(db, username)
+        db.add(
+            AppSession(
+                token_hash=_hash(token),
+                user_id=user.id,
+                password_enc=crypto.encrypt(password),
+            )
+        )
+        db.commit()
+
     return token
 
 
@@ -52,28 +68,84 @@ def get(token: str) -> PortalSession | None:
     """
     Devolve a sessão do token, renovando a janela de inatividade.
 
-    Retorna None se o token não existe ou se a sessão ficou parada além do TTL.
+    Retorna None se o token não existe, se a sessão ficou parada além do TTL,
+    ou se a senha não pôde ser decifrada (a `SESSION_SECRET` mudou) — nos três
+    casos o certo é o frontend mandar o aluno logar de novo.
     """
     if not token:
         return None
-    with _lock:
-        session = _sessions.get(token)
-        if session is None:
+
+    token_hash = _hash(token)
+
+    with SessionLocal() as db:
+        row = db.get(AppSession, token_hash)
+        if row is None:
             return None
-        if utc_now() - session.last_used_at > SESSION_IDLE_TTL:
-            del _sessions[token]
+
+        if utc_now() - _aware(row.last_used_at) > SESSION_IDLE_TTL:
+            db.delete(row)
+            db.commit()
             return None
-        session.last_used_at = utc_now()
-        return session
+
+        password = crypto.decrypt(row.password_enc)
+        if password is None:
+            db.delete(row)
+            db.commit()
+            return None
+
+        user = db.get(User, row.user_id)
+        if user is None:
+            db.delete(row)
+            db.commit()
+            return None
+
+        row.last_used_at = utc_now()
+        db.commit()
+
+        return PortalSession(
+            user_id=user.id,
+            username=user.moodle_username,
+            password=password,
+        )
 
 
 def revoke(token: str) -> None:
     """Encerra uma sessão. Idempotente."""
-    with _lock:
-        _sessions.pop(token, None)
+    if not token:
+        return
+    with SessionLocal() as db:
+        row = db.get(AppSession, _hash(token))
+        if row is not None:
+            db.delete(row)
+            db.commit()
 
 
-def revoke_all() -> None:
-    """Encerra todas as sessões."""
-    with _lock:
-        _sessions.clear()
+def revoke_for_user(user_id: str) -> None:
+    """Encerra todas as sessões de um aluno."""
+    with SessionLocal() as db:
+        db.execute(delete(AppSession).where(AppSession.user_id == user_id))
+        db.commit()
+
+
+def purge_expired() -> int:
+    """
+    Remove sessões paradas além do TTL. Chamado no startup; sem isso a tabela
+    só cresce, já que uma sessão abandonada nunca passa por `get()` de novo.
+    """
+    cutoff = utc_now() - SESSION_IDLE_TTL
+    with SessionLocal() as db:
+        rows = db.execute(
+            select(AppSession).where(AppSession.last_used_at < cutoff)
+        ).scalars().all()
+        for row in rows:
+            db.delete(row)
+        db.commit()
+        return len(rows)
+
+
+def _aware(value: datetime) -> datetime:
+    """
+    O SQLite devolve datetime sem timezone; comparar com `utc_now()` (aware)
+    levantaria TypeError. Os valores gravados já são hora de parede em UTC.
+    """
+    return value if value.tzinfo else value.replace(tzinfo=timezone.utc)

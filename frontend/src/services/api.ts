@@ -22,8 +22,12 @@ const api = axios.create({
  * A senha vai para o backend uma única vez, em /api/login, e o que fica no
  * navegador é um token opaco. Ele mora só em memória — nada de localStorage,
  * que sobreviveria ao fechar a aba e ficaria exposto a XSS. O custo é que um
- * reload da página exige login de novo, exatamente como já acontecia quando
- * as credenciais viviam em state do React.
+ * reload da página exige login de novo.
+ *
+ * Isso vale para o navegador. No servidor a senha é guardada cifrada, porque
+ * o cliente do Moodle precisa relogar sozinho quando a sessão de lá expira —
+ * o raciocínio inteiro está em `backend/app/crypto.py`, e a tela de login
+ * avisa o aluno.
  * ----------------------------------------------------------------------- */
 
 let authToken: string | null = null;
@@ -154,41 +158,71 @@ export async function clearCache(): Promise<void> {
   await api.delete('/cache');
 }
 
-/**
- * Extrai o conteúdo completo de uma atividade do Moodle (enunciado, critérios).
- */
-export async function fetchActivityContent(
-  subjectName: string,
-  activityUrl: string,
-): Promise<string> {
-  const { data } = await api.post<{ content: string }>('/activity-content', {
-    subject_name: subjectName,
-    activity_url: activityUrl,
-  });
-  return data.content;
+/* -------------------------------------------------------------------------
+ * Conta
+ * ----------------------------------------------------------------------- */
+
+export interface Account {
+  username: string;
+  plan: string;
+  assistantAvailable: boolean;
+  assistantUsed: number;
+  assistantLimit: number;
 }
 
-export interface AiMessage {
+/** Dados da conta logada: plano e saldo do assistente. */
+export async function fetchAccount(): Promise<Account> {
+  const { data } = await api.get<{
+    username: string;
+    plan: string;
+    assistant_available: boolean;
+    assistant_used: number;
+    assistant_limit: number;
+  }>('/me');
+  return {
+    username: data.username,
+    plan: data.plan,
+    assistantAvailable: data.assistant_available,
+    assistantUsed: data.assistant_used,
+    assistantLimit: data.assistant_limit,
+  };
+}
+
+/** Apaga a conta e todos os dados do aluno. Irreversível. */
+export async function deleteAccount(): Promise<void> {
+  await api.delete('/account');
+  authToken = null;
+}
+
+/* -------------------------------------------------------------------------
+ * Assistente de organização
+ * ----------------------------------------------------------------------- */
+
+export interface AssistantMessage {
   role: 'user' | 'assistant';
   content: string;
 }
 
+export interface AssistantReply {
+  response: string;
+  used: number;
+  limit: number;
+}
+
 /**
- * Envia mensagens pro Gemini com contexto da atividade e retorna a resposta.
+ * Pergunta ao assistente de organização (prioridades, plano de estudo).
+ *
+ * O contexto — quais atividades o aluno tem pendentes — é montado no backend
+ * a partir do cache; o frontend só manda a conversa.
  */
-export async function askAiHelp(
-  activityContent: string,
-  activityTitle: string,
-  subjectName: string,
-  messages: AiMessage[],
-): Promise<string> {
-  const { data } = await api.post<{ response: string }>('/ai-help', {
-    activity_content: activityContent,
-    activity_title: activityTitle,
-    subject_name: subjectName,
-    messages,
-  });
-  return data.response;
+export async function askAssistant(
+  messages: AssistantMessage[],
+): Promise<AssistantReply> {
+  const { data } = await api.post<{ response: string; used: number; limit: number }>(
+    '/assistant',
+    { messages },
+  );
+  return data;
 }
 
 /**

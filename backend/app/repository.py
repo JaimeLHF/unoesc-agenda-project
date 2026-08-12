@@ -3,21 +3,28 @@ Repositório — encapsula leituras/escritas no banco.
 
 Não tem lógica de negócio: só CRUD + upsert. Os endpoints do FastAPI
 chamam as funções daqui.
+
+**Regra do multi-tenant**: toda função que toca cache do aluno recebe
+`user_id` e filtra por ele. Não existe query global neste módulo — se um dia
+aparecer uma, ela vaza a agenda de um aluno para outro.
 """
 
-from typing import Iterable, Optional
+from typing import Optional
 
 from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.database import (
+    AppSession,
     DoneEvent,
     Event,
     Meta,
     SessionLocal,
     Subject,
+    User,
     event_key,
+    new_id,
     utc_now,
 )
 
@@ -32,13 +39,57 @@ def get_session() -> Session:
 
 
 # ---------------------------------------------------------------------------
+# Usuários
+# ---------------------------------------------------------------------------
+
+def get_or_create_user(session: Session, moodle_username: str) -> User:
+    """
+    Devolve o usuário do login informado, criando na primeira vez.
+
+    Não há cadastro no app: quem valida a senha é o Moodle, e só chegamos aqui
+    depois de um login bem-sucedido.
+    """
+    normalized = moodle_username.strip().lower()
+    user = session.execute(
+        select(User).where(User.moodle_username == normalized)
+    ).scalar_one_or_none()
+
+    if user is None:
+        user = User(id=new_id(), moodle_username=normalized)
+        session.add(user)
+        session.flush()
+    else:
+        user.last_login_at = utc_now()
+
+    return user
+
+
+def get_user(session: Session, user_id: str) -> Optional[User]:
+    return session.get(User, user_id)
+
+
+def delete_user(session: Session, user_id: str) -> None:
+    """
+    Apaga a conta e tudo que pertence a ela: cache, concluídos, metadados e
+    sessões abertas. Suporte ao "excluir minha conta" exigido pela LGPD.
+    """
+    session.execute(delete(Event).where(Event.user_id == user_id))
+    session.execute(delete(Subject).where(Subject.user_id == user_id))
+    session.execute(delete(DoneEvent).where(DoneEvent.user_id == user_id))
+    session.execute(delete(Meta).where(Meta.user_id == user_id))
+    session.execute(delete(AppSession).where(AppSession.user_id == user_id))
+    session.execute(delete(User).where(User.id == user_id))
+
+
+# ---------------------------------------------------------------------------
 # Subjects + Events (cache do scraping)
 # ---------------------------------------------------------------------------
 
-def upsert_subjects(session: Session, subjects: list[dict]) -> None:
-    """Insere ou atualiza cada disciplina. `name` é a PK."""
+def upsert_subjects(session: Session, user_id: str, subjects: list[dict]) -> None:
+    """Insere ou atualiza cada disciplina. A PK é (user_id, name)."""
     for s in subjects:
         stmt = sqlite_insert(Subject).values(
+            user_id=user_id,
             name=s["name"],
             content=s.get("content"),
             dof=s.get("dof"),
@@ -47,7 +98,7 @@ def upsert_subjects(session: Session, subjects: list[dict]) -> None:
             updated_at=utc_now(),
         )
         stmt = stmt.on_conflict_do_update(
-            index_elements=[Subject.name],
+            index_elements=[Subject.user_id, Subject.name],
             set_={
                 "content": stmt.excluded.content,
                 "dof": stmt.excluded.dof,
@@ -59,9 +110,9 @@ def upsert_subjects(session: Session, subjects: list[dict]) -> None:
         session.execute(stmt)
 
 
-def upsert_events(session: Session, events: list[dict]) -> None:
+def upsert_events(session: Session, user_id: str, events: list[dict]) -> None:
     """
-    Insere ou atualiza cada evento usando `stable_key` como identidade.
+    Insere ou atualiza cada evento usando (user_id, stable_key) como identidade.
     Eventos antigos (que não vieram no scrape mais recente) NÃO são removidos
     — preserva histórico.
     """
@@ -69,6 +120,7 @@ def upsert_events(session: Session, events: list[dict]) -> None:
         key = event_key(e)
         e["stable_key"] = key  # devolvido ao frontend, que não recalcula mais
         stmt = sqlite_insert(Event).values(
+            user_id=user_id,
             stable_key=key,
             title=e["title"],
             date=e["date"],
@@ -81,7 +133,7 @@ def upsert_events(session: Session, events: list[dict]) -> None:
             last_seen_at=utc_now(),
         )
         stmt = stmt.on_conflict_do_update(
-            index_elements=[Event.stable_key],
+            index_elements=[Event.user_id, Event.stable_key],
             set_={
                 "title": stmt.excluded.title,
                 "date": stmt.excluded.date,
@@ -96,34 +148,48 @@ def upsert_events(session: Session, events: list[dict]) -> None:
         session.execute(stmt)
 
 
-def set_google_event_id(session: Session, stable_key: str, google_event_id: str) -> None:
+def set_google_event_id(
+    session: Session, user_id: str, stable_key: str, google_event_id: str
+) -> None:
     """
     Registra o ID do evento criado no Google Calendar. É o que permite ao
     frontend mostrar o evento como já sincronizado depois de um reload.
     """
     session.execute(
         update(Event)
-        .where(Event.stable_key == stable_key)
+        .where(Event.user_id == user_id, Event.stable_key == stable_key)
         .values(google_event_id=google_event_id)
     )
 
 
-def list_synced_keys(session: Session) -> list[str]:
-    """`stable_key` de todo evento que já foi para o Google Calendar."""
+def list_synced_keys(session: Session, user_id: str) -> list[str]:
+    """`stable_key` de todo evento do aluno que já foi para o Google Calendar."""
     rows = session.execute(
-        select(Event.stable_key).where(Event.google_event_id.is_not(None))
+        select(Event.stable_key).where(
+            Event.user_id == user_id, Event.google_event_id.is_not(None)
+        )
     ).all()
     return [r[0] for r in rows]
 
 
-def list_subjects(session: Session) -> list[Subject]:
-    return list(session.execute(select(Subject).order_by(Subject.name)).scalars())
-
-
-def list_events(session: Session) -> list[Event]:
+def list_subjects(session: Session, user_id: str) -> list[Subject]:
     return list(
         session.execute(
-            select(Event).order_by(Event.date.asc(), Event.time.asc().nulls_first())
+            select(Subject).where(Subject.user_id == user_id).order_by(Subject.name)
+        ).scalars()
+    )
+
+
+def get_subject(session: Session, user_id: str, name: str) -> Optional[Subject]:
+    return session.get(Subject, (user_id, name))
+
+
+def list_events(session: Session, user_id: str) -> list[Event]:
+    return list(
+        session.execute(
+            select(Event)
+            .where(Event.user_id == user_id)
+            .order_by(Event.date.asc(), Event.time.asc().nulls_first())
         ).scalars()
     )
 
@@ -132,38 +198,48 @@ def list_events(session: Session) -> list[Event]:
 # Done events
 # ---------------------------------------------------------------------------
 
-def list_done_keys(session: Session) -> list[str]:
-    rows = session.execute(select(DoneEvent.stable_key)).all()
+def list_done_keys(session: Session, user_id: str) -> list[str]:
+    rows = session.execute(
+        select(DoneEvent.stable_key).where(DoneEvent.user_id == user_id)
+    ).all()
     return [r[0] for r in rows]
 
 
-def mark_done(session: Session, stable_key: str) -> None:
+def mark_done(session: Session, user_id: str, stable_key: str) -> None:
     """Idempotente — marcar duas vezes não dá erro."""
     stmt = sqlite_insert(DoneEvent).values(
-        stable_key=stable_key, completed_at=utc_now()
+        user_id=user_id, stable_key=stable_key, completed_at=utc_now()
     )
-    stmt = stmt.on_conflict_do_nothing(index_elements=[DoneEvent.stable_key])
+    stmt = stmt.on_conflict_do_nothing(
+        index_elements=[DoneEvent.user_id, DoneEvent.stable_key]
+    )
     session.execute(stmt)
 
 
-def unmark_done(session: Session, stable_key: str) -> None:
-    session.execute(delete(DoneEvent).where(DoneEvent.stable_key == stable_key))
+def unmark_done(session: Session, user_id: str, stable_key: str) -> None:
+    session.execute(
+        delete(DoneEvent).where(
+            DoneEvent.user_id == user_id, DoneEvent.stable_key == stable_key
+        )
+    )
 
 
 # ---------------------------------------------------------------------------
 # Meta (timestamps livres)
 # ---------------------------------------------------------------------------
 
-def set_meta(session: Session, key: str, value: str) -> None:
-    stmt = sqlite_insert(Meta).values(key=key, value=value)
+def set_meta(session: Session, user_id: str, key: str, value: str) -> None:
+    stmt = sqlite_insert(Meta).values(user_id=user_id, key=key, value=value)
     stmt = stmt.on_conflict_do_update(
-        index_elements=[Meta.key], set_={"value": stmt.excluded.value}
+        index_elements=[Meta.user_id, Meta.key], set_={"value": stmt.excluded.value}
     )
     session.execute(stmt)
 
 
-def get_meta(session: Session, key: str) -> Optional[str]:
-    row = session.execute(select(Meta.value).where(Meta.key == key)).first()
+def get_meta(session: Session, user_id: str, key: str) -> Optional[str]:
+    row = session.execute(
+        select(Meta.value).where(Meta.user_id == user_id, Meta.key == key)
+    ).first()
     return row[0] if row else None
 
 
@@ -171,11 +247,12 @@ def get_meta(session: Session, key: str) -> Optional[str]:
 # Operações de manutenção
 # ---------------------------------------------------------------------------
 
-def clear_cache(session: Session) -> None:
+def clear_cache(session: Session, user_id: str) -> None:
     """
-    Apaga subjects, events e meta. Mantém intencionalmente os done_events —
-    o usuário não quer perder o que já marcou como concluído ao limpar cache.
+    Apaga subjects, events e meta **do aluno informado**. Mantém
+    intencionalmente os done_events — o usuário não quer perder o que já marcou
+    como concluído ao limpar cache.
     """
-    session.execute(delete(Event))
-    session.execute(delete(Subject))
-    session.execute(delete(Meta))
+    session.execute(delete(Event).where(Event.user_id == user_id))
+    session.execute(delete(Subject).where(Subject.user_id == user_id))
+    session.execute(delete(Meta).where(Meta.user_id == user_id))

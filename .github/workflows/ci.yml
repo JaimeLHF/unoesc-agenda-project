@@ -29,18 +29,24 @@ jobs:
           pip install -r requirements.txt
 
       - name: Import smoke test
-        # Importa cada módulo top-level pra garantir que o código compila e
-        # as deps estão coerentes. Não roda Playwright — só valida sintaxe.
-        env:
-          GEMINI_API_KEY: dummy-key-for-import-only
+        # Importa cada módulo top-level pra garantir que o código compila e as
+        # deps estão coerentes. Não fala com o Moodle — só valida sintaxe.
         run: |
-          python -c "from app.database import init_db, Base, Subject, Event, DoneEvent, Meta"
+          python -c "from app.database import init_db, Base, User, AppSession, Subject, Event, DoneEvent, Meta"
           python -c "from app import repository"
           python -c "from app import session"
-          python -c "from app.scraper import ScraperService, current_semester"
+          python -c "from app import crypto"
+          python -c "from app import ratelimit"
+          python -c "from app import assistant"
           python -c "from app.calendar_sync import CalendarSyncService"
-          python -c "from app.parser import ParserService"
+          python -c "from app.moodle import MoodleClient"
           python -c "from app.main import app"
+
+      - name: Isolamento entre alunos
+        # Critério de aceite do multi-tenant: um aluno nunca enxerga os dados
+        # de outro, e nenhum endpoint de dados responde sem sessão. Roda com
+        # um Moodle falso, sem rede.
+        run: python -m tests.test_isolamento
 
   frontend:
     name: Frontend (TypeScript)

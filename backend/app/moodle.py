@@ -611,18 +611,10 @@ class MoodleClient:
         resp = self._client.get(f"{self.base}/course/view.php", params={"id": course_id})
         return html_to_text(main_region(resp.text))
 
-    def activity_content(self, activity_url: str) -> str:
-        """
-        Conteúdo de uma atividade (enunciado, instruções, critérios).
-
-        Aceita só URLs do próprio Moodle: o cliente carrega uma sessão
-        autenticada, e seguir link arbitrário vazaria os cookies do aluno.
-        """
-        if not activity_url.startswith(self.base):
-            raise ValueError(f"URL fora do Moodle: {activity_url}")
-        resp = self._client.get(activity_url)
-        resp.raise_for_status()
-        return html_to_text(main_region(resp.text), 50_000)
+    # O cliente já teve um `activity_content()`, que baixava o enunciado
+    # completo de uma atividade para alimentar o assistente que resolvia
+    # provas. Ambos foram removidos quando o app virou público: a agenda
+    # precisa de data e título, não do conteúdo da avaliação.
 
     # -- fluxo completo --------------------------------------------------
 
@@ -678,13 +670,6 @@ class MoodleClient:
         eventos.extend(webconfs)
         eventos.sort(key=lambda e: (e["date"], e["time"] or ""))
         return {"subjects": subjects, "calendar_events": eventos}
-
-    def fetch_activity_content(
-        self, username: str, password: str, activity_url: str
-    ) -> str:
-        """Compatível com o antigo `ScraperService.fetch_activity_content`, sem o `dof`."""
-        self.login(username, password)
-        return self.activity_content(activity_url)
 
 
 # ---------------------------------------------------------------------------

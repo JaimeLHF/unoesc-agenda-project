@@ -23,20 +23,37 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, loading, error }) => {
 
   return (
     <div className="login-card">
-      <h2 className="login-title">Acesse o Portal UNOESC</h2>
+      <h2 className="login-title">Entre com sua conta do Moodle</h2>
       <p className="login-subtitle">
-        Suas credenciais são usadas apenas para acessar o portal e nunca são armazenadas.
+        Use o mesmo usuário e senha do <strong>on.unoesc.edu.br</strong>. Em alguns
+        segundos suas entregas, provas e webconferências aparecem numa lista só.
       </p>
+
+      {/*
+        Aviso antes do campo de senha, não depois: o aluno precisa saber o que
+        acontece com a credencial dele antes de digitá-la. O texto diz o que o
+        sistema faz de verdade — guarda a senha cifrada — porque a alternativa
+        seria pedir a senha de novo várias vezes ao dia.
+      */}
+      <div className="privacy-notice">
+        <strong>Antes de continuar:</strong> guardamos sua senha de forma cifrada no
+        servidor para manter você conectado ao Moodle durante o uso. Ela nunca fica
+        salva no seu navegador e não é compartilhada com ninguém. Você pode apagar
+        tudo a qualquer momento em <em>Excluir conta</em>.
+        <br />
+        Este é um projeto independente, feito por alunos. Não é um serviço oficial da
+        UNOESC.
+      </div>
 
       <form onSubmit={handleSubmit} className="login-form">
         <div className="form-group">
-          <label htmlFor="username">Usuário (matrícula / CPF)</label>
+          <label htmlFor="username">Usuário do Moodle</label>
           <input
             id="username"
             type="text"
             value={username}
             onChange={(e) => setUsername(e.target.value)}
-            placeholder="Digite seu usuário"
+            placeholder="sua matrícula@unoesc.edu.br"
             disabled={loading}
             required
             autoComplete="username"
@@ -71,10 +88,10 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, loading, error }) => {
         >
           {loading ? (
             <>
-              <span className="spinner" aria-hidden="true" /> Buscando atividades…
+              <span className="spinner" aria-hidden="true" /> Entrando…
             </>
           ) : (
-            '🔍 Buscar Atividades'
+            'Entrar e ver minha agenda'
           )}
         </button>
       </form>
