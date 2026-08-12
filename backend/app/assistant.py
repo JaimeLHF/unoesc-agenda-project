@@ -184,7 +184,9 @@ def _call_claude(system_prompt: str, messages: list[dict]) -> str:
         system=system_prompt,
         messages=[{"role": m["role"], "content": m["content"]} for m in messages],
     )
-    return response.content[0].text
+    # Percorre os blocos em vez de assumir `content[0].text`: a resposta pode
+    # começar com um bloco que não é texto, e indexar direto quebraria.
+    return "".join(bloco.text for bloco in response.content if bloco.type == "text")
 
 
 def ask(system_prompt: str, messages: list[dict]) -> str:
