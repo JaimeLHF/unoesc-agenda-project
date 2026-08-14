@@ -1,0 +1,149 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Privacidade e termos de uso — Agenda UNOESC</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --fundo: #f7f7f8;
+      --cartao: #ffffff;
+      --texto: #1f2328;
+      --suave: #5b6371;
+      --linha: #e3e5e9;
+      --destaque: #2f6f4f;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --fundo: #16181d;
+        --cartao: #1f2229;
+        --texto: #e8eaed;
+        --suave: #a4acb9;
+        --linha: #2f333c;
+        --destaque: #7fd1a5;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 2rem 1rem 4rem;
+      background: var(--fundo);
+      color: var(--texto);
+      font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    }
+    main {
+      max-width: 42rem;
+      margin: 0 auto;
+      background: var(--cartao);
+      border: 1px solid var(--linha);
+      border-radius: 14px;
+      padding: 2rem;
+    }
+    h1 { font-size: 1.5rem; margin: 0 0 .25rem; }
+    h2 { font-size: 1.1rem; margin: 2rem 0 .5rem; }
+    .sub { color: var(--suave); margin: 0 0 1.5rem; font-size: .95rem; }
+    ul { padding-left: 1.2rem; }
+    li { margin: .35rem 0; }
+    code { background: var(--fundo); padding: .1rem .35rem; border-radius: 4px; }
+    a { color: var(--destaque); }
+    .aviso {
+      border-left: 3px solid var(--destaque);
+      padding: .75rem 1rem;
+      background: var(--fundo);
+      border-radius: 0 8px 8px 0;
+      margin: 1.5rem 0;
+    }
+    footer { max-width: 42rem; margin: 1.5rem auto 0; color: var(--suave); font-size: .9rem; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Privacidade e termos de uso</h1>
+    <p class="sub">Agenda UNOESC — atualizado em 14 de agosto de 2026</p>
+
+    <div class="aviso">
+      Este é um projeto independente, feito por aluno. <strong>Não é um serviço
+      oficial da UNOESC</strong> e não tem vínculo com a universidade.
+    </div>
+
+    <h2>O que o app faz</h2>
+    <p>
+      Entra no Moodle da UNOESC com a sua conta, lê as suas disciplinas e o seu
+      calendário, e mostra tudo numa lista só. Ele não altera nada no Moodle:
+      só lê.
+    </p>
+
+    <h2>Que dados são guardados</h2>
+    <ul>
+      <li><strong>Seu usuário do Moodle</strong> — identifica a sua conta aqui.</li>
+      <li><strong>Sua senha do Moodle, cifrada</strong> — o servidor precisa
+        dela para reconectar quando a sessão do Moodle expira no meio do uso.
+        Sem isso você teria que redigitar a senha várias vezes por dia. Ela
+        nunca é salva no seu navegador.</li>
+      <li><strong>Suas disciplinas, prazos, provas e webconferências</strong> —
+        cópia do que já está no Moodle, para a tela abrir rápido.</li>
+      <li><strong>O que você marcou como concluído.</strong></li>
+      <li><strong>Registro técnico de acesso</strong> — data, rota chamada e
+        tempo de resposta, para investigar erros. Sem conteúdo das telas.</li>
+    </ul>
+
+    <h2>O que não é guardado nem lido</h2>
+    <ul>
+      <li>Conteúdo de atividade, enunciado de prova ou resposta sua.</li>
+      <li>Suas notas.</li>
+      <li>Nada é vendido, compartilhado ou usado para publicidade.</li>
+    </ul>
+
+    <h2>O assistente de organização</h2>
+    <p>
+      Quando você usa o assistente, o que sai daqui para o provedor de IA é
+      apenas <em>título, data, disciplina e tipo</em> das suas atividades — o
+      suficiente para montar um plano de estudo. O conteúdo das atividades não
+      é acessado, e o assistente não resolve exercício nem prova.
+    </p>
+
+    <h2>Sobre a senha — o limite honesto</h2>
+    <p>
+      A senha fica cifrada no banco, e a chave que decifra vive fora dele. Um
+      vazamento do arquivo do banco, sozinho, não entrega senha nenhuma. Mas
+      quem tivesse acesso ao servidor em execução teria a chave e o banco
+      juntos. Esse risco é inerente a guardar senha de terceiro e não tem
+      solução técnica completa — a solução real seria a UNOESC emitir um token
+      por aluno, o que tiraria a senha do fluxo. Enquanto isso não existe, fica
+      registrado aqui em vez de escondido.
+    </p>
+    <p>
+      Recomendação prática: se você usa essa mesma senha em outro lugar, troque
+      lá. Uma senha por serviço vale para qualquer aplicativo, não só para este.
+    </p>
+
+    <h2>Por quanto tempo</h2>
+    <p>
+      Enquanto você usar. A sessão expira após 8 horas sem uso. Você apaga tudo
+      quando quiser, no botão <strong>Excluir conta</strong> dentro do app —
+      conta, agenda, marcações e credenciais somem na hora, sem volta.
+    </p>
+
+    <h2>Termos de uso</h2>
+    <ul>
+      <li>O app é oferecido como está, de graça, sem garantia de
+        disponibilidade. Ele pode sair do ar ou parar de funcionar se a UNOESC
+        mudar o Moodle.</li>
+      <li>Confira sempre o prazo oficial no Moodle antes de uma entrega. Um
+        erro de leitura aqui não justifica atraso.</li>
+      <li>Use com a sua própria conta. Entrar com a conta de outra pessoa é
+        proibido.</li>
+    </ul>
+
+    <h2>Contato</h2>
+    <p>
+      Dúvida, pedido de exclusão ou problema encontrado: fale direto com o Jaime,
+      responsável pelo projeto.
+    </p>
+  </main>
+  <footer>
+    <a href="/">← Voltar para a agenda</a>
+  </footer>
+</body>
+</html>

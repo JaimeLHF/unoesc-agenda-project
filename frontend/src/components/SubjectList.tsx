@@ -1,22 +1,17 @@
 import React from 'react';
 import type { Subject, AcademicEvent, EventType } from '../types';
 import EventAlerts from './EventAlerts';
+import Icon from './Icon';
 import { useDoneEvents } from '../contexts/DoneEventsContext';
 
 interface SubjectListProps {
   subjects: Subject[];
   events: AcademicEvent[];
   onSelectSubject: (id: string) => void;
-  onRefresh: () => void;
+  /** Só para avisar que os números na tela podem mudar em instantes. */
   refreshing: boolean;
-  refreshError?: string | null;
-  onLogout: () => void;
-  onClearCache: () => void;
   lastScrapedAt?: string | null;
   onOpenPortal?: (subjectName: string, targetUrl?: string) => Promise<string | null>;
-  onOpenAssistant?: () => void;
-  assistantAvailable?: boolean;
-  onDeleteAccount: () => void;
 }
 
 /** Formata "X minutos atrás" / "ontem" a partir de um timestamp ISO. */
@@ -77,6 +72,16 @@ function computeStats(events: AcademicEvent[]) {
   return { counts, upcomingCount, nextEvent };
 }
 
+/**
+ * Separa "28743 - Desenvolvimento Mobile" em código e nome. Sem o padrão
+ * esperado, devolve o texto inteiro como nome — nome de disciplina vem do
+ * Moodle e nem toda instituição usa o mesmo formato.
+ */
+function splitSubjectName(fullName: string): { code: string | null; label: string } {
+  const match = fullName.match(/^(\d{3,})\s*-\s*(.+)$/);
+  return match ? { code: match[1], label: match[2] } : { code: null, label: fullName };
+}
+
 function formatNextEventDate(iso: string, time?: string): string {
   try {
     const d = new Date(`${iso}T${time ?? '00:00'}:00`);
@@ -91,84 +96,23 @@ const SubjectList: React.FC<SubjectListProps> = ({
   subjects,
   events,
   onSelectSubject,
-  onRefresh,
   refreshing,
-  refreshError,
-  onLogout,
-  onClearCache,
   lastScrapedAt,
   onOpenPortal,
-  onOpenAssistant,
-  assistantAvailable,
-  onDeleteAccount,
 }) => {
   const { isDone } = useDoneEvents();
   const lastScrapedRel = formatRelative(lastScrapedAt);
   return (
     <section className="subject-grid-section">
-      <div className="subject-grid-header">
-        <div>
-          <h2 className="section-title">Suas disciplinas</h2>
-          <p className="section-subtitle">
-            Clique em uma disciplina para ver seus eventos e sincronizá-los.
-            {lastScrapedRel && (
-              <span className="last-scraped"> · Atualizado {lastScrapedRel}</span>
-            )}
-          </p>
-        </div>
-        <div className="subject-grid-actions">
-          <button
-            type="button"
-            className="btn-secondary"
-            onClick={onRefresh}
-            disabled={refreshing}
-            title="Buscar disciplinas e eventos novamente no portal"
-          >
-            {refreshing ? (
-              <>
-                <span className="spinner spinner--dark" aria-hidden="true" /> Atualizando…
-              </>
-            ) : (
-              '🔄 Atualizar'
-            )}
-          </button>
-          {assistantAvailable && onOpenAssistant && (
-            <button
-              type="button"
-              className="btn-secondary"
-              onClick={onOpenAssistant}
-              title="Pedir ajuda para organizar seus prazos"
-            >
-              🧠 Organizar
-            </button>
-          )}
-          <button
-            type="button"
-            className="btn-link"
-            onClick={onClearCache}
-            title="Apaga suas disciplinas e eventos salvos"
-          >
-            Limpar cache
-          </button>
-          <button type="button" className="btn-link" onClick={onLogout}>
-            Sair
-          </button>
-          <button
-            type="button"
-            className="btn-link btn-link--danger"
-            onClick={onDeleteAccount}
-            title="Apaga sua conta e todos os seus dados"
-          >
-            Excluir conta
-          </button>
-        </div>
+      <div className="page-heading">
+        <h2 className="section-title">Suas disciplinas</h2>
+        <p className="section-subtitle">
+          Clique em uma disciplina para ver os eventos dela.
+          {refreshing
+            ? ' · Buscando dados novos no Moodle…'
+            : lastScrapedRel && ` · Atualizado ${lastScrapedRel}`}
+        </p>
       </div>
-
-      {refreshError && (
-        <div className="error-banner" role="alert">
-          ⚠️ {refreshError}
-        </div>
-      )}
 
       <EventAlerts events={events} onOpenPortal={onOpenPortal} />
 
@@ -184,6 +128,8 @@ const SubjectList: React.FC<SubjectListProps> = ({
           const total = subjEvents.length;
           const doneInSubject = subjEvents.filter((e) => isDone(e)).length;
 
+          const { code, label } = splitSubjectName(subject.name);
+
           const breakdown = TYPE_ORDER
             .filter((t) => counts[t] > 0)
             .map((t) => `${counts[t]} ${counts[t] === 1 ? TYPE_LABELS[t].singular : TYPE_LABELS[t].plural}`)
@@ -198,7 +144,16 @@ const SubjectList: React.FC<SubjectListProps> = ({
               disabled={total === 0}
             >
               <div className="subject-card-large__header">
-                <span className="subject-card-large__name">{subject.name}</span>
+                <span className="subject-card-large__title">
+                  {/*
+                    "28743 - Desenvolvimento Mobile" quebrava em três linhas
+                    tortas porque o código disputava espaço com o nome. Separado,
+                    o código vira etiqueta e o nome fica legível de relance —
+                    que é o que o aluno procura ao varrer a grade.
+                  */}
+                  {code && <span className="subject-card-large__code">{code}</span>}
+                  <span className="subject-card-large__name">{label}</span>
+                </span>
                 <span className="subject-card-large__total">
                   {total} {total === 1 ? 'evento' : 'eventos'}
                 </span>
@@ -209,7 +164,8 @@ const SubjectList: React.FC<SubjectListProps> = ({
                   <div className="subject-card-large__breakdown">{breakdown}</div>
                   {doneInSubject > 0 && (
                     <div className="subject-card-large__done">
-                      ✓ {doneInSubject} de {total} concluído{doneInSubject === 1 ? '' : 's'}
+                      <Icon name="check" size={0.95} />
+                      {doneInSubject} de {total} concluído{doneInSubject === 1 ? '' : 's'}
                     </div>
                   )}
                   {nextEvent ? (

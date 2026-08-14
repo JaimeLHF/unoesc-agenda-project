@@ -61,6 +61,11 @@ function computeAlerts(events: AcademicEvent[]): Alert[] {
   return alerts;
 }
 
+/**
+ * Aqui os emojis ficam, contra a regra do resto da interface: esta é a faixa de
+ * urgência, e o 🚨 vermelho salta mais do que qualquer ícone de traço na mesma
+ * cor do texto. O que atrapalha um cabeçalho ajuda um alerta.
+ */
 function buildMessage(alert: Alert): { icon: string; text: string } {
   const { event, urgency, diffDays } = alert;
   const noun = TYPE_NOUN[event.type as EventType] ?? 'Evento';
@@ -71,7 +76,7 @@ function buildMessage(alert: Alert): { icon: string; text: string } {
     case 'today':
       return {
         icon: '🚨',
-        text: `HOJE${time}: ${noun} de ${subject} — fique atento!`,
+        text: `HOJE${time}: ${noun} de ${subject}`,
       };
     case 'tomorrow':
       return {
@@ -103,8 +108,9 @@ const EventAlerts: React.FC<EventAlertsProps> = ({ events, maxAlerts = 6, onOpen
   return (
     <section className="alerts-section" aria-label="Eventos urgentes">
       <h3 className="alerts-title">
-        🔔 Próximos eventos
-        <span className="alerts-count">({alerts.length})</span>
+        <span className="alerts-title__icon" aria-hidden="true">🔔</span>
+        Próximos eventos
+        <span className="alerts-count">{alerts.length}</span>
       </h3>
       <ul className="alerts-list">
         {alerts.map((alert) => {

@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import type { AcademicEvent, EventType } from '../types';
+import Icon from './Icon';
 import { useDoneEvents } from '../contexts/DoneEventsContext';
 
 interface EventModalProps {
@@ -31,7 +32,10 @@ function formatFullDate(iso: string, time?: string): string {
       month: 'long',
       year: 'numeric',
     });
-    return time ? `${dateStr} às ${time}` : dateStr;
+    // "domingo, 16 de agosto…" → "Domingo, 16 de agosto…". Em CSS isso seria
+    // `capitalize`, que sobe também o "De" de cada preposição.
+    const capitalizado = dateStr.charAt(0).toUpperCase() + dateStr.slice(1);
+    return time ? `${capitalizado} às ${time}` : capitalizado;
   } catch {
     return iso;
   }
@@ -82,23 +86,24 @@ const EventModal: React.FC<EventModalProps> = ({ event, onClose, onOpenPortal })
   return (
     <div className="modal-overlay" onClick={onClose} role="dialog" aria-modal="true">
       <div className="modal-box" onClick={(e) => e.stopPropagation()}>
-        <button
-          type="button"
-          className="modal-close"
-          onClick={onClose}
-          aria-label="Fechar"
-        >
-          ×
+        <button type="button" className="modal-close" onClick={onClose}>
+          <Icon name="fechar" label="Fechar" />
         </button>
 
         <div className="modal-header">
           <span className={`badge ${TYPE_BADGES[type] ?? 'badge--other'}`}>
             {TYPE_LABELS[type] ?? type}
           </span>
-          {done && <span className="status-pill status-pill--done">✓ Concluído</span>}
+          {done && (
+            <span className="status-pill status-pill--done">
+              <Icon name="check" size={0.9} /> Concluído
+            </span>
+          )}
           {past && !done && <span className="status-pill status-pill--past">Encerrado</span>}
           {event.synced && (
-            <span className="status-pill status-pill--synced">📅 Sincronizado</span>
+            <span className="status-pill status-pill--synced">
+              <Icon name="calendario" size={0.9} /> Sincronizado
+            </span>
           )}
         </div>
 
@@ -106,7 +111,8 @@ const EventModal: React.FC<EventModalProps> = ({ event, onClose, onOpenPortal })
 
         <div className="modal-date-block">
           <div className="modal-date-block__main">
-            📆 {formatFullDate(event.date, event.time)}
+            <Icon name="calendario" />
+            {formatFullDate(event.date, event.time)}
           </div>
           {!past && (
             <div className="modal-date-block__relative">{relativeDays(event.date, event.time)}</div>
@@ -114,8 +120,16 @@ const EventModal: React.FC<EventModalProps> = ({ event, onClose, onOpenPortal })
         </div>
 
         <div className="modal-meta">
-          <span>📚 {event.subject}</span>
-          {event.time && <span>🕐 {event.time}</span>}
+          <span>
+            <Icon name="prova" size={1} />
+            {event.subject}
+          </span>
+          {event.time && (
+            <span>
+              <Icon name="relogio" size={1} />
+              {event.time}
+            </span>
+          )}
         </div>
 
         {event.description && (
@@ -152,7 +166,15 @@ const EventModal: React.FC<EventModalProps> = ({ event, onClose, onOpenPortal })
                 }
               }}
             >
-              {openingPortal ? '⏳ Abrindo…' : '🔗 Abrir no Moodle'}
+              {openingPortal ? (
+                <>
+                  <span className="spinner spinner--dark" aria-hidden="true" /> Abrindo…
+                </>
+              ) : (
+                <>
+                  <Icon name="link-externo" /> Abrir no Moodle
+                </>
+              )}
             </button>
           )}
           <button
@@ -160,7 +182,15 @@ const EventModal: React.FC<EventModalProps> = ({ event, onClose, onOpenPortal })
             className={done ? 'btn-secondary' : 'btn-done'}
             onClick={() => toggleDone(event)}
           >
-            {done ? '↺ Marcar como pendente' : '✓ Marcar como concluído'}
+            {done ? (
+              <>
+                <Icon name="desfazer" /> Marcar como pendente
+              </>
+            ) : (
+              <>
+                <Icon name="check" /> Marcar como concluído
+              </>
+            )}
           </button>
         </div>
       </div>

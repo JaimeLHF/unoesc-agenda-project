@@ -1,4 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import AppHeader from './components/AppHeader';
+import Icon from './components/Icon';
+import LoadingSkeleton from './components/LoadingSkeleton';
 import LoginForm from './components/LoginForm';
 import SubjectList from './components/SubjectList';
 import SubjectDetail from './components/SubjectDetail';
@@ -80,7 +83,7 @@ const App: React.FC = () => {
 
   /** Busca disciplinas e eventos no Moodle. Usado no login e no refresh. */
   const fetchAll = async () => {
-    setLoadingMessage('Consultando o Moodle…');
+    setLoadingMessage('Buscando seus dados no Moodle…');
     const scrapeResult = await scrapePortal();
 
     setSubjects(scrapeResult.subjects);
@@ -88,7 +91,7 @@ const App: React.FC = () => {
     setLastScrapedAt(new Date().toISOString());
   };
 
-  /** Login inicial — autentica, mostra o que já existe e atualiza. */
+  /** Login inicial — autentica e só abre a agenda depois de atualizá-la. */
   const [loginLoading, setLoginLoading] = useState(false);
 
   const handleLogin = async (creds: LoginCredentials) => {
@@ -101,29 +104,32 @@ const App: React.FC = () => {
       setAuthenticated(true);
       void fetchAccount().then(setAccount).catch(() => setAccount(null));
 
-      // Se o aluno já usou o app antes, o cache abre a tela na hora e o
-      // Moodle é consultado em seguida. No primeiro acesso não há cache, e aí
-      // a espera pelo scrape é inevitável.
-      setLoadingMessage('Carregando sua agenda…');
+      // O cache entra antes só pelas marcações de concluído; as disciplinas e
+      // eventos dele ficam de reserva e não vão para a tela.
       const cache = await fetchCache().catch(() => null);
-      const temCache = Boolean(cache && (cache.subjects.length > 0 || cache.events.length > 0));
-
       if (cache) hydrate(cache.doneKeys);
-      if (cache && temCache) {
+
+      // Enquanto a agenda não está atualizada, a tela mostra só o esqueleto.
+      // Abrir com o cache e atualizar por baixo deixava o aluno lendo dados
+      // velhos sem saber que eram velhos — numa tela de prazos, isso é pior
+      // do que esperar.
+      try {
+        await fetchAll();
+      } catch (err) {
+        // Moodle fora do ar ou sem rede: em vez de travar na tela de entrada,
+        // mostra o que estava salvo, avisando que não é dado novo.
+        const temCache = Boolean(cache && (cache.subjects.length > 0 || cache.events.length > 0));
+        if (!cache || !temCache) throw err;
+
+        console.warn('Falha ao atualizar; usando os dados salvos:', err);
         setSubjects(cache.subjects);
         setEvents(cache.events);
         setLastScrapedAt(cache.lastScrapedAt);
-        setStep('results');
-        setLoginLoading(false);
-        // Atualiza em segundo plano — a tela já está utilizável.
-        setRefreshing(true);
-        fetchAll()
-          .catch((err) => console.warn('Falha ao atualizar em segundo plano:', err))
-          .finally(() => setRefreshing(false));
-        return;
+        setRefreshError(
+          'Não consegui falar com o Moodle agora. Esta é a sua última agenda salva.',
+        );
       }
 
-      await fetchAll();
       setLoginLoading(false);
       setStep('results');
     } catch (err: unknown) {
@@ -248,35 +254,61 @@ const App: React.FC = () => {
     ? events.filter((e) => e.subject === selectedSubject.name)
     : [];
 
+  // A tela de entrada já mostra a marca no meio dela; repetir a barra em cima
+  // só empilharia dois logotipos e daria ar de chrome de sistema.
+  const naTelaDeEntrada = step === 'login' && !loginLoading;
+
   return (
     <div className="app">
-      <header className="app-header">
-        <h1 className="app-title">📚 Agenda UNOESC</h1>
-        <p className="app-subtitle">
-          Todas as suas entregas, provas e webconferências numa lista só
-        </p>
-      </header>
+      {!naTelaDeEntrada && (
+        <AppHeader
+          /* Durante o carregamento a barra fica só com a marca: Atualizar e o
+             menu da conta agiriam sobre uma agenda que ainda não existe. */
+          authenticated={authenticated && !loginLoading}
+          username={account?.username}
+          onRefresh={handleRefresh}
+          refreshing={refreshing}
+          onOpenAssistant={() => setStep('assistant')}
+          assistantAvailable={account?.assistantAvailable ?? false}
+          onClearCache={handleClearCache}
+          onLogout={handleLogout}
+          onDeleteAccount={handleDeleteAccount}
+        />
+      )}
 
       {backendOffline && (
         <div className="backend-offline-banner" role="alert">
-          ⚠️ Sem conexão com o servidor. Verifique sua internet e tente de novo em instantes.
+          <Icon name="sem-conexao" />
+          Sem conexão com o servidor. Verifique sua internet e tente de novo em instantes.
         </div>
       )}
 
-      <main className="app-main">
+      {/*
+        O erro de atualização subiu para cá junto com o botão Atualizar: quem
+        dispara a ação no topo precisa ver a falha dela no topo, não enterrada
+        no meio da lista de disciplinas.
+      */}
+      {refreshError && (
+        <div className="app-banner error-banner" role="alert">
+          <Icon name="alerta" />
+          {refreshError}
+        </div>
+      )}
+
+      {/*
+        A tela de entrada ocupa a largura toda: ela é uma faixa escura ao lado
+        do formulário, e a margem de 1100px do resto do app cortaria as duas.
+      */}
+      <main className={naTelaDeEntrada ? 'app-main app-main--auth' : 'app-main'}>
         {step === 'login' && !loginLoading && (
           <LoginForm onSubmit={handleLogin} loading={loginLoading} error={loginError} />
         )}
 
         {step === 'login' && loginLoading && (
-          <div className="loading-screen">
-            <div className="loading-spinner" aria-label="Carregando" />
-            <p className="loading-message">{loadingMessage}</p>
-            <p className="loading-hint">
-              Na primeira vez isso leva cerca de um minuto — estamos lendo todas as suas
-              disciplinas.
-            </p>
-          </div>
+          <LoadingSkeleton
+            status={loadingMessage}
+            message="Na primeira vez isso leva cerca de um minuto, porque estamos lendo todas as suas disciplinas."
+          />
         )}
 
         {step === 'results' && !selectedSubject && (
@@ -284,16 +316,9 @@ const App: React.FC = () => {
             subjects={subjects}
             events={events}
             onSelectSubject={setSelectedSubjectId}
-            onRefresh={handleRefresh}
             refreshing={refreshing}
-            refreshError={refreshError}
-            onLogout={handleLogout}
-            onClearCache={handleClearCache}
-            onDeleteAccount={handleDeleteAccount}
             lastScrapedAt={lastScrapedAt}
             onOpenPortal={handleOpenPortal}
-            onOpenAssistant={() => setStep('assistant')}
-            assistantAvailable={account?.assistantAvailable ?? false}
           />
         )}
 
@@ -329,9 +354,10 @@ const App: React.FC = () => {
       </main>
 
       <footer className="app-footer">
-        <span>
-          Projeto independente de alunos — não é um serviço oficial da UNOESC.
-        </span>
+        <span>Projeto independente de alunos — não é um serviço oficial da UNOESC.</span>
+        <a href="/privacidade.html" target="_blank" rel="noreferrer">
+          Privacidade e termos
+        </a>
       </footer>
     </div>
   );

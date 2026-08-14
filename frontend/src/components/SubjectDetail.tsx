@@ -1,6 +1,8 @@
 import React, { useState } from 'react';
 import type { Subject, AcademicEvent, EventType } from '../types';
 import EventModal from './EventModal';
+import Icon from './Icon';
+import type { IconName } from './Icon';
 import { useDoneEvents } from '../contexts/DoneEventsContext';
 
 interface SubjectDetailProps {
@@ -18,11 +20,11 @@ interface SubjectDetailProps {
   onOpenPortal?: (subjectName: string, targetUrl?: string) => Promise<string | null>;
 }
 
-const SECTIONS: { type: EventType; label: string; emoji: string }[] = [
-  { type: 'webconference', label: 'Webconferências', emoji: '🎥' },
-  { type: 'deadline', label: 'Entregas', emoji: '📤' },
-  { type: 'exam', label: 'Provas', emoji: '📝' },
-  { type: 'other', label: 'Outros', emoji: '📌' },
+const SECTIONS: { type: EventType; label: string; icon: IconName }[] = [
+  { type: 'webconference', label: 'Webconferências', icon: 'video' },
+  { type: 'deadline', label: 'Entregas', icon: 'entrega' },
+  { type: 'exam', label: 'Provas', icon: 'prova' },
+  { type: 'other', label: 'Outros', icon: 'pin' },
 ];
 
 const BADGE_CLASS: Record<EventType, string> = {
@@ -113,8 +115,9 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
   return (
     <section className="subject-detail">
       <div className="subject-detail__top">
-        <button type="button" className="btn-link" onClick={onBack}>
-          ← Voltar
+        <button type="button" className="btn-back" onClick={onBack}>
+          <Icon name="voltar" />
+          Voltar
         </button>
         {onSync && (
           <button
@@ -128,9 +131,13 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
                 <span className="spinner" aria-hidden="true" /> Sincronizando…
               </>
             ) : allSynced ? (
-              '✅ Tudo sincronizado'
+              <>
+                <Icon name="check" /> Tudo sincronizado
+              </>
             ) : (
-              '📅 Sincronizar todos com Google Calendar'
+              <>
+                <Icon name="calendario" /> Sincronizar com o Google Calendar
+              </>
             )}
           </button>
         )}
@@ -138,7 +145,18 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
 
       <div className="subject-detail__header">
         <div>
-          <h2 className="subject-detail__title">{subject.name}</h2>
+          {/* Mesma separação da grade: código como etiqueta, nome em destaque. */}
+          {(() => {
+            const match = subject.name.match(/^(\d{3,})\s*-\s*(.+)$/);
+            return match ? (
+              <>
+                <span className="subject-detail__code">{match[1]}</span>
+                <h2 className="subject-detail__title">{match[2]}</h2>
+              </>
+            ) : (
+              <h2 className="subject-detail__title">{subject.name}</h2>
+            );
+          })()}
           <p className="subject-detail__meta">
             {events.length} {events.length === 1 ? 'evento' : 'eventos'}
             {upcomingCount > 0 && ` · ${upcomingCount} ${upcomingCount === 1 ? 'futuro' : 'futuros'}`}
@@ -159,7 +177,8 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
 
       {error && (
         <div className="error-banner" role="alert">
-          ⚠️ {error}
+          <Icon name="alerta" />
+          {error}
         </div>
       )}
 
@@ -167,16 +186,18 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
         <div className="empty-state">Nenhum evento identificado nesta disciplina.</div>
       ) : (
         <div className="subject-detail__sections">
-          {SECTIONS.map(({ type, label, emoji }) => {
+          {SECTIONS.map(({ type, label, icon }) => {
             const list = byType[type];
             if (list.length === 0) return null;
 
             return (
               <div key={type} className="event-section">
                 <h3 className="event-section__title">
-                  <span className="event-section__emoji">{emoji}</span>
+                  <span className={`event-section__icon event-section__icon--${type}`}>
+                    <Icon name={icon} />
+                  </span>
                   {label}
-                  <span className="event-section__count">({list.length})</span>
+                  <span className="event-section__count">{list.length}</span>
                 </h3>
 
                 <div className="event-cards">
@@ -205,7 +226,9 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
                             checked={done}
                             onChange={() => toggleDone(event)}
                           />
-                          <span className="event-done-toggle__check" aria-hidden="true">✓</span>
+                          <span className="event-done-toggle__check" aria-hidden="true">
+                            <Icon name="check" size={0.85} />
+                          </span>
                         </label>
 
                         <button
@@ -227,7 +250,9 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
                                 {label.replace(/s$/, '')}
                               </span>
                               {done && (
-                                <span className="status-pill status-pill--done">✓ Concluído</span>
+                                <span className="status-pill status-pill--done">
+                                  <Icon name="check" size={0.9} /> Concluído
+                                </span>
                               )}
                               {rel && !past && !done && (
                                 <span className="event-card-relative">{rel}</span>
@@ -237,7 +262,7 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
                               )}
                               {event.synced && (
                                 <span className="status-pill status-pill--synced" title="Sincronizado">
-                                  📅
+                                  <Icon name="calendario" size={0.9} />
                                 </span>
                               )}
                             </div>

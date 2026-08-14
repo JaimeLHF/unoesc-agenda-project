@@ -41,54 +41,393 @@ body {
   flex-direction: column;
 }
 
-.app-header {
-  background-color: var(--color-primary);
+/* ---- Barra superior ----
+   Fina, fixa e clara. O bloco azul de antes gastava a faixa mais valiosa da
+   tela repetindo o nome do app; aqui o azul aparece só no símbolo da marca e
+   nas ações, e o conteúdo começa quase no topo. */
+.topbar {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  background: rgba(255, 255, 255, 0.85);
+  /* O blur mantém a barra legível quando um card passa por baixo dela. */
+  backdrop-filter: saturate(180%) blur(12px);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.topbar__inner {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0.7rem 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  min-width: 0;
+}
+
+.brand__mark {
+  display: grid;
+  place-items: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  border-radius: 0.7rem;
   color: #ffffff;
-  padding: 1.5rem 2rem;
-  text-align: center;
+  background: linear-gradient(140deg, var(--color-primary) 0%, #4f46e5 100%);
+  box-shadow: 0 2px 6px -1px rgb(29 78 216 / 0.45);
+  flex-shrink: 0;
 }
 
-.app-title {
-  font-size: 2rem;
-  font-weight: 700;
-  letter-spacing: -0.025em;
+.brand__text {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.25;
+  min-width: 0;
 }
 
-.app-subtitle {
-  margin-top: 0.25rem;
-  font-size: 0.95rem;
-  opacity: 0.85;
+.brand__name {
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  color: var(--color-text);
+}
+
+.brand__tagline {
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.topbar__user {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  max-width: 14rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-right: 0.35rem;
+  border-right: 1px solid var(--color-border);
+  margin-right: 0.25rem;
 }
 
 .app-main {
   flex: 1;
   width: 100%;
   max-width: 1100px;
-  margin: 2rem auto;
+  margin: 1.75rem auto;
   padding: 0 1rem;
 }
 
-/* ---- Login ---- */
-.login-card {
+/* A tela de entrada é a única que sangra até as bordas e ocupa a altura toda —
+   sem isso sobrava uma faixa cinza entre o branco e o rodapé. */
+.app-main--auth {
+  max-width: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+}
+
+/* Banner de largura total, logo abaixo da barra (erro de atualização). */
+.app-banner {
+  max-width: 1100px;
+  margin: 1rem auto -0.75rem;
+  width: calc(100% - 2rem);
+}
+
+/* ---- Ícones ----
+   Herdam cor e tamanho do contexto; o alinhamento vertical evita que o texto
+   ao lado suba meio pixel em cada botão. */
+.icon {
+  flex-shrink: 0;
+  vertical-align: -0.15em;
+}
+
+/* Botão de barra: sem moldura em repouso, moldura no hover. */
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  padding: 0.4rem 0.7rem;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+  color: var(--color-primary);
+}
+
+.btn-ghost:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.btn-icon {
+  display: inline-grid;
+  place-items: center;
+  width: 2.1rem;
+  height: 2.1rem;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: var(--radius);
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: background-color 0.15s, color 0.15s;
+}
+
+.btn-icon:hover {
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+/* Voltar: seta e texto como um par, sem parecer botão de ação. */
+.btn-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  background: none;
+  border: none;
+  color: var(--color-primary);
+  font: inherit;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0.4rem 0.6rem 0.4rem 0.35rem;
+  border-radius: var(--radius);
+  transition: background-color 0.15s;
+}
+
+.btn-back:hover {
+  background: #eff6ff;
+}
+
+/* ---- Menu da conta ---- */
+.account-menu {
+  position: relative;
+}
+
+.account-menu__panel {
+  position: absolute;
+  top: calc(100% + 0.4rem);
+  right: 0;
+  min-width: 13rem;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-md);
-  max-width: 420px;
+  border-radius: 0.65rem;
+  box-shadow: 0 10px 25px -5px rgb(15 23 42 / 0.18);
+  padding: 0.3rem;
+  display: flex;
+  flex-direction: column;
+  z-index: 40;
+}
+
+.account-menu__item {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  width: 100%;
+  background: none;
+  border: none;
+  border-radius: 0.45rem;
+  padding: 0.5rem 0.6rem;
+  font: inherit;
+  font-size: 0.875rem;
+  color: var(--color-text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.account-menu__item:hover {
+  background: var(--color-bg);
+}
+
+.account-menu__item--danger {
+  color: var(--color-error);
+}
+
+.account-menu__item--danger:hover {
+  background: var(--color-error-bg);
+}
+
+.account-menu__separator {
+  height: 1px;
+  background: var(--color-border);
+  margin: 0.3rem 0.35rem;
+}
+
+/* ---- Login ----
+   Uma coluna só, sem cartão e sem moldura: a marca, uma frase, dois campos e um
+   botão. O cartão branco flutuando no cinza fazia a tela parecer produto de
+   empresa; isto aqui é um projeto de aluno e a tela pode dizer isso. */
+.auth {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2.5rem 1.25rem 3rem;
+  background: var(--color-surface);
+}
+
+.auth__inner {
+  width: 100%;
+  max-width: 21.5rem;
+}
+
+/* Todo o bloco de explicação fica centralizado; os campos, abaixo, seguem
+   alinhados à esquerda — rótulo centralizado em cima de campo é mais difícil
+   de varrer do que alinhado. */
+.auth__head {
+  text-align: center;
+}
+
+.auth__mark {
+  display: grid;
+  place-items: center;
+  width: 3rem;
+  height: 3rem;
   margin: 0 auto;
-  padding: 2rem;
+  border-radius: 0.9rem;
+  color: #ffffff;
+  background: linear-gradient(140deg, var(--color-primary) 0%, #4f46e5 100%);
+  box-shadow: 0 3px 10px -2px rgb(29 78 216 / 0.4);
 }
 
-.login-title {
-  font-size: 1.25rem;
-  font-weight: 600;
-  margin-bottom: 0.25rem;
+.auth__title {
+  margin-top: 1.25rem;
+  font-size: 1.4rem;
+  font-weight: 650;
+  letter-spacing: -0.022em;
+  line-height: 1.25;
+  text-align: center;
 }
 
-.login-subtitle {
-  font-size: 0.85rem;
+.auth__subtitle {
+  margin-top: 0.5rem;
+  font-size: 0.875rem;
+  line-height: 1.55;
   color: var(--color-text-muted);
-  margin-bottom: 1.5rem;
+  text-align: center;
+  text-wrap: pretty;
+}
+
+.auth__hint {
+  margin-top: 0.9rem;
+  font-size: 0.78rem;
+  line-height: 1.6;
+  color: var(--color-text-muted);
+}
+
+.auth__hint code {
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 3px;
+  padding: 0.05rem 0.3rem;
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.auth__help {
+  margin-top: 0.5rem;
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+
+/* `inline-block` centraliza o resumo no bloco e some com o triângulo do
+   navegador, que não centraliza junto com o texto. */
+.auth__help summary {
+  display: inline-block;
+  cursor: pointer;
+  color: var(--color-primary);
+}
+
+.auth__help summary:hover {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.auth__help p {
+  margin: 0.5rem auto 0;
+  max-width: 32ch;
+  line-height: 1.55;
+}
+
+/* Atalho para onde o número está. Dois botões-link com alvo de toque de 44px:
+   é uma tela de celular, e a pessoa está saindo dela para buscar um dado. */
+.auth__help-links {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.auth__help-links a {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.85rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  color: var(--color-primary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.auth__help-links a:hover {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.auth .login-form {
+  margin-top: 1.75rem;
+  gap: 1.15rem;
+}
+
+/* Campos maiores: a tela é de digitar, e no celular o alvo de toque manda. */
+.auth .form-group input {
+  padding: 0.7rem 0.8rem;
+  min-height: 2.85rem;
+  font-size: 1rem;
+}
+
+.auth .btn-primary {
+  width: 100%;
+  min-height: 2.85rem;
+}
+
+/* A assinatura de quem fez. Fica no fim da coluna, no tom de recado, não de
+   rodapé institucional. */
+.auth__signature {
+  margin-top: 1.5rem;
+  padding-top: 1.15rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.78rem;
+  line-height: 1.55;
+  color: var(--color-text-muted);
+  text-align: center;
+  text-wrap: pretty;
 }
 
 .login-form {
@@ -172,37 +511,171 @@ body {
   to { transform: rotate(360deg); }
 }
 
-.loading-screen {
+/* =========================================================
+   Esqueleto de carregamento
+
+   Desenha a forma da tela de resultados em blocos cinza enquanto o Moodle não
+   responde. Sozinho na tela: enquanto a agenda não está atualizada, mostrar
+   metade dela é pior do que não mostrar nada, porque o aluno não tem como
+   saber qual metade está velha.
+   ========================================================= */
+
+.skeleton__bar,
+.skeleton__pill,
+.skeleton__card {
+  /* A onda é um gradiente que atravessa o bloco, não um piscar de opacidade:
+     piscar em seis cartões ao mesmo tempo vira ruído na tela. */
+  background: linear-gradient(
+    100deg,
+    var(--color-border) 20%,
+    #eef2f7 40%,
+    var(--color-border) 60%
+  );
+  background-size: 220% 100%;
+  animation: skeleton-wave 1.4s ease-in-out infinite;
+  border-radius: 0.35rem;
+}
+
+@keyframes skeleton-wave {
+  from {
+    background-position: 160% 0;
+  }
+  to {
+    background-position: -60% 0;
+  }
+}
+
+/* Aviso do que está acontecendo. Não é bloco cinza: é a única coisa legível
+   da tela enquanto os dados não chegam, então tem cor e contraste de texto. */
+.skeleton__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 1.5rem;
+  padding: 0.45rem 0.8rem;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: var(--color-primary);
+  font-size: 0.85rem;
+  font-weight: 500;
+}
+
+.skeleton__heading {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
+  gap: 0.55rem;
+}
+
+.skeleton__bar--title {
+  height: 1.35rem;
+  width: 11rem;
+}
+
+.skeleton__bar--subtitle {
+  height: 0.85rem;
+  width: 20rem;
+  max-width: 100%;
+}
+
+.skeleton__pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 1.5rem;
+}
+
+.skeleton__pill {
+  height: 2rem;
+  width: 11rem;
+  border-radius: 999px;
+}
+
+.skeleton__pill--wide {
+  width: 15rem;
+}
+
+.skeleton__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 1rem;
-  min-height: 200px;
+  margin-top: 1.75rem;
 }
 
-.loading-spinner {
-  width: 2.5rem;
-  height: 2.5rem;
-  border: 3px solid var(--color-border);
-  border-top-color: var(--color-primary);
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
+/* O cartão é uma moldura de verdade com blocos dentro — assim a grade tem o
+   mesmo peso visual que vai ter quando os dados chegarem. */
+.skeleton__card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.1rem 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  animation: none;
 }
 
-.loading-message {
+.skeleton__bar--card-title {
+  height: 1rem;
+  width: 75%;
+}
+
+.skeleton__bar--card-meta {
+  height: 0.75rem;
+  width: 55%;
+}
+
+.skeleton__card-footer {
+  margin-top: 0.4rem;
+  padding-top: 0.75rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.skeleton__bar--card-next {
+  height: 0.75rem;
+  width: 85%;
+}
+
+.skeleton__message {
+  margin-top: 1.75rem;
+  text-align: center;
+  font-size: 0.85rem;
   color: var(--color-text-muted);
-  font-size: 1rem;
+}
+
+/* Texto só para leitor de tela: `aria-busy` avisa que está carregando, mas
+   não diz o quê. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton__bar,
+  .skeleton__pill {
+    animation: none;
+    background: var(--color-border);
+  }
 }
 
 /* ---- Banner de backend offline ---- */
 .backend-offline-banner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
   background: #fef2f2;
   color: #b91c1c;
   border-bottom: 1px solid #fecaca;
   padding: 0.7rem 1.5rem;
   font-size: 0.85rem;
-  text-align: center;
   font-weight: 500;
 }
 
@@ -239,6 +712,9 @@ body {
 
 /* ---- Banner de erro ---- */
 .error-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   background-color: var(--color-error-bg);
   color: var(--color-error);
   border: 1px solid #fca5a5;
@@ -441,12 +917,14 @@ body {
   gap: 0.75rem;
 }
 
-.subject-grid-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  gap: 1rem;
+/* Título da tela. As ações que ficavam aqui subiram para a barra superior. */
+.page-heading {
+  margin-bottom: 0.25rem;
+}
+
+.page-heading .section-title {
+  font-size: 1.35rem;
+  letter-spacing: -0.02em;
 }
 
 .last-scraped {
@@ -533,11 +1011,29 @@ body {
   gap: 0.75rem;
 }
 
+.subject-card-large__title {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 0;
+}
+
+/* Código da turma como etiqueta: presente para quem procura por ele, fora do
+   caminho de quem lê o nome. */
+.subject-card-large__code {
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
 .subject-card-large__name {
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 600;
   color: var(--color-text);
-  line-height: 1.3;
+  line-height: 1.35;
+  /* Sem quebra dentro da palavra: nomes longos descem de linha inteiros. */
+  overflow-wrap: break-word;
 }
 
 .subject-card-large__total {
@@ -644,9 +1140,18 @@ body {
   gap: 0.25rem;
 }
 
-.subject-detail__title {
-  font-size: 1.15rem;
+.subject-detail__code {
+  display: block;
+  font-size: 0.72rem;
   font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+}
+
+.subject-detail__title {
+  font-size: 1.3rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
   color: var(--color-text);
 }
 
@@ -679,14 +1184,31 @@ body {
   color: var(--color-text);
 }
 
-.event-section__emoji {
-  font-size: 1.15rem;
+/* Quadradinho colorido por trás do ícone da seção: dá ao tipo de evento a
+   mesma identidade de cor que o badge dos cards já usa. */
+.event-section__icon {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  border-radius: 0.5rem;
+  background: #f1f5f9;
+  color: #475569;
 }
 
-.event-section__count {
-  font-size: 0.8rem;
-  font-weight: 500;
+.event-section__icon--webconference { background: #dbeafe; color: #1d4ed8; }
+.event-section__icon--deadline      { background: #fef3c7; color: #b45309; }
+.event-section__icon--exam          { background: #fce7f3; color: #9d174d; }
+
+.event-section__count,
+.alerts-count {
+  font-size: 0.75rem;
+  font-weight: 600;
   color: var(--color-text-muted);
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 9999px;
+  padding: 0.05rem 0.5rem;
 }
 
 /* ---- Alertas de eventos próximos ---- */
@@ -710,11 +1232,6 @@ body {
   gap: 0.4rem;
 }
 
-.alerts-count {
-  font-size: 0.8rem;
-  font-weight: 500;
-  color: var(--color-text-muted);
-}
 
 .alerts-list {
   list-style: none;
@@ -745,8 +1262,11 @@ body {
   box-shadow: var(--shadow-md);
 }
 
-.alert-pill__icon {
-  font-size: 1.1rem;
+/* Emoji, não SVG — ver o comentário em EventAlerts.tsx. */
+.alert-pill__icon,
+.alerts-title__icon {
+  font-size: 1.05rem;
+  line-height: 1;
   flex-shrink: 0;
 }
 
@@ -905,6 +1425,9 @@ body {
 
 /* ---- Pílulas de status (passou / sincronizado) ---- */
 .status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
   font-size: 0.7rem;
   font-weight: 600;
   padding: 0.15rem 0.55rem;
@@ -1019,6 +1542,9 @@ body {
 
 /* Contador de "concluídos" no card de disciplina */
 .subject-card-large__done {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
   font-size: 0.75rem;
   font-weight: 600;
   color: var(--color-success);
@@ -1039,6 +1565,9 @@ body {
 }
 
 .btn-done {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
   background: var(--color-success);
   color: #ffffff;
   border: none;
@@ -1104,17 +1633,18 @@ body {
 
 .modal-close {
   position: absolute;
-  top: 0.6rem;
+  top: 0.7rem;
   right: 0.85rem;
+  display: grid;
+  place-items: center;
+  width: 2rem;
+  height: 2rem;
   background: none;
   border: none;
-  font-size: 1.75rem;
-  line-height: 1;
+  font-size: 1.1rem;
   color: var(--color-text-muted);
   cursor: pointer;
-  padding: 0.25rem 0.5rem;
   border-radius: var(--radius);
-  font-family: inherit;
 }
 
 .modal-close:hover {
@@ -1152,11 +1682,14 @@ body {
 }
 
 .modal-date-block__main {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
   font-size: 1rem;
   font-weight: 600;
   color: var(--color-primary);
-  text-transform: capitalize;
 }
+
 
 .modal-date-block__relative {
   font-size: 0.8rem;
@@ -1172,12 +1705,19 @@ body {
 .modal-meta {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 0.85rem;
   font-size: 0.85rem;
   color: var(--color-text-muted);
   margin-bottom: 1rem;
   padding-bottom: 0.85rem;
   border-bottom: 1px solid var(--color-border);
+}
+
+.modal-meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
 }
 
 .modal-description {
@@ -1225,10 +1765,45 @@ body {
     padding: 0 0.85rem;
   }
 
-  /* Login */
-  .login-card {
-    padding: 1.25rem;
-    margin: 0 0.25rem;
+  /* A faixa escura precisa encostar nas bordas também no celular. */
+  .app-main--auth {
+    margin: 0;
+    padding: 0;
+  }
+
+  /* Login: no celular a coluna começa mais alto, sem centralizar na tela.
+     A largura máxima continua valendo — solta, ela esticava o formulário de
+     ponta a ponta num tablet. */
+  .auth {
+    align-items: flex-start;
+    padding: 1.75rem 1.15rem 2.5rem;
+  }
+
+  /* O bloco de explicação encolhe para os campos subirem: numa tela de 390px
+     cada linha de texto a mais empurra o botão para fora da primeira dobra. */
+  .auth__mark {
+    width: 2.75rem;
+    height: 2.75rem;
+  }
+
+  .auth__title {
+    margin-top: 1rem;
+    font-size: 1.3rem;
+  }
+
+  .auth__subtitle {
+    font-size: 0.85rem;
+  }
+
+  .auth .login-form {
+    margin-top: 1.5rem;
+  }
+
+  /* Os dois atalhos ocupam metade da largura cada, lado a lado. */
+  .auth__help-links a {
+    flex: 1;
+    min-width: 8.5rem;
+    justify-content: center;
   }
 
   /* Subject list */
@@ -1480,18 +2055,26 @@ body {
   font-size: 0.75rem;
 }
 
-.loading-hint {
-  font-size: 0.82rem;
-  color: var(--color-text-muted);
-  max-width: 22rem;
-  text-align: center;
-}
-
 .app-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
   padding: 1.5rem 1rem;
-  text-align: center;
+  border-top: 1px solid var(--color-border);
   font-size: 0.78rem;
   color: var(--color-text-muted);
+}
+
+.app-footer a {
+  color: var(--color-text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.app-footer a:hover {
+  color: var(--color-primary);
 }
 
 .btn-link--danger {
@@ -1504,5 +2087,35 @@ body {
   }
   .assistant__msg {
     max-width: 100%;
+  }
+}
+
+/* ---- Barra superior em telas estreitas ----
+   O rótulo dos botões some antes do ícone: no celular a barra precisa caber
+   marca + ações sem quebrar linha, e o ícone sozinho continua clicável. */
+@media (max-width: 768px) {
+  .topbar__inner {
+    padding: 0.6rem 0.85rem;
+  }
+
+  .brand__tagline,
+  .topbar__user {
+    display: none;
+  }
+
+  .brand__name {
+    font-size: 1rem;
+  }
+
+  .btn-ghost__label {
+    display: none;
+  }
+
+  .btn-ghost {
+    padding: 0.45rem 0.55rem;
+  }
+
+  .app-banner {
+    margin-top: 0.85rem;
   }
 }

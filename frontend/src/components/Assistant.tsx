@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import Icon from './Icon';
 import { askAssistant } from '../services/api';
 import type { AssistantMessage } from '../services/api';
 
@@ -58,8 +59,9 @@ const Assistant: React.FC<AssistantProps> = ({ onBack, used, limit, onQuotaChang
   return (
     <section className="assistant">
       <div className="assistant__header">
-        <button type="button" className="btn-link" onClick={onBack}>
-          ← Voltar
+        <button type="button" className="btn-back" onClick={onBack}>
+          <Icon name="voltar" />
+          Voltar
         </button>
         <div>
           <h2 className="section-title">Assistente de organização</h2>
@@ -112,7 +114,8 @@ const Assistant: React.FC<AssistantProps> = ({ onBack, used, limit, onQuotaChang
 
       {error && (
         <div className="error-banner" role="alert">
-          ⚠️ {error}
+          <Icon name="alerta" />
+          {error}
         </div>
       )}
 
