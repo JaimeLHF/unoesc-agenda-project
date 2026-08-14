@@ -246,7 +246,7 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ stableKey, onBack, onOpenPo
       ) : null}
 
       <div className="activity__content">
-        <h2 className="activity__section-title">Enunciado</h2>
+        <h2 className="activity__section-title">Descritivo da atividade</h2>
 
         {detalhe.content?.intro ? (
           <Prosa texto={detalhe.content.intro} />
@@ -314,6 +314,30 @@ const Prosa: React.FC<{ texto: string }> = ({ texto }) => {
     }
 
     fecharLista();
+
+    // O professor já escreveu a hierarquia; ela só se perdia porque tudo saía
+    // com o mesmo peso. Linha terminada em ":" abre uma seção.
+    if (linha.endsWith(':') && linha.length < 90) {
+      blocos.push(
+        <h3 key={`h${blocos.length}`} className="activity__subhead">
+          {linha.replace(/:$/, '')}
+        </h3>,
+      );
+      continue;
+    }
+
+    // "Peso: 3,0", "Importante: ...", "Formato de entrega: ..." — o rótulo na
+    // frente dos dois pontos é o que o olho procura ao varrer o enunciado.
+    const rotulado = linha.match(/^([A-ZÀ-Ú][^:]{2,45}):\s+(.+)$/);
+    if (rotulado) {
+      blocos.push(
+        <p key={`p${blocos.length}`}>
+          <strong>{rotulado[1]}:</strong> {comLinks(rotulado[2])}
+        </p>,
+      );
+      continue;
+    }
+
     blocos.push(<p key={`p${blocos.length}`}>{comLinks(linha)}</p>);
   }
   fecharLista();
