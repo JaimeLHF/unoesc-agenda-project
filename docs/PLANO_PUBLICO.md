@@ -136,8 +136,14 @@ Recomendação: **um serviço só**. O FastAPI serve o `frontend/dist` via
 
 ## Fase 6 — IA de organização ✅
 
-Só metadados que já estão no cache: título, data, disciplina, tipo. O conteúdo da
-atividade nunca é lido.
+Só metadados que já estão no cache: título, data, disciplina, tipo.
+
+> **Atualização de 14/08/2026.** O app voltou a ler o conteúdo da atividade, mas
+> só para mostrar na página dela (`MoodleClient.activity_content`, usada pelo
+> `GET /api/activity/<chave>`). O contexto do assistente continua sendo montado
+> em `assistant.py` apenas com data, disciplina e título — o enunciado não entra
+> nele. Ler para o aluno e responder por ele são coisas diferentes; a fase 5
+> removeu a segunda, e ela não volta.
 
 1. `POST /api/assistant` — recebe a pergunta e monta o contexto a partir dos
    eventos do usuário no banco.

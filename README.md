@@ -13,6 +13,7 @@ O aluno entra com a conta do Moodle e vê tudo numa lista. Não instala nada, n�
 - **Calendário via API** do Moodle: data, hora, disciplina e link já estruturados
 - **Multi-usuário** — cada aluno vê apenas a própria agenda
 - **Assistente de organização** (opcional) — prioridades, plano de estudo, acúmulo de prazos
+- **Página por atividade** (`/atividade/<chave>`) — enunciado, anexos e status do envio lidos no Moodle, sem login novo. Endereço próprio, dá para favoritar e compartilhar
 - **Marcar como concluído**, **alertas de eventos próximos** e **link direto** pra cada atividade
 - **Deploy único** — um container serve a API e a interface
 - **Responsivo** — funciona no celular
@@ -38,6 +39,8 @@ O aluno entra com a conta do Moodle e vê tudo numa lista. Não instala nada, n�
 O projeto já teve um assistente que baixava o enunciado das atividades e devolvia as respostas de provas. **Isso foi removido** quando ele passou a ser hospedado publicamente: distribuir uma ferramenta dessas sob um domínio próprio esbarra no regulamento acadêmico, e o risco recai sobre quem hospeda.
 
 O que ficou é um assistente que só enxerga **título, data e disciplina** — o suficiente para ajudar a planejar, insuficiente para responder qualquer coisa.
+
+O app **lê** o enunciado da atividade e mostra na página dela (`MoodleClient.activity_content`), para o aluno não precisar fazer login no Moodle de novo só para saber o que entregar. É o mesmo texto que ele já vê no Moodle dele, e ele vai parar numa tela — nunca no contexto do assistente, que continua sendo montado só com data, disciplina e título em `assistant.py`. Ler o enunciado e responder por ele são coisas diferentes; a primeira ficou, a segunda não volta.
 
 A sincronização com o **Google Calendar** está desligada nesta versão. O código continua no repositório; o que falta é a verificação da tela de consentimento OAuth pelo Google, exigida para escopos sensíveis. Sem `VITE_GOOGLE_CLIENT_ID` configurado, os botões não aparecem.
 
@@ -76,9 +79,9 @@ Frontend em **http://localhost:5180** · API em **http://localhost:8880** · Swa
 ### 3. Use
 
 1. Entre com usuário e senha do Moodle.
-2. O primeiro acesso lê todas as disciplinas — leva cerca de um minuto.
-3. Nas próximas vezes a agenda abre na hora, do cache, e atualiza em segundo plano.
-4. Clique num evento para ver detalhes e abrir a atividade no Moodle.
+2. Enquanto o Moodle não responde, a tela mostra só o esqueleto de carregamento — o primeiro acesso lê todas as disciplinas e leva cerca de um minuto.
+3. A agenda **não** abre com o cache atualizando por baixo: numa tela de prazos, meia agenda velha é pior que nenhuma, porque não dá para saber qual metade está velha. O cache só entra se o Moodle estiver fora do ar, e aí a tela avisa.
+4. Clique num evento para abrir a página dele: enunciado, anexos e status do envio, lidos no Moodle com a sessão do servidor.
 5. Marque o que já entregou como concluído.
 
 ---
@@ -203,21 +206,28 @@ unoesc-agenda-project/
 │   │   ├── crypto.py            # Cifragem das senhas guardadas
 │   │   ├── ratelimit.py         # Proteção do /api/login
 │   │   ├── assistant.py         # Assistente de organização + cota
+│   │   ├── observability.py     # Logging, log por requisição, erros amigáveis
 │   │   └── calendar_sync.py     # Google Calendar (desligado na v1)
 │   ├── tests/
 │   │   └── test_isolamento.py   # Critério de aceite do multi-tenant
 │   └── requirements.txt
 ├── frontend/
+│   ├── public/                       # favicon.svg, privacidade.html
 │   ├── src/
 │   │   ├── components/
+│   │   │   ├── AppHeader.tsx         # Barra superior + menu da conta
 │   │   │   ├── LoginForm.tsx         # Login + aviso de privacidade
+│   │   │   ├── LoadingSkeleton.tsx   # Esqueleto enquanto a agenda não chega
 │   │   │   ├── SubjectList.tsx       # Grid de disciplinas
 │   │   │   ├── SubjectDetail.tsx     # Eventos de uma disciplina
-│   │   │   ├── EventModal.tsx        # Modal de detalhes
+│   │   │   ├── ActivityPage.tsx      # Página de uma atividade (rota própria)
 │   │   │   ├── EventAlerts.tsx       # Banner de alertas urgentes
+│   │   │   ├── Icon.tsx              # Ícones SVG de traço
 │   │   │   └── Assistant.tsx         # Chat de organização
+│   │   ├── lib/router.ts             # Roteador mínimo, sem dependência
 │   │   ├── contexts/DoneEventsContext.tsx
 │   │   ├── services/api.ts
+│   │   ├── index.css                 # Estilos globais
 │   │   └── App.tsx
 │   └── package.json
 └── docs/
@@ -254,6 +264,8 @@ make test
 ```
 
 Roda `backend/tests/test_isolamento.py` contra um Moodle falso, sem rede. Verifica que dois alunos logados ao mesmo tempo não enxergam nada um do outro, que nenhum endpoint de dados responde sem sessão, que o rate limit do login funciona e que excluir a conta apaga tudo.
+
+Cobre também o link compartilhável da atividade: como a busca é sempre por `(user_id, stable_key)`, o link de um aluno abre **404** para outro. Endpoint novo que devolva dado do aluno entra nessa lista.
 
 É o critério de aceite da versão pública — roda no CI a cada push.
 

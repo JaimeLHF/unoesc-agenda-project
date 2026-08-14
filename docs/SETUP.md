@@ -66,7 +66,7 @@ npm run dev
 
 Abra **http://localhost:5180** e entre com seu usuário e senha do Moodle (`<matrícula>@unoesc.edu.br`).
 
-O primeiro acesso lê todas as disciplinas e leva cerca de um minuto. Depois disso a agenda abre na hora, do cache, e atualiza em segundo plano.
+O primeiro acesso lê todas as disciplinas e leva cerca de um minuto. Enquanto o Moodle não responde, a tela mostra só o esqueleto de carregamento — inclusive nos acessos seguintes. A agenda **não** abre com o cache atualizando por baixo: numa tela de prazos, meia agenda velha é pior que nenhuma, porque não dá para saber qual metade está velha. O cache só entra se o Moodle estiver fora do ar, e a tela avisa que é a última agenda salva.
 
 ---
 
