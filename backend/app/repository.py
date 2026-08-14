@@ -184,6 +184,17 @@ def get_subject(session: Session, user_id: str, name: str) -> Optional[Subject]:
     return session.get(Subject, (user_id, name))
 
 
+def get_event(session: Session, user_id: str, stable_key: str) -> Optional[Event]:
+    """
+    Um evento do aluno pela chave estável.
+
+    A busca é sempre por (user_id, stable_key) — a chave primária composta. É
+    o que faz um link de atividade compartilhado abrir só para quem tem aquela
+    atividade na própria agenda.
+    """
+    return session.get(Event, (user_id, stable_key))
+
+
 def list_events(session: Session, user_id: str) -> list[Event]:
     return list(
         session.execute(

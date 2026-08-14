@@ -2119,3 +2119,139 @@ body {
     margin-top: 0.85rem;
   }
 }
+
+/* =========================================================
+   Página da atividade
+
+   Substituiu o modal. O modal cabia a descrição curta do calendário e cortava
+   o enunciado; aqui entra a página real da atividade, lida no Moodle com a
+   sessão do servidor, e o endereço é próprio — dá para favoritar e mandar
+   para um colega.
+   ========================================================= */
+
+.activity {
+  max-width: 44rem;
+}
+
+.activity__header {
+  margin-top: 1rem;
+  padding-bottom: 1.25rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.activity__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.6rem;
+}
+
+.activity__title {
+  font-size: 1.5rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.25;
+  text-wrap: pretty;
+}
+
+.activity__meta {
+  margin-top: 0.75rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem 1rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.activity__meta span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.activity__relative {
+  font-weight: 600;
+  color: var(--color-primary);
+}
+
+.activity__actions {
+  margin-top: 1.25rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.activity__section-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: 0.6rem;
+}
+
+.activity__files {
+  margin-top: 2rem;
+}
+
+.activity__files ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+/* Os anexos são o que o aluno mais procura: o enunciado costuma estar num PDF,
+   não no texto da página. Por isso viram alvo grande, não link de corpo. */
+.activity__files a {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-height: 2.75rem;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  color: var(--color-primary);
+  font-size: 0.88rem;
+  font-weight: 500;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.activity__files a:hover {
+  background: #eff6ff;
+  border-color: #bfdbfe;
+}
+
+.activity__files-hint {
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.activity__content {
+  margin-top: 2rem;
+}
+
+.activity__text {
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: var(--color-text);
+  max-width: 68ch;
+  overflow-wrap: anywhere;
+}
+
+.activity__text p + p {
+  margin-top: 0.7rem;
+}
+
+.activity__empty {
+  font-size: 0.88rem;
+  color: var(--color-text-muted);
+}
+
+.activity .error-banner {
+  margin-bottom: 0.9rem;
+}

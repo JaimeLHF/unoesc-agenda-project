@@ -11,7 +11,8 @@ interface SubjectListProps {
   /** Só para avisar que os números na tela podem mudar em instantes. */
   refreshing: boolean;
   lastScrapedAt?: string | null;
-  onOpenPortal?: (subjectName: string, targetUrl?: string) => Promise<string | null>;
+  /** Repassado para a faixa de alertas, que leva à página da atividade. */
+  onOpenEvent: (event: AcademicEvent) => void;
 }
 
 /** Formata "X minutos atrás" / "ontem" a partir de um timestamp ISO. */
@@ -98,7 +99,7 @@ const SubjectList: React.FC<SubjectListProps> = ({
   onSelectSubject,
   refreshing,
   lastScrapedAt,
-  onOpenPortal,
+  onOpenEvent,
 }) => {
   const { isDone } = useDoneEvents();
   const lastScrapedRel = formatRelative(lastScrapedAt);
@@ -114,7 +115,7 @@ const SubjectList: React.FC<SubjectListProps> = ({
         </p>
       </div>
 
-      <EventAlerts events={events} onOpenPortal={onOpenPortal} />
+      <EventAlerts events={events} onOpenEvent={onOpenEvent} />
 
       {subjects.length === 0 ? (
         <div className="empty-state">Nenhuma disciplina encontrada no portal.</div>

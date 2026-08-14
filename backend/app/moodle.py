@@ -29,6 +29,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 from html import unescape
 from typing import Any, Optional
+from urllib.parse import unquote
 
 import httpx
 
@@ -568,7 +569,11 @@ class MoodleClient:
                 "title": clean_event_title(ev.get("name") or ""),
                 "date": dt.strftime("%Y-%m-%d"),
                 "time": dt.strftime("%H:%M"),
-                "description": html_to_text(ev.get("description") or "", 500),
+                # 500 caracteres cortavam o enunciado no meio de uma palavra —
+                # justamente onde costuma estar o que a atividade pede. O que o
+                # Moodle manda no calendário já é o resumo dele; guardamos
+                # inteiro e deixamos a tela decidir quanto mostrar.
+                "description": html_to_text(ev.get("description") or "", 8_000),
                 "subject": clean_course_name(curso.get("fullname") or curso.get("shortname") or ""),
                 "type": guess_type(modulename, ev.get("name") or ""),
                 "synced": False,
@@ -614,10 +619,61 @@ class MoodleClient:
         resp = self._client.get(f"{self.base}/course/view.php", params={"id": course_id})
         return html_to_text(main_region(resp.text))
 
-    # O cliente já teve um `activity_content()`, que baixava o enunciado
-    # completo de uma atividade para alimentar o assistente que resolvia
-    # provas. Ambos foram removidos quando o app virou público: a agenda
-    # precisa de data e título, não do conteúdo da avaliação.
+    def activity_content(self, url: str) -> dict:
+        """
+        Página de uma atividade, lida com a sessão que o backend já mantém.
+
+        Este método já existiu e foi apagado quando o app virou público, porque
+        alimentava o assistente que resolvia provas. Voltou em 14/08/2026 com
+        um destino só: a tela de detalhe que o aluno abre. O conteúdo daqui
+        **não entra no contexto do assistente** — ele continua montando o
+        prompt a partir de data, disciplina e título, e só (`assistant.py`).
+
+        O aluno já vê exatamente isto no Moodle dele; o que muda é não precisar
+        logar de novo para ler.
+        """
+        if not url.startswith(self.base):
+            raise PermissionError("Endereço fora do Moodle da UNOESC.")
+
+        resp = self._client.get(url, follow_redirects=True)
+
+        # Sessão caída: o Moodle responde 200 com a página de login em vez de
+        # um 401, então o redirecionamento é o único sinal confiável.
+        if "/login/index.php" in str(resp.url):
+            raise PermissionError("A sessão do Moodle expirou.")
+
+        resp.raise_for_status()
+        regiao = main_region(resp.text)
+
+        return {
+            "text": html_to_text(regiao, 20_000),
+            "files": self._extract_files(regiao),
+            "url": str(resp.url),
+        }
+
+    @staticmethod
+    def _extract_files(html: str) -> list[dict]:
+        """
+        Anexos da atividade — o enunciado costuma estar num PDF, não no texto.
+
+        Os links de arquivo do Moodle passam todos por `/pluginfile.php/`; é o
+        que separa um anexo de um link qualquer dentro da descrição.
+        """
+        vistos: set[str] = set()
+        arquivos: list[dict] = []
+
+        for m in re.finditer(
+            r'(?is)<a[^>]+href="([^"]*/pluginfile\.php/[^"]+)"[^>]*>(.*?)</a>', html
+        ):
+            href = unescape(m.group(1))
+            if href in vistos:
+                continue
+            vistos.add(href)
+
+            nome = html_to_text(m.group(2), 200) or href.rsplit("/", 1)[-1]
+            arquivos.append({"name": unquote(nome), "url": href})
+
+        return arquivos
 
     # -- fluxo completo --------------------------------------------------
 

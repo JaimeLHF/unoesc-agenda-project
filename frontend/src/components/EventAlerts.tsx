@@ -1,12 +1,12 @@
-import React, { useState } from 'react';
+import React from 'react';
 import type { AcademicEvent, EventType } from '../types';
-import EventModal from './EventModal';
 import { useDoneEvents } from '../contexts/DoneEventsContext';
 
 interface EventAlertsProps {
   events: AcademicEvent[];
   maxAlerts?: number;
-  onOpenPortal?: (subjectName: string, targetUrl?: string) => Promise<string | null>;
+  /** Leva para a página da atividade — antes isso abria um modal. */
+  onOpenEvent: (event: AcademicEvent) => void;
 }
 
 type Urgency = 'today' | 'tomorrow' | 'soon' | 'week';
@@ -96,8 +96,7 @@ function buildMessage(alert: Alert): { icon: string; text: string } {
   }
 }
 
-const EventAlerts: React.FC<EventAlertsProps> = ({ events, maxAlerts = 6, onOpenPortal }) => {
-  const [openEvent, setOpenEvent] = useState<AcademicEvent | null>(null);
+const EventAlerts: React.FC<EventAlertsProps> = ({ events, maxAlerts = 6, onOpenEvent }) => {
   const { isDone } = useDoneEvents();
 
   // Eventos já marcados como concluídos não geram alertas — o aluno já os fez
@@ -120,7 +119,7 @@ const EventAlerts: React.FC<EventAlertsProps> = ({ events, maxAlerts = 6, onOpen
               <button
                 type="button"
                 className={`alert-pill alert-pill--${alert.urgency}`}
-                onClick={() => setOpenEvent(alert.event)}
+                onClick={() => onOpenEvent(alert.event)}
                 title={alert.event.title}
               >
                 <span className="alert-pill__icon">{icon}</span>
@@ -131,8 +130,6 @@ const EventAlerts: React.FC<EventAlertsProps> = ({ events, maxAlerts = 6, onOpen
           );
         })}
       </ul>
-
-      <EventModal event={openEvent} onClose={() => setOpenEvent(null)} onOpenPortal={onOpenPortal} />
     </section>
   );
 };

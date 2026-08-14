@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import ActivityPage from './components/ActivityPage';
 import AppHeader from './components/AppHeader';
 import Icon from './components/Icon';
 import LoadingSkeleton from './components/LoadingSkeleton';
@@ -19,7 +20,8 @@ import {
 } from './services/api';
 import type { Account } from './services/api';
 import { requestGoogleAccessToken } from './services/googleAuth';
-import { useDoneEvents } from './contexts/DoneEventsContext';
+import { useDoneEvents, eventKey } from './contexts/DoneEventsContext';
+import { activityPath, navigate, useActivityRoute } from './lib/router';
 import type { Subject, AcademicEvent, LoginCredentials } from './types';
 import './index.css';
 
@@ -54,6 +56,11 @@ const App: React.FC = () => {
   const [backendOffline, setBackendOffline] = useState(false);
 
   const { hydrate } = useDoneEvents();
+
+  // A atividade aberta mora no endereço, não no estado: assim o botão voltar
+  // do navegador funciona e o link pode ser compartilhado com um colega.
+  const activityKey = useActivityRoute();
+  const abrirAtividade = (event: AcademicEvent) => navigate(activityPath(eventKey(event)));
 
   // Banner de "servidor fora do ar": axios interceptor dispatcha eventos
   // 'backend-online'/'backend-offline' a cada request.
@@ -311,18 +318,26 @@ const App: React.FC = () => {
           />
         )}
 
-        {step === 'results' && !selectedSubject && (
+        {step === 'results' && activityKey && (
+          <ActivityPage
+            stableKey={activityKey}
+            onBack={() => navigate('/')}
+            onOpenPortal={handleOpenPortal}
+          />
+        )}
+
+        {step === 'results' && !activityKey && !selectedSubject && (
           <SubjectList
             subjects={subjects}
             events={events}
             onSelectSubject={setSelectedSubjectId}
             refreshing={refreshing}
             lastScrapedAt={lastScrapedAt}
-            onOpenPortal={handleOpenPortal}
+            onOpenEvent={abrirAtividade}
           />
         )}
 
-        {step === 'results' && selectedSubject && (
+        {step === 'results' && !activityKey && selectedSubject && (
           <SubjectDetail
             subject={selectedSubject}
             events={eventsForSelected}
@@ -335,7 +350,7 @@ const App: React.FC = () => {
             }
             syncing={syncing}
             error={syncError}
-            onOpenPortal={handleOpenPortal}
+            onOpenEvent={abrirAtividade}
           />
         )}
 

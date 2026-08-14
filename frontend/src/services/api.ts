@@ -242,3 +242,33 @@ export async function openCourse(
   });
   return data.url;
 }
+
+/** Um anexo da atividade — quase sempre o PDF com o enunciado. */
+export interface ActivityFile {
+  name: string;
+  url: string;
+}
+
+export interface ActivityDetail {
+  stable_key: string;
+  title: string;
+  date: string;
+  time?: string | null;
+  description: string;
+  subject: string;
+  type: string;
+  url: string;
+  done: boolean;
+  synced: boolean;
+  /** Página da atividade lida no Moodle com a sessão do servidor. */
+  content: { text: string; files: ActivityFile[]; url: string } | null;
+  /** Por que o conteúdo não veio. A página abre mesmo assim. */
+  content_error: string | null;
+}
+
+export async function fetchActivity(stableKey: string): Promise<ActivityDetail> {
+  const { data } = await api.get<ActivityDetail>(
+    `/activity/${encodeURIComponent(stableKey)}`,
+  );
+  return data;
+}

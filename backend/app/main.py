@@ -15,6 +15,7 @@ from typing import Optional
 from fastapi import Depends, FastAPI, Header, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel
 
 from app import assistant
@@ -563,6 +564,67 @@ async def open_course(
         return {"url": subject.course_url}
 
 
+@app.get("/api/activity/{stable_key:path}")
+async def activity_detail(
+    stable_key: str,
+    session: app_session.PortalSession = Depends(require_session),
+):
+    """
+    Tudo o que sabemos de uma atividade, para a página de detalhe.
+
+    O evento sai do cache do próprio aluno — a busca é sempre filtrada por
+    `user_id`, então um link compartilhado só abre para quem tem aquela
+    atividade na própria agenda; para os outros dá 404, não vaza nada.
+
+    O conteúdo da página é buscado no Moodle com a sessão do servidor, o que
+    poupa o aluno de logar de novo só para ler o enunciado. Ele é devolvido
+    **apenas para esta tela**: `assistant.py` continua montando o contexto com
+    data, disciplina e título, e nunca recebe este texto.
+    """
+    with repo.get_session() as db:
+        evento = repo.get_event(db, session.user_id, stable_key)
+        if not evento:
+            raise HTTPException(status_code=404, detail="Atividade não encontrada.")
+
+        done_keys = set(repo.list_done_keys(db, session.user_id))
+        synced_keys = set(repo.list_synced_keys(db, session.user_id))
+
+        detalhe = {
+            "stable_key": evento.stable_key,
+            "title": evento.title,
+            "date": evento.date,
+            "time": evento.time,
+            "description": evento.description or "",
+            "subject": evento.subject,
+            "type": evento.type,
+            "url": evento.url or "",
+            "done": evento.stable_key in done_keys,
+            "synced": evento.stable_key in synced_keys,
+            "content": None,
+            "content_error": None,
+        }
+
+    if not detalhe["url"]:
+        detalhe["content_error"] = "Esta atividade não tem página própria no Moodle."
+        return detalhe
+
+    # A falha aqui não derruba a página: o aluno ainda vê data, título e a
+    # descrição do calendário, com um aviso no lugar do enunciado.
+    try:
+        with MoodleClient() as moodle:
+            await asyncio.to_thread(moodle.login, session.username, session.password)
+            detalhe["content"] = await asyncio.to_thread(
+                moodle.activity_content, detalhe["url"]
+            )
+    except PermissionError as exc:
+        detalhe["content_error"] = str(exc)
+    except Exception as exc:
+        codigo = registrar_falha(f"conteúdo da atividade (user={session.user_id})", exc)
+        detalhe["content_error"] = mensagem_amigavel(codigo, "abrir a atividade no Moodle")
+
+    return detalhe
+
+
 @app.post("/api/sync-calendar", response_model=SyncCalendarResponse)
 async def sync_calendar(
     request: SyncCalendarRequest,
@@ -607,13 +669,35 @@ async def sync_calendar(
 # Frontend compilado
 #
 # Registrado por último de propósito: o mount em "/" captura qualquer caminho,
-# e as rotas acima precisam ser resolvidas primeiro. `html=True` faz a raiz
-# servir o index.html; caminhos desconhecidos continuam dando 404, o que basta
-# porque a interface não usa rotas de URL — a navegação é toda em estado.
+# e as rotas acima precisam ser resolvidas primeiro.
 # ---------------------------------------------------------------------------
+
+class SPAStaticFiles(StaticFiles):
+    """
+    Arquivos estáticos com fallback para o `index.html`.
+
+    Desde que a atividade ganhou endereço próprio (`/atividade/<chave>`), a
+    interface tem rotas de verdade. Abrir esse link direto — de um favorito ou
+    de um link mandado por um colega — chega ao servidor como um caminho que
+    não existe em disco, e o `StaticFiles` puro devolveria 404. Quem resolve a
+    rota é o JavaScript, então o servidor entrega o `index.html` e deixa o
+    navegador decidir.
+
+    `/api/...` fica de fora: ali um caminho desconhecido é erro de chamada, e
+    devolver HTML no lugar de um 404 esconderia o problema de quem chamou.
+    """
+
+    async def get_response(self, path: str, scope):
+        try:
+            return await super().get_response(path, scope)
+        except StarletteHTTPException as exc:
+            if exc.status_code != 404 or path.startswith("api/"):
+                raise
+            return await super().get_response("index.html", scope)
+
 
 _dist = Path(os.getenv("FRONTEND_DIST", Path(__file__).resolve().parent.parent.parent / "frontend" / "dist"))
 if (_dist / "index.html").exists():
-    app.mount("/", StaticFiles(directory=str(_dist), html=True), name="frontend")
+    app.mount("/", SPAStaticFiles(directory=str(_dist), html=True), name="frontend")
 else:
     observability.logger.warning("Frontend não encontrado em %s — servindo só a API.", _dist)

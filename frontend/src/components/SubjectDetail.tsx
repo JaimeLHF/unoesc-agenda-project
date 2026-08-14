@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import type { Subject, AcademicEvent, EventType } from '../types';
-import EventModal from './EventModal';
 import Icon from './Icon';
 import type { IconName } from './Icon';
 import { useDoneEvents } from '../contexts/DoneEventsContext';
@@ -17,7 +16,8 @@ interface SubjectDetailProps {
   onSync?: () => void;
   syncing: boolean;
   error?: string | null;
-  onOpenPortal?: (subjectName: string, targetUrl?: string) => Promise<string | null>;
+  /** Leva para a página da atividade — antes isso abria um modal. */
+  onOpenEvent: (event: AcademicEvent) => void;
 }
 
 const SECTIONS: { type: EventType; label: string; icon: IconName }[] = [
@@ -85,9 +85,8 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
   onSync,
   syncing,
   error,
-  onOpenPortal,
+  onOpenEvent,
 }) => {
-  const [openEvent, setOpenEvent] = useState<AcademicEvent | null>(null);
   const [hideDone, setHideDone] = useState(false);
   const { isDone, toggleDone } = useDoneEvents();
 
@@ -234,7 +233,7 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
                         <button
                           type="button"
                           className="event-card-clickarea"
-                          onClick={() => setOpenEvent(event)}
+                          onClick={() => onOpenEvent(event)}
                         >
                           <div className="event-date-badge">
                             <span className="event-date-badge__day">{day}</span>
@@ -284,7 +283,6 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
         </div>
       )}
 
-      <EventModal event={openEvent} onClose={() => setOpenEvent(null)} onOpenPortal={onOpenPortal} />
     </section>
   );
 };

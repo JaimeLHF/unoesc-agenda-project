@@ -156,6 +156,7 @@ def main_teste() -> int:
             ("post", "/api/open-course", {"subject_name": "Cálculo I"}),
             ("post", "/api/assistant", {"messages": [{"role": "user", "content": "oi"}]}),
             ("delete", "/api/account", None),
+            ("get", "/api/activity/moodle:1", None),
         ]
         for metodo, rota, corpo in sem_sessao:
             resp = getattr(client, metodo)(rota, json=corpo) if corpo else getattr(client, metodo)(rota)
@@ -169,6 +170,18 @@ def main_teste() -> int:
             headers=auth(token_a),
         )
         verificar(resp.status_code == 404, "A não consegue abrir disciplina de B")
+
+        # A página de atividade tem endereço próprio e compartilhável. A busca
+        # é por (user_id, stable_key), então o link de B abre 404 para A — é o
+        # que impede um link compartilhado de virar vazamento.
+        chave_de_b = client.get("/api/cache", headers=auth(token_b)).json()["events"][0][
+            "stable_key"
+        ]
+        resp = client.get(f"/api/activity/{chave_de_b}", headers=auth(token_a))
+        verificar(resp.status_code == 404, "A não abre a atividade de B pelo link dela")
+
+        resp = client.get(f"/api/activity/{chave_de_b}", headers=auth(token_b))
+        verificar(resp.status_code == 200, "B abre a própria atividade")
 
         print("\n[5] Limpar cache não atinge o vizinho")
         client.delete("/api/cache", headers=auth(token_a))
