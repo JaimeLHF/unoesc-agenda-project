@@ -1,6 +1,6 @@
 # Agenda UNOESC — atalhos de desenvolvimento
 
-.PHONY: dev setup test clean docker
+.PHONY: dev setup test clean docker backup deploy
 
 ## Sobe backend + frontend em paralelo
 dev:
@@ -17,6 +17,14 @@ test:
 ## Constrói a imagem de produção (frontend compilado + API num container só)
 docker:
 	docker build -t agenda-unoesc .
+
+## Baixa uma cópia do banco de produção para ./backups
+backup:
+	./scripts/backup-db.sh
+
+## Backup + testes + deploy no Fly.io, nessa ordem
+deploy: backup test
+	fly deploy
 
 ## Apaga o banco local (agenda.db) para começar do zero
 clean:

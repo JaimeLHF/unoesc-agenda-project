@@ -9,6 +9,7 @@ Utiliza as bibliotecas google-api-python-client e google-auth para:
 import asyncio
 import base64
 import hashlib
+import logging
 from datetime import datetime, date, timedelta
 from typing import Any
 
@@ -17,6 +18,8 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 
 from app.database import stable_event_key
+
+logger = logging.getLogger("agenda.calendar")
 
 # Escopo necessário para criar e gerenciar eventos no Google Calendar
 SCOPES = ["https://www.googleapis.com/auth/calendar.events"]
@@ -120,7 +123,7 @@ class CalendarSyncService:
             return key, created.get("id", ""), created.get("htmlLink", "")
         except HttpError as exc:
             # Registra o erro mas não interrompe a sincronização dos demais eventos
-            print(f"Erro ao criar evento '{title}': {exc}")
+            logger.warning("Falha ao criar o evento '%s' no Google: %s", title, exc)
             return key, "", ""
 
     def _upsert(self, google_event: dict) -> dict:

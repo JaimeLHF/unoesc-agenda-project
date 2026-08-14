@@ -7,7 +7,7 @@
 #
 # `gru` é São Paulo — o mais perto dos alunos e do Moodle da UNOESC.
 
-app = "agenda-unoesc"
+app = "unoesc-agenda"
 primary_region = "gru"
 
 [build]
@@ -42,6 +42,19 @@ primary_region = "gru"
     type = "requests"
     soft_limit = 40
     hard_limit = 60
+
+  # Bate em `/api/health/live`, que não toca no Moodle nem no banco: um check a
+  # cada 30s contra `/api/health` faria uma requisição ao Moodle da UNOESC 2880
+  # vezes por dia sem ninguém estar usando o app. Se o processo travar, o Fly
+  # reinicia a máquina sozinho — hoje ele nem saberia que travou.
+  # Com a máquina suspensa (min_machines_running = 0) o check não roda, e é
+  # exatamente o desejado: ninguém usando, nada para checar.
+  [[http_service.checks]]
+    grace_period = "10s"
+    interval = "30s"
+    method = "GET"
+    timeout = "5s"
+    path = "/api/health/live"
 
 [[vm]]
   size = "shared-cpu-1x"

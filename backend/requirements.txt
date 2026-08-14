@@ -1,12 +1,27 @@
-fastapi
-uvicorn[standard]
-google-genai
-google-api-python-client
-google-auth-httplib2
-google-auth-oauthlib
-anthropic
-python-dotenv
-pydantic
-httpx
-sqlalchemy
-cryptography
+# Versões travadas de propósito.
+#
+# São três ambientes rodando este arquivo: Python 3.14 na máquina de
+# desenvolvimento, 3.11 no CI e 3.11 na imagem Docker. Sem `==`, cada `pip
+# install` pega o que estiver publicado naquele dia, e um deploy pode quebrar
+# sozinho, sem nenhuma mudança no código — o build de produção é o pior lugar
+# para descobrir que uma dependência mudou de comportamento.
+#
+# Para atualizar: suba a versão aqui, rode `make test`, e deixe o CI confirmar
+# no 3.11 antes do deploy.
+
+fastapi==0.141.1
+uvicorn[standard]==0.52.0
+pydantic==2.13.4
+httpx==0.28.1
+sqlalchemy==2.0.51
+cryptography==50.0.0
+python-dotenv==1.2.2
+
+# Assistente de organização (opcional — sem chave, o recurso não aparece)
+anthropic==0.120.2
+google-genai==2.16.0
+
+# Google Calendar — fora do ar na v1 pública, mas o endpoint segue de pé
+google-api-python-client==2.198.0
+google-auth-httplib2==0.4.0
+google-auth-oauthlib==1.4.0

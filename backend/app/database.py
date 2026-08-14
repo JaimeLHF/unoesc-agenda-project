@@ -11,6 +11,7 @@ tornou a mudança obrigatória foi hospedar numa URL pública: sem `user_id`, o
 segundo aluno a logar sobrescreveria e enxergaria a agenda do primeiro.
 """
 
+import logging
 import os
 import uuid
 from datetime import datetime, timezone
@@ -19,6 +20,8 @@ from typing import Optional
 
 from sqlalchemy import String, Text, DateTime, Integer, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
+
+logger = logging.getLogger("agenda.db")
 
 
 def utc_now() -> datetime:
@@ -242,10 +245,10 @@ def _drop_pre_multitenant_tables() -> None:
     if not legacy:
         return
 
-    print(
-        "[DB] banco no formato antigo (single-user) detectado. "
-        f"Recriando {', '.join(legacy)} com suporte a múltiplos usuários — "
-        "faça login e atualize para repopular."
+    logger.warning(
+        "Banco no formato antigo (single-user) detectado. Recriando %s com "
+        "suporte a múltiplos usuários — faça login e atualize para repopular.",
+        ", ".join(legacy),
     )
     with engine.begin() as conn:
         for table in legacy:
@@ -279,9 +282,12 @@ def _run_lightweight_migrations() -> None:
                 if column.nullable is False and column.default is None:
                     # SQLite não permite ADD COLUMN NOT NULL sem default;
                     # caímos no fluxo manual nesses raros casos.
-                    print(
-                        f"[DB] coluna '{column.name}' em '{table.name}' é NOT NULL sem default. "
-                        f"Apague o banco ({DB_PATH}) para recriar do zero."
+                    logger.warning(
+                        "Coluna '%s' em '%s' é NOT NULL sem default. Apague o banco "
+                        "(%s) para recriar do zero.",
+                        column.name,
+                        table.name,
+                        DB_PATH,
                     )
                     continue
                 if column.default is not None and getattr(column.default, "is_scalar", False):
@@ -291,5 +297,5 @@ def _run_lightweight_migrations() -> None:
                     pieces.append(f"DEFAULT {default_value}")
 
                 stmt = " ".join(pieces)
-                print(f"[DB] migração: {stmt}")
+                logger.info("Migração: %s", stmt)
                 conn.execute(text(stmt))

@@ -18,12 +18,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app import assistant
+from app import observability
 from app import ratelimit
 from app import repository as repo
 from app import session as app_session
 from app.calendar_sync import CalendarSyncService
 from app.database import init_db, utc_now
 from app.moodle import MoodleClient, clear_session_cache
+from app.observability import mensagem_amigavel, registrar_falha
 
 # ---------------------------------------------------------------------------
 # Modelos de Requisição e Resposta (Pydantic)
@@ -140,10 +142,12 @@ async def lifespan(_app: FastAPI):
     Ciclo de vida do app. Substitui `@app.on_event("startup")`, deprecado no
     FastAPI. O que vem antes do `yield` roda na subida; depois, no shutdown.
     """
+    observability.setup_logging()
     init_db()
     removidas = app_session.purge_expired()
     if removidas:
-        print(f"[startup] {removidas} sessão(ões) expirada(s) removida(s).")
+        observability.logger.info("%d sessão(ões) expirada(s) removida(s).", removidas)
+    observability.logger.info("API pronta (APP_ENV=%s).", os.getenv("APP_ENV", "development"))
     yield
 
 
@@ -166,6 +170,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Uma linha de log por requisição, e a última rede de proteção contra exceção
+# não tratada — sem ela o erro sairia como traceback no corpo da resposta.
+app.middleware("http")(observability.log_requests)
 
 # ---------------------------------------------------------------------------
 # Autenticação
@@ -219,11 +227,14 @@ async def login(credentials: LoginCredentials):
                 moodle.login, credentials.username, credentials.password
             )
     except PermissionError as exc:
+        # Credencial recusada: a mensagem vem do nosso próprio código e é
+        # escrita para o aluno ("usuário ou senha incorretos").
         ratelimit.register_failure(chave)
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except Exception as exc:
+        codigo = registrar_falha("login no Moodle", exc)
         raise HTTPException(
-            status_code=500, detail=f"Erro ao autenticar no Moodle: {exc}"
+            status_code=502, detail=mensagem_amigavel(codigo, "entrar no Moodle")
         ) from exc
 
     ratelimit.reset(chave)
@@ -272,6 +283,19 @@ async def delete_account(session: app_session.PortalSession = Depends(require_se
 # ---------------------------------------------------------------------------
 # Endpoints
 # ---------------------------------------------------------------------------
+
+@app.get("/api/health/live")
+async def liveness():
+    """
+    "O processo está de pé?" — nada além disso.
+
+    É o alvo do health check do Fly (`fly.toml`), que roda a cada 30s. Por isso
+    não toca no Moodle nem no banco: um check que faz requisição externa vira
+    milhares de acessos por dia ao servidor da UNOESC sem ninguém usar o app.
+    O diagnóstico completo é o `/api/health` abaixo, chamado sob demanda.
+    """
+    return {"status": "ok"}
+
 
 @app.get("/api/health")
 async def health_check():
@@ -361,8 +385,9 @@ async def scrape_portal(session: app_session.PortalSession = Depends(require_ses
     except PermissionError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except Exception as exc:
+        codigo = registrar_falha(f"scrape do Moodle (user={session.user_id})", exc)
         raise HTTPException(
-            status_code=500, detail=f"Erro ao extrair dados do Moodle: {exc}"
+            status_code=502, detail=mensagem_amigavel(codigo, "buscar sua agenda no Moodle")
         ) from exc
 
 
@@ -497,7 +522,10 @@ async def ask_assistant(
     except assistant.AssistantUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Erro ao consultar a IA: {exc}") from exc
+        codigo = registrar_falha("chamada ao assistente", exc)
+        raise HTTPException(
+            status_code=502, detail=mensagem_amigavel(codigo, "falar com o assistente")
+        ) from exc
 
     return AssistantResponse(response=answer, used=quota.used, limit=quota.limit)
 
@@ -568,7 +596,11 @@ async def sync_calendar(
             calendar_links=[r["link"] for r in results],
         )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Erro ao sincronizar com o Google Calendar: {exc}") from exc
+        codigo = registrar_falha("sincronização com o Google Calendar", exc)
+        raise HTTPException(
+            status_code=502,
+            detail=mensagem_amigavel(codigo, "sincronizar com o Google Calendar"),
+        ) from exc
 
 
 # ---------------------------------------------------------------------------
@@ -584,4 +616,4 @@ _dist = Path(os.getenv("FRONTEND_DIST", Path(__file__).resolve().parent.parent.p
 if (_dist / "index.html").exists():
     app.mount("/", StaticFiles(directory=str(_dist), html=True), name="frontend")
 else:
-    print(f"[startup] frontend não encontrado em {_dist} — servindo só a API.")
+    observability.logger.warning("Frontend não encontrado em %s — servindo só a API.", _dist)

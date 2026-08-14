@@ -63,3 +63,6 @@ moodle_token.txt
 
 # Screenshots do Playwright MCP
 .playwright-mcp/
+
+# Backups locais do banco de produção (scripts/backup-db.sh)
+backups/

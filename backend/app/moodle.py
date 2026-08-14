@@ -21,6 +21,7 @@ completo da API.
 """
 
 import json
+import logging
 import re
 import threading
 import unicodedata
@@ -30,6 +31,8 @@ from html import unescape
 from typing import Any, Optional
 
 import httpx
+
+logger = logging.getLogger("agenda.moodle")
 
 # ---------------------------------------------------------------------------
 # Constantes
@@ -638,7 +641,7 @@ class MoodleClient:
         self.login(username, password)
 
         cursos = self.list_courses()
-        print(f"[Moodle] {len(cursos)} disciplina(s)")
+        logger.info("%d disciplina(s) encontradas", len(cursos))
 
         subjects = []
         webconfs: list[dict] = []
@@ -652,7 +655,9 @@ class MoodleClient:
                 if with_content:
                     conteudo = texto
             except Exception as exc:  # acessório: não derruba a busca da agenda
-                print(f"[Moodle]   [{i}/{len(cursos)}] {c['name']}: sem texto ({exc})")
+                logger.warning(
+                    "[%d/%d] %s: sem texto (%s)", i, len(cursos), c["name"], exc
+                )
 
             subjects.append({
                 "id": str(uuid.uuid4()),
@@ -664,8 +669,11 @@ class MoodleClient:
             })
 
         eventos = self.calendar_events()
-        print(f"[Moodle] {len(eventos)} evento(s) no calendário "
-              f"+ {len(webconfs)} webconferência(s) no texto")
+        logger.info(
+            "%d evento(s) no calendário + %d webconferência(s) no texto",
+            len(eventos),
+            len(webconfs),
+        )
 
         eventos.extend(webconfs)
         eventos.sort(key=lambda e: (e["date"], e["time"] or ""))

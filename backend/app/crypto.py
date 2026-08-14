@@ -24,9 +24,12 @@ sai do fluxo inteiro. Está registrado como o item de maior impacto no
 
 import base64
 import hashlib
+import logging
 import os
 
 from cryptography.fernet import Fernet, InvalidToken
+
+logger = logging.getLogger("agenda.crypto")
 
 
 class SecretMissingError(RuntimeError):
@@ -57,8 +60,8 @@ def _load_fernet() -> Fernet:
         # Desenvolvimento: chave efêmera. Reiniciar o backend derruba as
         # sessões, que é o comportamento que o app já tinha antes.
         secret = Fernet.generate_key().decode()
-        print(
-            "[crypto] SESSION_SECRET não definida — usando chave efêmera de "
+        logger.warning(
+            "SESSION_SECRET não definida — usando chave efêmera de "
             "desenvolvimento. As sessões não sobrevivem a um restart."
         )
 
