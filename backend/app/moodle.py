@@ -619,7 +619,7 @@ class MoodleClient:
         resp = self._client.get(f"{self.base}/course/view.php", params={"id": course_id})
         return html_to_text(main_region(resp.text))
 
-    def activity_content(self, url: str) -> dict:
+    def activity_content(self, url: str, title: str = "") -> dict:
         """
         Página de uma atividade, lida com a sessão que o backend já mantém.
 
@@ -646,10 +646,71 @@ class MoodleClient:
         regiao = main_region(resp.text)
 
         return {
-            "text": html_to_text(regiao, 20_000),
+            "intro": self._extract_intro(regiao, title),
+            "status": self._extract_status(regiao),
             "files": self._extract_files(regiao),
             "url": str(resp.url),
         }
+
+    # A página de uma tarefa tem duas partes com naturezas diferentes: o
+    # enunciado, que é texto corrido, e a tabela de status do envio, que é um
+    # conjunto de pares rótulo/valor. Achatar as duas no mesmo bloco de texto
+    # produzia aquela parede em que "Status de envio" aparecia duas vezes e
+    # "Adicionar envio" — que no Moodle é um botão — virava um parágrafo.
+
+    _TABELA_RE = re.compile(r'(?is)<table[^>]*class="[^"]*generaltable[^"]*"[^>]*>(.*?)</table>')
+    _LINHA_RE = re.compile(r"(?is)<tr[^>]*>(.*?)</tr>")
+    _CELULA_RE = re.compile(r"(?is)<t([hd])[^>]*>(.*?)</t\1>")
+
+    # Linhas que só fazem sentido dentro do Moodle: rótulo de botão, cabeçalho
+    # de seção repetido, e as datas de abertura/vencimento — que esta tela já
+    # mostra no topo, com o dia da semana por extenso.
+    _RUIDO_RE = re.compile(
+        r"^(condições de conclusão|adicionar envio|editar envio|status de envio"
+        r"|aberto:.*|vencimento:.*|-)$",
+        re.IGNORECASE,
+    )
+
+    @classmethod
+    def _extract_status(cls, html: str) -> list[dict]:
+        """A tabela de status do envio como pares rótulo/valor."""
+        m = cls._TABELA_RE.search(html)
+        if not m:
+            return []
+
+        linhas: list[dict] = []
+        for linha in cls._LINHA_RE.finditer(m.group(1)):
+            celulas = [
+                html_to_text(c.group(2), 400) for c in cls._CELULA_RE.finditer(linha.group(1))
+            ]
+            if len(celulas) != 2:
+                continue
+            rotulo, valor = celulas[0].strip(), celulas[1].strip()
+            # Linha sem valor não informa nada; "-" é o vazio do próprio Moodle.
+            if rotulo and valor and valor != "-":
+                linhas.append({"label": rotulo, "value": valor})
+        return linhas
+
+    @classmethod
+    def _extract_intro(cls, html: str, title: str = "") -> str:
+        """
+        Só o enunciado: corta a partir da tabela de status, que vem depois dele
+        na página e é devolvida separada por `_extract_status`.
+        """
+        m = cls._TABELA_RE.search(html)
+        texto = html_to_text(html[: m.start()] if m else html, 20_000)
+
+        alvo = _normalizar(title)
+        linhas = [
+            linha
+            for linha in texto.splitlines()
+            if not cls._RUIDO_RE.match(linha.strip())
+            # O título da atividade encabeça a página do Moodle, e esta tela já
+            # o mostra em destaque — repetido, viraria a primeira linha do
+            # enunciado.
+            and not (alvo and _normalizar(linha) == alvo)
+        ]
+        return "\n".join(linhas).strip()
 
     @staticmethod
     def _extract_files(html: str) -> list[dict]:

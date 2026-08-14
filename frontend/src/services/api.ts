@@ -261,7 +261,14 @@ export interface ActivityDetail {
   done: boolean;
   synced: boolean;
   /** Página da atividade lida no Moodle com a sessão do servidor. */
-  content: { text: string; files: ActivityFile[]; url: string } | null;
+  content: {
+    /** O enunciado, já sem a tabela de status e sem rótulo de botão. */
+    intro: string;
+    /** Status do envio como pares rótulo/valor, do jeito que o Moodle mostra. */
+    status: { label: string; value: string }[];
+    files: ActivityFile[];
+    url: string;
+  } | null;
   /** Por que o conteúdo não veio. A página abre mesmo assim. */
   content_error: string | null;
 }

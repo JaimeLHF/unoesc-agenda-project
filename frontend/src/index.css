@@ -2255,3 +2255,63 @@ body {
 .activity .error-banner {
   margin-bottom: 0.9rem;
 }
+
+/* Situação no Moodle: pares rótulo/valor, não texto corrido. É uma tabela na
+   origem, e achatá-la em parágrafos era o que duplicava "Status de envio" e
+   jogava "2 dias 12 horas restando" no meio do enunciado. */
+.activity__status {
+  margin-top: 1.75rem;
+}
+
+.activity__status dl {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  overflow: hidden;
+}
+
+.activity__status dl > div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  padding: 0.7rem 0.9rem;
+}
+
+.activity__status dl > div + div {
+  border-top: 1px solid var(--color-border);
+}
+
+.activity__status dt {
+  flex: 0 0 13rem;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.activity__status dd {
+  flex: 1;
+  min-width: 12rem;
+  font-size: 0.88rem;
+  font-weight: 500;
+}
+
+@media (max-width: 560px) {
+  .activity__status dt {
+    flex-basis: 100%;
+  }
+}
+
+/* Listas do enunciado. */
+.activity__text ul {
+  margin: 0.5rem 0 0.7rem 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.activity__text li {
+  padding-left: 0.2rem;
+}
+
+.activity__text li::marker {
+  color: var(--color-primary);
+}

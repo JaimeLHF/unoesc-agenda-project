@@ -211,6 +211,20 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ stableKey, onBack, onOpenPo
         )}
       </div>
 
+      {detalhe.content?.status?.length ? (
+        <div className="activity__status">
+          <h2 className="activity__section-title">Situação no Moodle</h2>
+          <dl>
+            {detalhe.content.status.map((linha) => (
+              <div key={linha.label}>
+                <dt>{linha.label}</dt>
+                <dd>{linha.value}</dd>
+              </div>
+            ))}
+          </dl>
+        </div>
+      ) : null}
+
       {detalhe.content?.files?.length ? (
         <div className="activity__files">
           <h2 className="activity__section-title">Arquivos da atividade</h2>
@@ -234,12 +248,8 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ stableKey, onBack, onOpenPo
       <div className="activity__content">
         <h2 className="activity__section-title">Enunciado</h2>
 
-        {detalhe.content?.text ? (
-          <div className="activity__text">
-            {detalhe.content.text.split('\n').map((linha, i) =>
-              linha.trim() ? <p key={i}>{comLinks(linha)}</p> : null,
-            )}
-          </div>
+        {detalhe.content?.intro ? (
+          <Prosa texto={detalhe.content.intro} />
         ) : (
           <>
             {detalhe.content_error && (
@@ -249,11 +259,7 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ stableKey, onBack, onOpenPo
               </div>
             )}
             {detalhe.description ? (
-              <div className="activity__text">
-                {detalhe.description.split('\n').map((linha, i) =>
-                  linha.trim() ? <p key={i}>{comLinks(linha)}</p> : null,
-                )}
-              </div>
+              <Prosa texto={detalhe.description} />
             ) : (
               <p className="activity__empty">
                 O Moodle não devolveu descrição para esta atividade.
@@ -264,6 +270,55 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ stableKey, onBack, onOpenPo
       </div>
     </section>
   );
+};
+
+/**
+ * O enunciado, com a estrutura que o HTML tinha antes de virar texto.
+ *
+ * O Moodle escreve o que a atividade pede como lista (`<li>`), e o texto puro
+ * entrega isso como linhas soltas terminadas em ";". Renderizar cada uma como
+ * parágrafo é o que fazia a página parecer um monte de frases empilhadas sem
+ * hierarquia. Aqui as sequências desse tipo voltam a ser uma lista.
+ */
+const Prosa: React.FC<{ texto: string }> = ({ texto }) => {
+  const linhas = texto.split('\n').map((l) => l.trim()).filter(Boolean);
+  const blocos: React.ReactNode[] = [];
+  let itens: string[] = [];
+
+  const fecharLista = () => {
+    if (!itens.length) return;
+    blocos.push(
+      <ul key={`l${blocos.length}`}>
+        {itens.map((item, i) => (
+          <li key={i}>{comLinks(item.replace(/^[-•*]\s*/, ''))}</li>
+        ))}
+      </ul>,
+    );
+    itens = [];
+  };
+
+  for (const linha of linhas) {
+    // Item de lista: termina em ";" ou começa com marcador.
+    if (/;$/.test(linha) || /^[-•*]\s+/.test(linha)) {
+      itens.push(linha);
+      continue;
+    }
+
+    // Em português a lista fecha com ponto: "a; b; c." Sem esta regra o último
+    // item saía da lista e virava um parágrafo solto logo abaixo dela. Uma
+    // linha terminada em ":" não entra — essa abre a próxima seção.
+    if (itens.length && !linha.endsWith(':')) {
+      itens.push(linha);
+      fecharLista();
+      continue;
+    }
+
+    fecharLista();
+    blocos.push(<p key={`p${blocos.length}`}>{comLinks(linha)}</p>);
+  }
+  fecharLista();
+
+  return <div className="activity__text">{blocos}</div>;
 };
 
 /** Transforma URLs soltas no texto em links clicáveis. */

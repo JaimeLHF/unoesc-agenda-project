@@ -614,7 +614,7 @@ async def activity_detail(
         with MoodleClient() as moodle:
             await asyncio.to_thread(moodle.login, session.username, session.password)
             detalhe["content"] = await asyncio.to_thread(
-                moodle.activity_content, detalhe["url"]
+                moodle.activity_content, detalhe["url"], detalhe["title"]
             )
     except PermissionError as exc:
         detalhe["content_error"] = str(exc)
