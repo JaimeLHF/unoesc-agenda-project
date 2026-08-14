@@ -2129,8 +2129,10 @@ body {
    para um colega.
    ========================================================= */
 
+/* Ocupa a largura da coluna de conteúdo do app (1100px). A trava de 44rem
+   deixava dois terços da tela vazios num monitor. */
 .activity {
-  max-width: 44rem;
+  max-width: none;
 }
 
 .activity__header {
@@ -2251,9 +2253,12 @@ body {
 
 /* A medida limita a linha, não o cartão: linha longa demais faz o olho perder
    o começo da seguinte. */
+/* A linha ainda tem medida, só que mais larga: sem nenhum teto, o olho perde
+   o começo da linha seguinte num monitor de 27". */
 .activity__text > p,
-.activity__text > h3 {
-  max-width: 68ch;
+.activity__text > h3,
+.activity__text > ul {
+  max-width: 90ch;
 }
 
 /* A hierarquia é do professor — ele escreveu "Você deverá:" como seção. Ela só
