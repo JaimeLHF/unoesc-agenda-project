@@ -12,8 +12,17 @@
    agradar o fast refresh espalharia o contexto sem ganho real — o custo é
    um reload a mais ao editar este arquivo durante o desenvolvimento. */
 
-import React, { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import type { AcademicEvent } from '../types';
+import Icon from '../components/Icon';
 import { markEventDone, unmarkEventDone } from '../services/api';
 
 interface DoneEventsContextValue {
@@ -40,8 +49,36 @@ export function eventKey(event: AcademicEvent): string {
   );
 }
 
+/** Quanto tempo o aviso de desfazer fica na tela. */
+const DESFAZER_MS = 7000;
+
 export const DoneEventsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [doneKeys, setDoneKeys] = useState<Set<string>>(new Set());
+
+  /**
+   * A última atividade marcada como concluída, enquanto o desfazer está de pé.
+   *
+   * Marcar tira o item da vista em mais de um lugar — some da faixa de alertas
+   * e some do detalhe quando "Ocultar concluídos" está ligado. Sem esta faixa,
+   * desmarcar um clique errado exigia ir caçar a atividade de volta.
+   */
+  const [desfazivel, setDesfazivel] = useState<AcademicEvent | null>(null);
+  const timer = useRef<number | null>(null);
+
+  const agendarSumico = useCallback(() => {
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => {
+      setDesfazivel(null);
+      timer.current = null;
+    }, DESFAZER_MS);
+  }, []);
+
+  useEffect(
+    () => () => {
+      if (timer.current !== null) window.clearTimeout(timer.current);
+    },
+    [],
+  );
 
   const hydrate = useCallback((keys: string[]) => {
     setDoneKeys(new Set(keys));
@@ -65,12 +102,23 @@ export const DoneEventsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
         return next;
       });
 
+      // Desmarcar não precisa de aviso: o item volta para a vista sozinho, e
+      // é a própria ação de desfazer.
+      if (wasDone) {
+        setDesfazivel(null);
+      } else {
+        setDesfazivel(event);
+        agendarSumico();
+      }
+
       const action = wasDone ? unmarkEventDone(key) : markEventDone(key);
       action
         .then((serverKeys) => setDoneKeys(new Set(serverKeys)))
         .catch((err) => {
           console.error('Falha ao salvar status de concluído:', err);
-          // Reverte no erro
+          // Reverte no erro — e some com o desfazer, que não tem mais o que
+          // desfazer: no servidor a marcação nunca chegou a existir.
+          setDesfazivel(null);
           setDoneKeys((prev) => {
             const next = new Set(prev);
             if (wasDone) next.add(key);
@@ -79,7 +127,7 @@ export const DoneEventsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
           });
         });
     },
-    [doneKeys],
+    [doneKeys, agendarSumico],
   );
 
   const value = useMemo<DoneEventsContextValue>(
@@ -87,7 +135,32 @@ export const DoneEventsProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     [isDone, toggleDone, hydrate, doneKeys],
   );
 
-  return <DoneEventsContext.Provider value={value}>{children}</DoneEventsContext.Provider>;
+  return (
+    <DoneEventsContext.Provider value={value}>
+      {children}
+      {desfazivel && (
+        <div className="undo-toast" role="status">
+          <span className="undo-toast__text">
+            <strong>{desfazivel.title}</strong> marcada como concluída.
+          </span>
+          <button
+            type="button"
+            className="undo-toast__button"
+            onClick={() => toggleDone(desfazivel)}
+          >
+            Desfazer
+          </button>
+          <button
+            type="button"
+            className="undo-toast__close"
+            onClick={() => setDesfazivel(null)}
+          >
+            <Icon name="fechar" label="Fechar aviso" size={1} />
+          </button>
+        </div>
+      )}
+    </DoneEventsContext.Provider>
+  );
 };
 
 export function useDoneEvents(): DoneEventsContextValue {
