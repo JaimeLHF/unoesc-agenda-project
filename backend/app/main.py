@@ -814,8 +814,20 @@ async def submission_info(
     try:
         with MoodleClient() as moodle:
             await asyncio.to_thread(moodle.login, session.username, session.password)
-            form = await asyncio.to_thread(moodle.submission_form, url)
             status = await asyncio.to_thread(moodle.activity_content, url, "")
+
+            # O formulário é a parte que pode faltar: tarefa entregue e travada
+            # não abre `editsubmission`, e o Moodle responde isso de formas
+            # diferentes conforme o tema. Falhar aqui não pode apagar a tela —
+            # o aluno ainda precisa ver que a entrega dele está lá.
+            try:
+                form = await asyncio.to_thread(moodle.submission_form, url)
+            except Exception as exc:
+                observability.logger.info(
+                    "Formulário de envio indisponível (user=%s): %s", session.user_id, exc
+                )
+                form = {"can_submit": False,
+                        "reason": "O Moodle não abriu o formulário de envio desta tarefa."}
     except PermissionError as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except Exception as exc:

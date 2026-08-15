@@ -44,6 +44,7 @@ const SubmissionBox: React.FC<SubmissionBoxProps> = ({
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [statusSalvo, setStatusSalvo] = useState<StatusLinha[] | null>(null);
+  const [erroConsulta, setErroConsulta] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   // Marca uma vez só: se o aluno desmarcar no toast, não voltamos a marcar.
   const jaAvisou = useRef(false);
@@ -66,7 +67,16 @@ const SubmissionBox: React.FC<SubmissionBoxProps> = ({
           aoConfirmar.current?.();
         }
       })
-      .catch(() => ativo && setInfo(null))
+      .catch((err) => {
+        if (!ativo) return;
+        // Sumir em silêncio era pior: numa tela de entrega, "não apareceu
+        // nada" e "não dá para enviar" são coisas diferentes, e só o aluno
+        // paga a diferença.
+        const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data
+          ?.detail;
+        setErroConsulta(detail ?? 'Não consegui conferir o envio no Moodle agora.');
+        setInfo(null);
+      })
       .finally(() => ativo && setCarregando(false));
     return () => {
       ativo = false;
@@ -81,6 +91,18 @@ const SubmissionBox: React.FC<SubmissionBoxProps> = ({
           <span className="spinner spinner--dark" aria-hidden="true" /> Conferindo o
           envio no Moodle…
         </p>
+      </div>
+    );
+  }
+
+  if (!info && erroConsulta) {
+    return (
+      <div className="submission">
+        <h2 className="activity__section-title">Envio</h2>
+        <div className="error-banner" role="alert">
+          <Icon name="alerta" />
+          {erroConsulta}
+        </div>
       </div>
     );
   }
