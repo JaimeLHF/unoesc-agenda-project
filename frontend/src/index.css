@@ -91,9 +91,9 @@
   em degraus. O azul clareia (um azul escuro sobre fundo escuro seria ilegível)
   e, com ele, o texto que vai por cima escurece — os dois andam em par.
 
-  A mesma lista vale duas vezes de propósito: uma para quem escolheu escuro no
-  botão, outra para quem não escolheu nada e usa o sistema no escuro. Quem
-  escolheu claro (`data-theme="light"`) fica de fora da segunda.
+  Entra só por escolha: o claro é o padrão do app, inclusive para quem usa o
+  sistema no escuro. Quem quiser o escuro pede no botão da barra, e a escolha
+  fica guardada.
 */
 :root[data-theme='dark'] {
   color-scheme: dark;
@@ -161,73 +161,6 @@
   --shadow-primary-color: rgb(0 0 0 / 0.55);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    color-scheme: dark;
-
-    --color-primary: #7cb0ff;
-    --color-primary-hover: #a3c8ff;
-    --color-on-primary: #0b1220;
-    --color-on-primary-faint: rgba(11, 18, 32, 0.35);
-    --color-primary-ink: #93c5fd;
-    --color-primary-soft: #1a2942;
-    --color-primary-soft-2: #22375a;
-    --color-primary-border: #33507e;
-    --color-primary-ghost: rgba(124, 176, 255, 0.3);
-    --color-brand-2: #818cf8;
-
-    --color-bg: #0f172a;
-    --color-surface: #1a2334;
-    --color-surface-2: #243045;
-    --color-surface-2-ink: #cbd5e1;
-    --color-border: #334155;
-    --color-text: #e8eef7;
-    --color-text-muted: #9aabc2;
-
-    --color-error: #f87171;
-    --color-error-bg: #2b1518;
-    --color-error-border: #7f1d1d;
-    --color-error-border-strong: #991b1b;
-    --color-error-ink: #fca5a5;
-
-    --color-success: #4ade80;
-    --color-success-bg: #10251a;
-    --color-success-strong: #22c55e;
-    --color-ok-bg: #14311f;
-    --color-ok-border: #1c5533;
-    --color-ok-ink: #86efac;
-
-    --color-warn-bg: #2f2410;
-    --color-warn-ink: #fcd34d;
-    --color-exam-bg: #331627;
-    --color-exam-ink: #f9a8d4;
-    --color-alert-orange-bg: #2c1a10;
-    --color-alert-orange-border: #7c2d12;
-    --color-alert-orange-ink: #fdba74;
-    --color-alert-yellow-bg: #2a2410;
-    --color-alert-yellow-border: #713f12;
-    --color-alert-yellow-ink: #fde047;
-
-    --color-skeleton-highlight: #2b3a52;
-    --color-topbar-bg: rgba(15, 23, 42, 0.85);
-    --color-glass: rgba(26, 35, 52, 0.7);
-    --color-code-bg: rgba(255, 255, 255, 0.08);
-    --color-overlay: rgba(2, 6, 23, 0.7);
-
-    --color-inverse-surface: #e8eef7;
-    --color-inverse-text: #0f172a;
-    --color-inverse-muted: rgb(15 23 42 / 0.6);
-    --color-inverse-hover: rgb(15 23 42 / 0.1);
-    --color-inverse-accent: #1d4ed8;
-
-    --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4);
-    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.45);
-    --shadow-lg: 0 10px 25px -5px rgb(0 0 0 / 0.6);
-    --shadow-modal: 0 20px 25px -5px rgb(0 0 0 / 0.65), 0 10px 10px -5px rgb(0 0 0 / 0.4);
-    --shadow-topbar: 0 8px 24px -14px rgb(0 0 0 / 0.9);
-    --shadow-primary-color: rgb(0 0 0 / 0.55);
-  }
-}
 
 body {
   font-family: 'Inter', system-ui, sans-serif;

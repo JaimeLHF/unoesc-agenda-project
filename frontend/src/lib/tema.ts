@@ -1,25 +1,20 @@
 /**
  * Tema claro e escuro.
  *
- * O padrão é seguir o sistema: quem já deixou o celular no escuro não deveria
- * precisar dizer isso de novo aqui. O botão da barra é uma exceção explícita —
- * e essa escolha, sim, fica guardada no navegador.
+ * O claro é o padrão, mesmo para quem usa o celular no escuro: é a cara do app
+ * e é como ele aparece na primeira visita. O escuro existe para quem pedir, no
+ * botão da barra — e essa escolha, sim, fica guardada no navegador.
  *
  * `localStorage` guarda só a palavra "dark" ou "light". O token de sessão
  * continua fora dele, em memória, pelo motivo de sempre: XSS. Preferência de
  * cor não é segredo, e perdê-la a cada reload seria pior do que guardá-la.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 export type Tema = 'light' | 'dark';
 
 const CHAVE = 'agenda-tema';
-
-/** O que o sistema operacional do aluno pede, quando ele não escolheu nada. */
-export function temaDoSistema(): Tema {
-  return window.matchMedia?.('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-}
 
 /** A escolha guardada, ou `null` quando o aluno nunca mexeu no botão. */
 export function temaEscolhido(): Tema | null {
@@ -27,9 +22,9 @@ export function temaEscolhido(): Tema | null {
   return salvo === 'dark' || salvo === 'light' ? salvo : null;
 }
 
-/** O tema em vigor agora: a escolha do aluno, ou a do sistema. */
+/** O tema em vigor agora: a escolha do aluno, ou o claro. */
 export function temaAtual(): Tema {
-  return temaEscolhido() ?? temaDoSistema();
+  return temaEscolhido() ?? 'light';
 }
 
 /**
@@ -47,29 +42,9 @@ export function aplicarTema(tema: Tema): void {
     ?.setAttribute('content', tema === 'dark' ? '#0f172a' : '#ffffff');
 }
 
-/**
- * O tema em vigor e o botão que o inverte.
- *
- * Enquanto o aluno não escolher nada, o app continua acompanhando o sistema em
- * tempo real: quem tem o celular no modo automático vê a tela virar sozinha ao
- * anoitecer, sem precisar recarregar. O primeiro clique no botão encerra esse
- * acompanhamento — a partir dali quem manda é a escolha dele.
- */
+/** O tema em vigor e o botão que o inverte. */
 export function useTema(): { tema: Tema; alternar: () => void } {
   const [tema, setTema] = useState<Tema>(() => temaAtual());
-
-  useEffect(() => {
-    const mq = window.matchMedia?.('(prefers-color-scheme: dark)');
-    if (!mq) return;
-    const aoMudar = () => {
-      if (temaEscolhido()) return;
-      const novo = temaDoSistema();
-      document.documentElement.dataset.theme = novo;
-      setTema(novo);
-    };
-    mq.addEventListener('change', aoMudar);
-    return () => mq.removeEventListener('change', aoMudar);
-  }, []);
 
   const alternar = useCallback(() => {
     setTema((atual) => {
