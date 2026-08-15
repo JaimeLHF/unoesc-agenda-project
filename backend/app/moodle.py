@@ -843,6 +843,11 @@ class MoodleClient:
             "can_submit": True,
             "reason": None,
             "cmid": cmid,
+            # O rascunho vem pré-carregado com o que já está no envio. Salvar
+            # manda tudo o que estiver lá, não só o que o app subiu — então
+            # esta lista precisa chegar à tela, ou o aluno acha que trocou o
+            # arquivo quando na verdade somou mais um.
+            "existing_files": self._draft_files(itemid_arquivos) if itemid_arquivos else [],
             "accepts_files": bool(itemid_arquivos),
             "accepts_text": bool(itemid_texto),
             "itemid_files": itemid_arquivos,
@@ -853,6 +858,41 @@ class MoodleClient:
             "moodle_max_label": limite.group(0) if limite else None,
             "hidden": ocultos,
         }
+
+    def _draft_files(self, itemid: str) -> list[dict]:
+        """
+        O que já está na área de rascunho desta tarefa.
+
+        O Moodle pré-carrega aqui os arquivos do envio atual, então esta é a
+        lista que o aluno veria ao abrir o seletor de arquivos lá — e é a que
+        vai junto no `savesubmission`. Falha aqui não impede o envio: a lista é
+        informação, não permissão.
+        """
+        try:
+            resp = self._client.post(
+                f"{self.base}/repository/draftfiles_ajax.php",
+                params={"action": "list"},
+                data={
+                    "sesskey": self.sesskey or "",
+                    "client_id": "agenda",
+                    "itemid": itemid,
+                    "filepath": "/",
+                    "draftpath": "/",
+                },
+            )
+            resp.raise_for_status()
+            dados = resp.json()
+        except Exception as exc:
+            logger.info("Rascunho não pôde ser listado: %s", exc)
+            return []
+
+        arquivos = []
+        for f in (dados or {}).get("list", []):
+            nome = f.get("filename") or ""
+            # O Moodle usa "." para representar a própria pasta.
+            if nome and nome != ".":
+                arquivos.append({"name": nome, "size": int(f.get("size") or 0)})
+        return arquivos
 
     def upload_to_draft(self, form: dict, filename: str, content: bytes) -> dict:
         """

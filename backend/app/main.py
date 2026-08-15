@@ -171,6 +171,12 @@ class StatusLinha(BaseModel):
     value: str
 
 
+class ArquivoNoRascunho(BaseModel):
+    """Arquivo que já está no envio desta tarefa."""
+    name: str
+    size: int
+
+
 class SubmissionInfo(BaseModel):
     """O que esta tarefa aceita hoje — e por que não, quando não aceita."""
     can_submit: bool
@@ -179,6 +185,8 @@ class SubmissionInfo(BaseModel):
     accepts_text: bool = False
     max_files: int = 0
     max_file_mb: int = 0
+    # Salvar manda junto o que já estava anexado — a tela precisa mostrar.
+    existing_files: list[ArquivoNoRascunho] = []
     status: list[StatusLinha] = []
 
 
@@ -818,6 +826,7 @@ async def submission_info(
         accepts_text=form.get("accepts_text", False),
         max_files=min(form.get("max_files") or MAX_ARQUIVOS, MAX_ARQUIVOS),
         max_file_mb=MAX_ARQUIVO_BYTES // (1024 * 1024),
+        existing_files=[ArquivoNoRascunho(**f) for f in (form.get("existing_files") or [])],
         status=[StatusLinha(**linha) for linha in (status.get("status") or [])],
     )
 
@@ -881,6 +890,13 @@ async def submit_assignment(
             if not form.get("can_submit"):
                 raise HTTPException(status_code=409, detail=form.get("reason") or
                                     "O Moodle não está aceitando envio nesta tarefa.")
+            ja_anexados = len(form.get("existing_files") or [])
+            if form.get("max_files") and ja_anexados + len(conteudos) > form["max_files"]:
+                raise HTTPException(
+                    status_code=409,
+                    detail=f"Esta tarefa aceita {form['max_files']} arquivo(s) e já tem "
+                           f"{ja_anexados} anexado(s).",
+                )
             if conteudos and not form.get("accepts_files"):
                 raise HTTPException(status_code=409,
                                     detail="Esta tarefa não aceita arquivo, só texto.")

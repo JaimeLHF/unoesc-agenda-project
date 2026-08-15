@@ -335,6 +335,11 @@ export interface StatusLinha {
   value: string;
 }
 
+export interface ArquivoNoRascunho {
+  name: string;
+  size: number;
+}
+
 export interface SubmissionInfo {
   can_submit: boolean;
   /** Por que não dá para enviar agora — prazo fechado, envio travado. */
@@ -343,6 +348,8 @@ export interface SubmissionInfo {
   accepts_text: boolean;
   max_files: number;
   max_file_mb: number;
+  /** Já anexado na tarefa — vai junto quando salvar. */
+  existing_files: ArquivoNoRascunho[];
   status: StatusLinha[];
 }
 

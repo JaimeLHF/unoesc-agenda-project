@@ -76,7 +76,10 @@ const SubmissionBox: React.FC<SubmissionBoxProps> = ({ stableKey, onOpenMoodle }
     );
   }
 
-  const limiteArquivos = info.max_files || 1;
+  const jaAnexados = info.existing_files ?? [];
+  // O que já está na tarefa conta no limite do professor: o Moodle salva o
+  // conjunto todo, não só o que sobe agora.
+  const limiteArquivos = Math.max((info.max_files || 1) - jaAnexados.length, 0);
   const podeEnviar = arquivos.length > 0 || texto.trim().length > 0;
 
   const adicionar = (lista: FileList | null) => {
@@ -144,7 +147,29 @@ const SubmissionBox: React.FC<SubmissionBoxProps> = ({ stableKey, onOpenMoodle }
         </div>
       )}
 
-      {info.accepts_files && (
+      {info.accepts_files && jaAnexados.length > 0 && (
+        <div className="submission__field">
+          <span className="submission__label">
+            Já anexado nesta tarefa
+            <span className="submission__limits">continua no envio</span>
+          </span>
+          <ul className="submission__files">
+            {jaAnexados.map((f) => (
+              <li key={f.name}>
+                <Icon name="entrega" size={1} />
+                <span className="submission__file-name">{f.name}</span>
+                <span className="submission__file-size">{formatarTamanho(f.size)}</span>
+              </li>
+            ))}
+          </ul>
+          <p className="submission__hint">
+            O que você adicionar abaixo entra junto com estes. Para tirar algum, use o
+            Moodle.
+          </p>
+        </div>
+      )}
+
+      {info.accepts_files && limiteArquivos > 0 && (
         <div className="submission__field">
           <label className="submission__label" htmlFor="submission-files">
             Arquivos
