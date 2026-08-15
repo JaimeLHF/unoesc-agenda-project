@@ -388,11 +388,26 @@ const App: React.FC = () => {
         )}
       </main>
 
+      {/*
+        A autoria fica no rodapé, em duas linhas: primeiro quem fez, depois o
+        aviso de que não é serviço oficial. Assinar o trabalho e deixar claro
+        que ele não é da instituição são a mesma frase vista de dois lados, e
+        quem chega pelo link de um colega merece as duas.
+      */}
       <footer className="app-footer">
-        <span>Projeto independente de alunos — não é um serviço oficial da UNOESC.</span>
-        <a href="/privacidade.html" target="_blank" rel="noreferrer">
-          Privacidade e termos
-        </a>
+        <p className="app-footer__credit">
+          Feito por{' '}
+          <a href="https://github.com/JaimeLHF" target="_blank" rel="noreferrer">
+            Jaime Luiz Hansen Filho
+          </a>{' '}
+          — Análise e Desenvolvimento de Sistemas, UNOESC São Miguel do Oeste
+        </p>
+        <p className="app-footer__legal">
+          <span>Projeto independente de alunos — não é um serviço oficial da UNOESC.</span>
+          <a href="/privacidade.html" target="_blank" rel="noreferrer">
+            Privacidade e termos
+          </a>
+        </p>
       </footer>
     </div>
   );

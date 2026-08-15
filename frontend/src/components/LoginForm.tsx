@@ -131,8 +131,13 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, loading, error }) => {
           repetir a mesma frase duas vezes na mesma tela só ocupa espaço.
         */}
         <p className="auth__signature">
-          Feito por alunos da UNOESC. Sua senha fica cifrada no servidor só para manter a
-          conexão com o Moodle e nunca é salva no navegador.{' '}
+          Feito por{' '}
+          <a href="https://github.com/JaimeLHF" target="_blank" rel="noreferrer">
+            Jaime Luiz Hansen Filho
+          </a>
+          , de Análise e Desenvolvimento de Sistemas na UNOESC São Miguel do Oeste. Sua
+          senha fica cifrada no servidor só para manter a conexão com o Moodle e nunca é
+          salva no navegador.{' '}
           <a href="/privacidade.html" target="_blank" rel="noreferrer">
             Privacidade e termos
           </a>
