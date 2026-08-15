@@ -7,6 +7,11 @@ interface SubmissionBoxProps {
   stableKey: string;
   /** Para quem quiser conferir (ou fazer o envio final) no Moodle. */
   onOpenMoodle?: () => void;
+  /**
+   * Chamado quando o Moodle diz que a tarefa já foi entregue. Quem marca o
+   * evento como concluído é a página — ela é que tem o evento inteiro.
+   */
+  onEntregaConfirmada?: () => void;
 }
 
 function formatarTamanho(bytes: number): string {
@@ -27,7 +32,11 @@ function formatarTamanho(bytes: number): string {
  * status relida no Moodle. Dizer "enviado" sem ter conferido lá seria pior do
  * que não ter o botão — o aluno iria dormir achando que entregou.
  */
-const SubmissionBox: React.FC<SubmissionBoxProps> = ({ stableKey, onOpenMoodle }) => {
+const SubmissionBox: React.FC<SubmissionBoxProps> = ({
+  stableKey,
+  onOpenMoodle,
+  onEntregaConfirmada,
+}) => {
   const [info, setInfo] = useState<SubmissionInfo | null>(null);
   const [carregando, setCarregando] = useState(true);
   const [arquivos, setArquivos] = useState<File[]>([]);
@@ -36,12 +45,27 @@ const SubmissionBox: React.FC<SubmissionBoxProps> = ({ stableKey, onOpenMoodle }
   const [erro, setErro] = useState<string | null>(null);
   const [statusSalvo, setStatusSalvo] = useState<StatusLinha[] | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  // Marca uma vez só: se o aluno desmarcar no toast, não voltamos a marcar.
+  const jaAvisou = useRef(false);
+  // A callback vive num ref para não entrar nas dependências do efeito: ela é
+  // recriada a cada render da página, e o efeito só deve rodar por tarefa.
+  const aoConfirmar = useRef(onEntregaConfirmada);
+  useEffect(() => {
+    aoConfirmar.current = onEntregaConfirmada;
+  });
 
   useEffect(() => {
     let ativo = true;
     setCarregando(true);
     fetchSubmissionInfo(stableKey)
-      .then((i) => ativo && setInfo(i))
+      .then((i) => {
+        if (!ativo) return;
+        setInfo(i);
+        if (i.submitted && !jaAvisou.current) {
+          jaAvisou.current = true;
+          aoConfirmar.current?.();
+        }
+      })
       .catch(() => ativo && setInfo(null))
       .finally(() => ativo && setCarregando(false));
     return () => {
@@ -64,6 +88,45 @@ const SubmissionBox: React.FC<SubmissionBoxProps> = ({ stableKey, onOpenMoodle }
   // Sem formulário de envio não há o que mostrar: webconferência, prova e
   // material não têm entrega, e uma caixa vazia só faria o aluno procurar.
   if (!info) return null;
+
+  // Entregue: nada de formulário. Um campo de envio aberto embaixo de uma
+  // entrega feita convida ao reenvio, e reenviar não era o que o aluno queria.
+  if (info.submitted) {
+    return (
+      <div className="submission submission--entregue">
+        <h2 className="activity__section-title">Envio</h2>
+        <div className="submission__ok" role="status">
+          <Icon name="check" />
+          <div>
+            <strong>{info.submitted_label ?? 'Enviado para avaliação'}</strong>
+            {info.submitted_at && (
+              <p className="submission__hint">Última modificação: {info.submitted_at}</p>
+            )}
+            {info.existing_files.length > 0 && (
+              <ul className="submission__files">
+                {info.existing_files.map((f) => (
+                  <li key={f.name}>
+                    <Icon name="entrega" size={1} />
+                    <span className="submission__file-name">{f.name}</span>
+                    <span className="submission__file-size">{formatarTamanho(f.size)}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+            {onOpenMoodle && (
+              <p className="submission__hint">
+                Para trocar o que foi enviado,{' '}
+                <button type="button" className="btn-link" onClick={onOpenMoodle}>
+                  abra a tarefa no Moodle
+                </button>
+                .
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (!info.can_submit) {
     return (

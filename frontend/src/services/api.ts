@@ -350,6 +350,12 @@ export interface SubmissionInfo {
   max_file_mb: number;
   /** Já anexado na tarefa — vai junto quando salvar. */
   existing_files: ArquivoNoRascunho[];
+  /** Entregue para avaliação: a tela mostra o aviso, não o formulário. */
+  submitted: boolean;
+  /** Rascunho salvo: ainda dá para mexer. */
+  draft: boolean;
+  submitted_label: string | null;
+  submitted_at: string | null;
   status: StatusLinha[];
 }
 

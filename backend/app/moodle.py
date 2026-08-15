@@ -859,6 +859,33 @@ class MoodleClient:
             "hidden": ocultos,
         }
 
+    @staticmethod
+    def submission_state(status: list[dict]) -> dict:
+        """
+        Lê a tabela de status e diz se a tarefa já foi entregue.
+
+        O Moodle distingue três situações que a tela precisa tratar diferente:
+        nada enviado, rascunho salvo (dá para mexer) e enviado para avaliação
+        (acabou). A frase vem traduzida, então casamos o texto em português e
+        deixamos o inglês como reserva — o tema da UNOESC já apareceu nos dois.
+        """
+        estado = {"submitted": False, "draft": False, "label": None, "modified": None}
+        for linha in status or []:
+            rotulo = _normalizar(linha.get("label", ""))
+            valor = linha.get("value", "")
+            valor_norm = _normalizar(valor)
+
+            if "status de envio" in rotulo or "submission status" in rotulo:
+                estado["label"] = valor
+                if "enviado para avaliacao" in valor_norm or "submitted for grading" in valor_norm:
+                    estado["submitted"] = True
+                elif "rascunho" in valor_norm or "draft" in valor_norm:
+                    estado["draft"] = True
+            elif "ultima modificacao" in rotulo or "last modified" in rotulo:
+                if valor and valor != "-":
+                    estado["modified"] = valor
+        return estado
+
     def _draft_files(self, itemid: str) -> list[dict]:
         """
         O que já está na área de rascunho desta tarefa.

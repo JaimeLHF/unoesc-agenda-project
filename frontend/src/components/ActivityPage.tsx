@@ -233,6 +233,11 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ stableKey, onBack, onOpenPo
       */}
       <SubmissionBox
         stableKey={detalhe.stable_key}
+        /* Entregue no Moodle é entregue na agenda: a marcação vem junto, e o
+           toast de desfazer continua ali para quem discordar. */
+        onEntregaConfirmada={() => {
+          if (!isDone(comoEvento)) toggleDone(comoEvento);
+        }}
         onOpenMoodle={
           onOpenPortal && detalhe.url
             ? () => {

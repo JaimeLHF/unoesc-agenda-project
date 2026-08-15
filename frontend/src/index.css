@@ -3082,3 +3082,18 @@ body {
 .submission__status dt {
   color: var(--color-text-muted);
 }
+
+/* Tarefa entregue: o bloco perde a moldura de formulário e vira só o aviso —
+   não há mais nada a preencher ali. */
+.submission--entregue {
+  padding-bottom: 0.35rem;
+}
+
+.submission--entregue .submission__ok {
+  margin-bottom: 0.9rem;
+}
+
+.submission--entregue .submission__files li {
+  background: transparent;
+  padding-left: 0;
+}

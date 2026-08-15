@@ -187,6 +187,11 @@ class SubmissionInfo(BaseModel):
     max_file_mb: int = 0
     # Salvar manda junto o que já estava anexado — a tela precisa mostrar.
     existing_files: list[ArquivoNoRascunho] = []
+    # Já entregue: a tela troca o formulário por um aviso do que o Moodle diz.
+    submitted: bool = False
+    draft: bool = False
+    submitted_label: Optional[str] = None
+    submitted_at: Optional[str] = None
     status: list[StatusLinha] = []
 
 
@@ -819,15 +824,24 @@ async def submission_info(
             status_code=502, detail=mensagem_amigavel(codigo, "abrir o envio no Moodle")
         ) from exc
 
+    linhas = status.get("status") or []
+    estado = MoodleClient.submission_state(linhas)
+
     return SubmissionInfo(
-        can_submit=form.get("can_submit", False),
+        # Entregue é entregue: mesmo que o Moodle ainda deixe reabrir o
+        # formulário, a tela mostra o aviso em vez de convidar a reenviar.
+        can_submit=form.get("can_submit", False) and not estado["submitted"],
         reason=form.get("reason"),
         accepts_files=form.get("accepts_files", False),
         accepts_text=form.get("accepts_text", False),
         max_files=min(form.get("max_files") or MAX_ARQUIVOS, MAX_ARQUIVOS),
         max_file_mb=MAX_ARQUIVO_BYTES // (1024 * 1024),
         existing_files=[ArquivoNoRascunho(**f) for f in (form.get("existing_files") or [])],
-        status=[StatusLinha(**linha) for linha in (status.get("status") or [])],
+        submitted=estado["submitted"],
+        draft=estado["draft"],
+        submitted_label=estado["label"],
+        submitted_at=estado["modified"],
+        status=[StatusLinha(**linha) for linha in linhas],
     )
 
 
@@ -883,6 +897,18 @@ async def submit_assignment(
     try:
         with MoodleClient() as moodle:
             await asyncio.to_thread(moodle.login, session.username, session.password)
+
+            # Tarefa já entregue não se reenvia por acidente: mesmo que o
+            # Moodle deixe o formulário aberto, o app para aqui. A tela não
+            # oferece o botão, mas a checagem é do backend — é ele que escreve.
+            atual = await asyncio.to_thread(moodle.activity_content, url, "")
+            estado = MoodleClient.submission_state(atual.get("status") or [])
+            if estado["submitted"]:
+                raise HTTPException(
+                    status_code=409,
+                    detail="Esta tarefa já foi enviada para avaliação no Moodle. "
+                           "Para trocar o envio, use o Moodle.",
+                )
 
             # O `itemid` do rascunho nasce neste GET e vale para os POSTs
             # seguintes; por isso o formulário é aberto agora, e não na tela.
