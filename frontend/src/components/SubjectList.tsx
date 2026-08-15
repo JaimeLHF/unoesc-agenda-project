@@ -103,6 +103,31 @@ const SubjectList: React.FC<SubjectListProps> = ({
 }) => {
   const { isDone } = useDoneEvents();
   const lastScrapedRel = formatRelative(lastScrapedAt);
+
+  /*
+    A grade é lida de relance procurando o que vence primeiro. Ordenar por
+    nome obrigava o aluno a varrer card por card atrás da data mais próxima —
+    então quem tem entrega mais perto sobe. Disciplina sem evento futuro cai
+    para o fim, e o desempate é pelo nome para a ordem não dançar a cada
+    atualização.
+  */
+  const cards = React.useMemo(() => {
+    return subjects
+      .map((subject) => {
+        const subjEvents = events.filter((e) => e.subject === subject.name);
+        const pendingEvents = subjEvents.filter((e) => !isDone(e));
+        const stats = computeStats(pendingEvents);
+        const nextAt = stats.nextEvent
+          ? new Date(`${stats.nextEvent.date}T${stats.nextEvent.time ?? '00:00'}:00`).getTime()
+          : Infinity;
+        return { subject, subjEvents, stats, nextAt: isNaN(nextAt) ? Infinity : nextAt };
+      })
+      .sort((a, b) =>
+        a.nextAt !== b.nextAt
+          ? a.nextAt - b.nextAt
+          : a.subject.name.localeCompare(b.subject.name, 'pt-BR'),
+      );
+  }, [subjects, events, isDone]);
   return (
     <section className="subject-grid-section">
       <div className="page-heading">
@@ -121,11 +146,9 @@ const SubjectList: React.FC<SubjectListProps> = ({
         <div className="empty-state">Nenhuma disciplina encontrada no portal.</div>
       ) : (
         <div className="subject-grid-large">
-        {subjects.map((subject) => {
-          const subjEvents = events.filter((e) => e.subject === subject.name);
+        {cards.map(({ subject, subjEvents, stats }) => {
           // Próximo evento ignora os já concluídos — esses não precisam mais aparecer em destaque
-          const pendingEvents = subjEvents.filter((e) => !isDone(e));
-          const { counts, upcomingCount, nextEvent } = computeStats(pendingEvents);
+          const { counts, upcomingCount, nextEvent } = stats;
           const total = subjEvents.length;
           const doneInSubject = subjEvents.filter((e) => isDone(e)).length;
 
