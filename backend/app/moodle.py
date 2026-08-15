@@ -811,6 +811,15 @@ class MoodleClient:
         )
         if "/login/index.php" in str(resp.url):
             raise PermissionError("A sessão do Moodle expirou.")
+
+        # Medido em 15/08/2026 numa tarefa já entregue: o Moodle responde
+        # **404** ao `editsubmission` em vez de uma página com aviso. Não é
+        # erro nosso nem tarefa inexistente — é a forma dele de dizer "não há
+        # formulário aqui", e a tela precisa disso, não de uma exceção.
+        if resp.status_code == 404:
+            return {"can_submit": False,
+                    "reason": "O Moodle não abre o formulário desta tarefa — ela já foi "
+                              "entregue, ou o prazo de envio terminou."}
         resp.raise_for_status()
         pagina = resp.text
 
