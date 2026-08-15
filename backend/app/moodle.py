@@ -20,6 +20,7 @@ produziram estão em `backend/scripts/probes/` e o README de lá tem o mapa
 completo da API.
 """
 
+import base64
 import json
 import logging
 import re
@@ -141,6 +142,20 @@ def clear_session_cache() -> None:
 # ---------------------------------------------------------------------------
 # Helpers de texto
 # ---------------------------------------------------------------------------
+
+def _epoch_iso(valor: Any) -> Optional[str]:
+    """
+    Epoch do Moodle → ISO no fuso de Brasília. Zero significa "nunca acessou",
+    não 1970.
+    """
+    try:
+        segundos = int(valor or 0)
+    except (TypeError, ValueError):
+        return None
+    if segundos <= 0:
+        return None
+    return datetime.fromtimestamp(segundos, TZ_BR).isoformat()
+
 
 _TAG_RE = re.compile(r"(?is)<(script|style|svg|noscript)[^>]*>.*?</\1>")
 _BLOCK_RE = re.compile(r"(?i)</(p|div|li|tr|h[1-6]|section|article)>")
@@ -339,6 +354,9 @@ class MoodleClient:
             headers={"User-Agent": USER_AGENT},
         )
         self.sesskey: Optional[str] = None
+        # Id numérico do aluno no Moodle. Sai do `M.cfg` junto com o sesskey e
+        # é o que `core_user_get_users_by_field` pede para devolver o perfil.
+        self.userid: Optional[int] = None
         self._credentials: Optional[tuple[str, str]] = None
 
     # -- ciclo de vida ---------------------------------------------------
@@ -368,17 +386,20 @@ class MoodleClient:
         if cached:
             self._client.cookies.update(cached["cookies"])
             self.sesskey = cached["sesskey"]
+            self.userid = cached.get("userid")
             if self._session_alive():
                 return
             # Sessão morreu antes do TTL — descarta e faz login de verdade.
             _drop_session(key)
             self._client.cookies.clear()
             self.sesskey = None
+            self.userid = None
 
         self._do_login(username, password)
         _save_session(key, {
             "cookies": dict(self._client.cookies),
             "sesskey": self.sesskey,
+            "userid": self.userid,
         })
 
     def _do_login(self, username: str, password: str) -> None:
@@ -402,8 +423,11 @@ class MoodleClient:
             )
 
         self.sesskey = self._extract_sesskey(resp.text)
-        if not self.sesskey:
-            self.sesskey = self._extract_sesskey(self._client.get(f"{self.base}/my/").text)
+        self.userid = self._extract_userid(resp.text)
+        if not self.sesskey or not self.userid:
+            painel = self._client.get(f"{self.base}/my/").text
+            self.sesskey = self.sesskey or self._extract_sesskey(painel)
+            self.userid = self.userid or self._extract_userid(painel)
         if not self.sesskey:
             raise RuntimeError(
                 "Login aceito mas não foi possível ler o sesskey — o Moodle pode "
@@ -427,6 +451,15 @@ class MoodleClient:
     def _extract_sesskey(html: str) -> Optional[str]:
         m = re.search(r'"sesskey":"([^"]+)"', html)
         return m.group(1) if m else None
+
+    @staticmethod
+    def _extract_userid(html: str) -> Optional[int]:
+        """
+        Lê o `userId` do `M.cfg` — falta dele não é erro fatal, só desliga o
+        perfil: a agenda inteira funciona sem ele.
+        """
+        m = re.search(r'"userId":\s*(\d+)', html) or re.search(r'"userid":\s*(\d+)', html)
+        return int(m.group(1)) if m else None
 
     def _session_alive(self) -> bool:
         """Confere se os cookies em cache ainda valem, sem custo de login."""
@@ -488,6 +521,78 @@ class MoodleClient:
         return data
 
     # -- consultas -------------------------------------------------------
+
+    def profile(self) -> dict:
+        """
+        Dados cadastrais do próprio aluno, para a tela de perfil.
+
+        `core_user_get_users_by_field` é a única função de usuário que esta
+        instância deixa ligada no AJAX — `core_webservice_get_site_info` e as de
+        nota respondem `servicenotavailable` (medido em 15/08/2026, veja
+        `scripts/probes/probe_profile.py`). Ela devolve mais que a página de
+        perfil pública: nome separado em primeiro/último, e-mail, departamento e
+        os dois acessos como epoch, sem precisar raspar HTML traduzido.
+
+        Só o próprio `userid` é consultado. O Moodle recusaria outro id, mas o
+        ponto aqui é que nem existe caminho para pedir outro: o id sai da sessão
+        do aluno, não de parâmetro de requisição.
+        """
+        if not self.userid:
+            self.userid = self._extract_userid(self._client.get(f"{self.base}/my/").text)
+        if not self.userid:
+            raise RuntimeError(
+                "Não foi possível identificar sua conta no Moodle — o layout da "
+                "página pode ter mudado."
+            )
+
+        data = self._ajax("core_user_get_users_by_field",
+                          {"field": "id", "values": [self.userid]})
+        bruto = (data or [{}])[0] if isinstance(data, list) and data else {}
+
+        nome = (bruto.get("fullname") or "").strip()
+        return {
+            "moodle_id": bruto.get("id") or self.userid,
+            "fullname": nome,
+            "firstname": (bruto.get("firstname") or "").strip(),
+            "lastname": (bruto.get("lastname") or "").strip(),
+            # `username` vem só a matrícula ("294833"); o e-mail é que traz o
+            # endereço completo que o aluno usa para entrar.
+            "username": (bruto.get("username") or "").strip(),
+            "email": (bruto.get("email") or "").strip(),
+            "department": (bruto.get("department") or "").strip(),
+            "institution": (bruto.get("institution") or "").strip(),
+            "city": (bruto.get("city") or "").strip(),
+            "country": (bruto.get("country") or "").strip(),
+            "timezone": (bruto.get("timezone") or "").strip(),
+            "first_access": _epoch_iso(bruto.get("firstaccess")),
+            "last_access": _epoch_iso(bruto.get("lastaccess")),
+            "avatar": self._avatar_data_uri(bruto.get("profileimageurl")),
+        }
+
+    def _avatar_data_uri(self, url: Optional[str]) -> Optional[str]:
+        """
+        Baixa a foto de perfil e devolve como `data:` embutido.
+
+        A URL do Moodle exige a sessão de lá, que o navegador do aluno não tem —
+        o mesmo motivo pelo qual login automático é impossível. O servidor já
+        está logado, então busca a imagem e manda os bytes junto do JSON.
+
+        O Moodle sempre responde alguma coisa: sem foto enviada, cai no avatar
+        cinza do tema (`/theme/image.php/.../u/f1`). Esse não vale a viagem —
+        a tela desenha as iniciais, que dizem mais do que uma silhueta genérica.
+        """
+        if not url or "pluginfile.php" not in url:
+            return None
+        try:
+            resp = self._client.get(url)
+            resp.raise_for_status()
+            tipo = resp.headers.get("content-type", "image/jpeg").split(";")[0]
+            if not tipo.startswith("image/") or len(resp.content) > 300_000:
+                return None
+            return f"data:{tipo};base64," + base64.b64encode(resp.content).decode("ascii")
+        except Exception as exc:  # foto é enfeite: nunca derruba o perfil
+            logger.info("Foto de perfil não veio: %s", exc)
+            return None
 
     def list_courses(self) -> list[dict]:
         """Disciplinas em que o aluno está matriculado."""

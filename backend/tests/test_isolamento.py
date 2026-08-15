@@ -63,6 +63,22 @@ AGENDAS = {
 }
 
 
+PERFIS = {
+    "aluno.a@unoesc.edu.br": {
+        "moodle_id": 1, "fullname": "Aluno A", "firstname": "Aluno", "lastname": "A",
+        "username": "aluno.a", "email": "aluno.a@unoesc.edu.br", "department": "",
+        "institution": "", "city": "", "country": "BR", "timezone": "America/Sao_Paulo",
+        "first_access": None, "last_access": None, "avatar": None,
+    },
+    "aluno.b@unoesc.edu.br": {
+        "moodle_id": 2, "fullname": "Aluno B", "firstname": "Aluno", "lastname": "B",
+        "username": "aluno.b", "email": "aluno.b@unoesc.edu.br", "department": "",
+        "institution": "", "city": "", "country": "BR", "timezone": "America/Sao_Paulo",
+        "first_access": None, "last_access": None, "avatar": None,
+    },
+}
+
+
 class MoodleFalso:
     """Dublê do `MoodleClient`: valida credencial e devolve agenda fixa."""
 
@@ -75,6 +91,11 @@ class MoodleFalso:
     def login(self, username, password):
         if CONTAS.get(username) != password:
             raise PermissionError("Usuário ou senha inválidos.")
+        self._username = username
+
+    def profile(self):
+        """Cadastro do aluno que logou neste cliente — nunca de outro."""
+        return dict(PERFIS[self._username])
 
     def run(self, username, password):
         self.login(username, password)
@@ -157,6 +178,7 @@ def main_teste() -> int:
             ("post", "/api/assistant", {"messages": [{"role": "user", "content": "oi"}]}),
             ("delete", "/api/account", None),
             ("get", "/api/activity/moodle:1", None),
+            ("get", "/api/profile", None),
         ]
         for metodo, rota, corpo in sem_sessao:
             resp = getattr(client, metodo)(rota, json=corpo) if corpo else getattr(client, metodo)(rota)
@@ -182,6 +204,28 @@ def main_teste() -> int:
 
         resp = client.get(f"/api/activity/{chave_de_b}", headers=auth(token_b))
         verificar(resp.status_code == 200, "B abre a própria atividade")
+
+        # O perfil é o endpoint que mistura duas fontes — cadastro do Moodle e
+        # contagens do banco. As duas precisam vir da mesma conta.
+        perfil_a = client.get("/api/profile", headers=auth(token_a)).json()
+        perfil_b = client.get("/api/profile", headers=auth(token_b)).json()
+        verificar(
+            perfil_a["moodle"]["email"] == "aluno.a@unoesc.edu.br"
+            and perfil_b["moodle"]["email"] == "aluno.b@unoesc.edu.br",
+            "cada perfil traz o cadastro do próprio aluno",
+        )
+        verificar(
+            perfil_a["stats"]["subjects"] == 1 and perfil_a["stats"]["events_total"] == 1,
+            "contagens do perfil de A só somam a agenda de A",
+        )
+        verificar(
+            perfil_a["stats"]["events_done"] == 1 and perfil_b["stats"]["events_done"] == 0,
+            "concluído de A não aparece nas contagens de B",
+        )
+        verificar(
+            perfil_b["stats"]["next_event_title"] == "Trabalho de Redes",
+            "próximo evento do perfil é o da agenda do próprio aluno",
+        )
 
         print("\n[5] Limpar cache não atinge o vizinho")
         client.delete("/api/cache", headers=auth(token_a))

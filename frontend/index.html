@@ -6,8 +6,32 @@
     <meta name="description" content="Agenda UNOESC — suas entregas, provas e webconferências do Moodle numa lista só" />
     <!-- O mesmo símbolo da marca que aparece na barra superior do app. -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
-    <meta name="theme-color" content="#1d4ed8" />
+    <meta name="theme-color" content="#ffffff" />
     <title>Agenda UNOESC</title>
+    <!--
+      Roda antes do React montar. Sem isso, quem usa o tema escuro toma uma
+      tela branca no rosto por um quadro inteiro toda vez que abre o app —
+      justamente à noite, que é quando ele está no escuro.
+    -->
+    <script>
+      (function () {
+        try {
+          var salvo = localStorage.getItem('agenda-tema');
+          var tema =
+            salvo === 'dark' || salvo === 'light'
+              ? salvo
+              : window.matchMedia('(prefers-color-scheme: dark)').matches
+                ? 'dark'
+                : 'light';
+          document.documentElement.setAttribute('data-theme', tema);
+          document
+            .querySelector('meta[name="theme-color"]')
+            .setAttribute('content', tema === 'dark' ? '#0f172a' : '#ffffff');
+        } catch (e) {
+          /* navegador sem localStorage: fica no claro, que é o padrão do CSS */
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

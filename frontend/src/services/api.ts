@@ -188,6 +188,55 @@ export async function fetchAccount(): Promise<Account> {
   };
 }
 
+/** O cadastro do aluno como o Moodle o guarda. */
+export interface MoodleProfile {
+  moodle_id: number | null;
+  fullname: string;
+  firstname: string;
+  lastname: string;
+  /** Só a matrícula ("294833"); o endereço completo está em `email`. */
+  username: string;
+  email: string;
+  department: string;
+  institution: string;
+  city: string;
+  country: string;
+  timezone: string;
+  first_access: string | null;
+  last_access: string | null;
+  /** Foto já embutida como `data:` — a URL do Moodle exige a sessão de lá. */
+  avatar: string | null;
+}
+
+export interface ProfileStats {
+  subjects: number;
+  events_total: number;
+  events_upcoming: number;
+  events_done: number;
+  next_event_title: string | null;
+  next_event_date: string | null;
+  next_event_time: string | null;
+  next_event_subject: string | null;
+  last_scraped_at: string | null;
+}
+
+export interface Profile {
+  account_username: string;
+  plan: string;
+  member_since: string | null;
+  last_login_at: string | null;
+  /** Nulo quando o Moodle não respondeu; `moodle_error` diz o motivo. */
+  moodle: MoodleProfile | null;
+  moodle_error: string | null;
+  stats: ProfileStats;
+}
+
+/** Perfil completo: cadastro no Moodle + conta no app + resumo da agenda. */
+export async function fetchProfile(): Promise<Profile> {
+  const { data } = await api.get<Profile>('/profile');
+  return data;
+}
+
 /** Apaga a conta e todos os dados do aluno. Irreversível. */
 export async function deleteAccount(): Promise<void> {
   await api.delete('/account');

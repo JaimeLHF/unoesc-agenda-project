@@ -7,6 +7,8 @@ import LoginForm from './components/LoginForm';
 import SubjectList from './components/SubjectList';
 import SubjectDetail from './components/SubjectDetail';
 import Assistant from './components/Assistant';
+import ProfilePage from './components/ProfilePage';
+import ThemeToggle from './components/ThemeToggle';
 import {
   login,
   logout,
@@ -14,18 +16,19 @@ import {
   syncToCalendar,
   fetchCache,
   fetchAccount,
+  fetchProfile,
   deleteAccount,
   clearCache,
   openCourse,
 } from './services/api';
-import type { Account } from './services/api';
+import type { Account, Profile } from './services/api';
 import { requestGoogleAccessToken } from './services/googleAuth';
 import { useDoneEvents, eventKey } from './contexts/DoneEventsContext';
 import { activityPath, navigate, useActivityRoute } from './lib/router';
 import type { Subject, AcademicEvent, LoginCredentials } from './types';
 import './index.css';
 
-type AppStep = 'login' | 'results' | 'assistant';
+type AppStep = 'login' | 'results' | 'assistant' | 'profile';
 
 /**
  * O Google Calendar fica fora do ar enquanto a tela de consentimento OAuth não
@@ -46,6 +49,9 @@ const App: React.FC = () => {
   // sessão está ativa.
   const [authenticated, setAuthenticated] = useState(false);
   const [account, setAccount] = useState<Account | null>(null);
+  // Só para a barra: nome e foto do aluno. Chega depois da agenda e sem
+  // bloquear nada — se o Moodle não responder, a barra fica com as iniciais.
+  const [profile, setProfile] = useState<Profile | null>(null);
 
   const [loadingMessage, setLoadingMessage] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
@@ -72,6 +78,7 @@ const App: React.FC = () => {
     const onSessionExpired = () => {
       setAuthenticated(false);
       setAccount(null);
+      setProfile(null);
       setStep('login');
       setLoginError('Sua sessão expirou. Faça login novamente.');
     };
@@ -110,6 +117,7 @@ const App: React.FC = () => {
       await login(creds);
       setAuthenticated(true);
       void fetchAccount().then(setAccount).catch(() => setAccount(null));
+      void fetchProfile().then(setProfile).catch(() => setProfile(null));
 
       // O cache entra antes só pelas marcações de concluído; as disciplinas e
       // eventos dele ficam de reserva e não vão para a tela.
@@ -169,6 +177,7 @@ const App: React.FC = () => {
   const resetLocalState = () => {
     setAuthenticated(false);
     setAccount(null);
+    setProfile(null);
     setSubjects([]);
     setEvents([]);
     setSelectedSubjectId(null);
@@ -273,10 +282,13 @@ const App: React.FC = () => {
              menu da conta agiriam sobre uma agenda que ainda não existe. */
           authenticated={authenticated && !loginLoading}
           username={account?.username}
+          fullName={profile?.moodle?.fullname}
+          avatar={profile?.moodle?.avatar}
           onRefresh={handleRefresh}
           refreshing={refreshing}
           onOpenAssistant={() => setStep('assistant')}
           assistantAvailable={account?.assistantAvailable ?? false}
+          onOpenProfile={() => setStep('profile')}
           onClearCache={handleClearCache}
           onLogout={handleLogout}
           onDeleteAccount={handleDeleteAccount}
@@ -308,7 +320,13 @@ const App: React.FC = () => {
       */}
       <main className={naTelaDeEntrada ? 'app-main app-main--auth' : 'app-main'}>
         {step === 'login' && !loginLoading && (
-          <LoginForm onSubmit={handleLogin} loading={loginLoading} error={loginError} />
+          <>
+            {/* A tela de entrada não tem barra — o botão do tema vem solto no
+                canto, para quem abre o app à noite não precisar entrar antes
+                de baixar o brilho. */}
+            <ThemeToggle className="theme-toggle--solto" />
+            <LoginForm onSubmit={handleLogin} loading={loginLoading} error={loginError} />
+          </>
         )}
 
         {step === 'login' && loginLoading && (
@@ -353,6 +371,8 @@ const App: React.FC = () => {
             onOpenEvent={abrirAtividade}
           />
         )}
+
+        {step === 'profile' && <ProfilePage onBack={() => setStep('results')} />}
 
         {step === 'assistant' && account && (
           <Assistant

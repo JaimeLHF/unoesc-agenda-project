@@ -9,22 +9,224 @@
   padding: 0;
 }
 
+/* Tema claro — a base. Todo valor de cor do app sai daqui; nada de literal
+   solto no meio das regras, senão o modo escuro vira caça ao tesouro. */
 :root {
+  color-scheme: light;
+
   --color-primary: #1d4ed8;
   --color-primary-hover: #1e40af;
+  /* O que fica POR CIMA do azul (texto do botão, ícone da marca). No escuro o
+     azul clareia e esta cor escurece junto — é o par que mantém o contraste. */
+  --color-on-primary: #ffffff;
+  --color-on-primary-faint: rgba(255, 255, 255, 0.4);
+  /* Azul de texto e de tinta sobre fundo claro. */
+  --color-primary-ink: #1d4ed8;
+  --color-primary-soft: #eff6ff;
+  --color-primary-soft-2: #dbeafe;
+  --color-primary-border: #bfdbfe;
+  --color-primary-ghost: rgba(29, 78, 216, 0.25);
+  --color-brand-2: #4f46e5;
+
   --color-bg: #f8fafc;
   --color-surface: #ffffff;
+  --color-surface-2: #f1f5f9;
+  --color-surface-2-ink: #475569;
   --color-border: #e2e8f0;
   --color-text: #1e293b;
   --color-text-muted: #64748b;
+
   --color-error: #dc2626;
   --color-error-bg: #fef2f2;
+  --color-error-border: #fecaca;
+  --color-error-border-strong: #fca5a5;
+  --color-error-ink: #b91c1c;
+
   --color-success: #16a34a;
   --color-success-bg: #f0fdf4;
+  --color-success-strong: #15803d;
+  --color-ok-bg: #dcfce7;
+  --color-ok-border: #bbf7d0;
+  --color-ok-ink: #166534;
+
+  --color-warn-bg: #fef3c7;
+  --color-warn-ink: #b45309;
+  --color-exam-bg: #fce7f3;
+  --color-exam-ink: #9d174d;
+  --color-alert-orange-bg: #fff7ed;
+  --color-alert-orange-border: #fed7aa;
+  --color-alert-orange-ink: #c2410c;
+  --color-alert-yellow-bg: #fefce8;
+  --color-alert-yellow-border: #fde68a;
+  --color-alert-yellow-ink: #a16207;
+
+  --color-skeleton-highlight: #eef2f7;
+  --color-topbar-bg: rgba(255, 255, 255, 0.85);
+  --color-glass: rgba(255, 255, 255, 0.7);
+  --color-code-bg: rgba(255, 255, 255, 0.5);
+  --color-overlay: rgba(15, 23, 42, 0.55);
+
+  /* A faixa de desfazer é o contrário do fundo da tela: escura no claro,
+     clara no escuro. É o que faz ela sobrar por cima de tudo sem borda. */
+  --color-inverse-surface: #1e293b;
+  --color-inverse-text: #ffffff;
+  --color-inverse-muted: rgb(255 255 255 / 0.6);
+  --color-inverse-hover: rgb(255 255 255 / 0.1);
+  --color-inverse-accent: #bfdbfe;
 
   --radius: 0.5rem;
   --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.1);
+  --shadow-lg: 0 10px 25px -5px rgb(15 23 42 / 0.18);
+  --shadow-modal: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+  --shadow-topbar: 0 8px 24px -16px rgb(15 23 42 / 0.5);
+  --shadow-primary-color: rgb(29 78 216 / 0.45);
+}
+
+/*
+  Tema escuro.
+
+  Não é o claro com as cores invertidas: fundo quase preto puro cansa a vista
+  de quem lê prazo à noite, então a base é o slate 900 e as superfícies sobem
+  em degraus. O azul clareia (um azul escuro sobre fundo escuro seria ilegível)
+  e, com ele, o texto que vai por cima escurece — os dois andam em par.
+
+  A mesma lista vale duas vezes de propósito: uma para quem escolheu escuro no
+  botão, outra para quem não escolheu nada e usa o sistema no escuro. Quem
+  escolheu claro (`data-theme="light"`) fica de fora da segunda.
+*/
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --color-primary: #7cb0ff;
+  --color-primary-hover: #a3c8ff;
+  --color-on-primary: #0b1220;
+  --color-on-primary-faint: rgba(11, 18, 32, 0.35);
+  --color-primary-ink: #93c5fd;
+  --color-primary-soft: #1a2942;
+  --color-primary-soft-2: #22375a;
+  --color-primary-border: #33507e;
+  --color-primary-ghost: rgba(124, 176, 255, 0.3);
+  --color-brand-2: #818cf8;
+
+  --color-bg: #0f172a;
+  --color-surface: #1a2334;
+  --color-surface-2: #243045;
+  --color-surface-2-ink: #cbd5e1;
+  --color-border: #334155;
+  --color-text: #e8eef7;
+  --color-text-muted: #9aabc2;
+
+  --color-error: #f87171;
+  --color-error-bg: #2b1518;
+  --color-error-border: #7f1d1d;
+  --color-error-border-strong: #991b1b;
+  --color-error-ink: #fca5a5;
+
+  --color-success: #4ade80;
+  --color-success-bg: #10251a;
+  --color-success-strong: #22c55e;
+  --color-ok-bg: #14311f;
+  --color-ok-border: #1c5533;
+  --color-ok-ink: #86efac;
+
+  --color-warn-bg: #2f2410;
+  --color-warn-ink: #fcd34d;
+  --color-exam-bg: #331627;
+  --color-exam-ink: #f9a8d4;
+  --color-alert-orange-bg: #2c1a10;
+  --color-alert-orange-border: #7c2d12;
+  --color-alert-orange-ink: #fdba74;
+  --color-alert-yellow-bg: #2a2410;
+  --color-alert-yellow-border: #713f12;
+  --color-alert-yellow-ink: #fde047;
+
+  --color-skeleton-highlight: #2b3a52;
+  --color-topbar-bg: rgba(15, 23, 42, 0.85);
+  --color-glass: rgba(26, 35, 52, 0.7);
+  --color-code-bg: rgba(255, 255, 255, 0.08);
+  --color-overlay: rgba(2, 6, 23, 0.7);
+
+  --color-inverse-surface: #e8eef7;
+  --color-inverse-text: #0f172a;
+  --color-inverse-muted: rgb(15 23 42 / 0.6);
+  --color-inverse-hover: rgb(15 23 42 / 0.1);
+  --color-inverse-accent: #1d4ed8;
+
+  --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.45);
+  --shadow-lg: 0 10px 25px -5px rgb(0 0 0 / 0.6);
+  --shadow-modal: 0 20px 25px -5px rgb(0 0 0 / 0.65), 0 10px 10px -5px rgb(0 0 0 / 0.4);
+  --shadow-topbar: 0 8px 24px -14px rgb(0 0 0 / 0.9);
+  --shadow-primary-color: rgb(0 0 0 / 0.55);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --color-primary: #7cb0ff;
+    --color-primary-hover: #a3c8ff;
+    --color-on-primary: #0b1220;
+    --color-on-primary-faint: rgba(11, 18, 32, 0.35);
+    --color-primary-ink: #93c5fd;
+    --color-primary-soft: #1a2942;
+    --color-primary-soft-2: #22375a;
+    --color-primary-border: #33507e;
+    --color-primary-ghost: rgba(124, 176, 255, 0.3);
+    --color-brand-2: #818cf8;
+
+    --color-bg: #0f172a;
+    --color-surface: #1a2334;
+    --color-surface-2: #243045;
+    --color-surface-2-ink: #cbd5e1;
+    --color-border: #334155;
+    --color-text: #e8eef7;
+    --color-text-muted: #9aabc2;
+
+    --color-error: #f87171;
+    --color-error-bg: #2b1518;
+    --color-error-border: #7f1d1d;
+    --color-error-border-strong: #991b1b;
+    --color-error-ink: #fca5a5;
+
+    --color-success: #4ade80;
+    --color-success-bg: #10251a;
+    --color-success-strong: #22c55e;
+    --color-ok-bg: #14311f;
+    --color-ok-border: #1c5533;
+    --color-ok-ink: #86efac;
+
+    --color-warn-bg: #2f2410;
+    --color-warn-ink: #fcd34d;
+    --color-exam-bg: #331627;
+    --color-exam-ink: #f9a8d4;
+    --color-alert-orange-bg: #2c1a10;
+    --color-alert-orange-border: #7c2d12;
+    --color-alert-orange-ink: #fdba74;
+    --color-alert-yellow-bg: #2a2410;
+    --color-alert-yellow-border: #713f12;
+    --color-alert-yellow-ink: #fde047;
+
+    --color-skeleton-highlight: #2b3a52;
+    --color-topbar-bg: rgba(15, 23, 42, 0.85);
+    --color-glass: rgba(26, 35, 52, 0.7);
+    --color-code-bg: rgba(255, 255, 255, 0.08);
+    --color-overlay: rgba(2, 6, 23, 0.7);
+
+    --color-inverse-surface: #e8eef7;
+    --color-inverse-text: #0f172a;
+    --color-inverse-muted: rgb(15 23 42 / 0.6);
+    --color-inverse-hover: rgb(15 23 42 / 0.1);
+    --color-inverse-accent: #1d4ed8;
+
+    --shadow: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.45);
+    --shadow-lg: 0 10px 25px -5px rgb(0 0 0 / 0.6);
+    --shadow-modal: 0 20px 25px -5px rgb(0 0 0 / 0.65), 0 10px 10px -5px rgb(0 0 0 / 0.4);
+    --shadow-topbar: 0 8px 24px -14px rgb(0 0 0 / 0.9);
+    --shadow-primary-color: rgb(0 0 0 / 0.55);
+  }
 }
 
 body {
@@ -49,10 +251,20 @@ body {
   position: sticky;
   top: 0;
   z-index: 30;
-  background: rgba(255, 255, 255, 0.85);
+  background: var(--color-topbar-bg);
   /* O blur mantém a barra legível quando um card passa por baixo dela. */
   backdrop-filter: saturate(180%) blur(12px);
-  border-bottom: 1px solid var(--color-border);
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* Parada no topo, a barra é parte da página e não precisa de moldura. Assim
+   que o conteúdo começa a passar por baixo, a linha e a sombra entram para
+   separar as duas camadas — a borda fixa, sozinha, sumia quando um card
+   branco encostava nela. */
+.topbar--rolado {
+  border-bottom-color: var(--color-border);
+  box-shadow: var(--shadow-topbar);
 }
 
 .topbar__inner {
@@ -78,9 +290,9 @@ body {
   width: 2.25rem;
   height: 2.25rem;
   border-radius: 0.7rem;
-  color: #ffffff;
-  background: linear-gradient(140deg, var(--color-primary) 0%, #4f46e5 100%);
-  box-shadow: 0 2px 6px -1px rgb(29 78 216 / 0.45);
+  color: var(--color-on-primary);
+  background: linear-gradient(140deg, var(--color-primary) 0%, var(--color-brand-2) 100%);
+  box-shadow: 0 2px 6px -1px var(--shadow-primary-color);
   flex-shrink: 0;
 }
 
@@ -109,16 +321,65 @@ body {
   gap: 0.35rem;
 }
 
-.topbar__user {
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-  max-width: 14rem;
+/* O botão do perfil: foto (ou iniciais) e o primeiro nome numa pílula. É o
+   único elemento da barra com forma redonda — o que o separa das duas ações
+   retangulares ao lado sem precisar de moldura. */
+.topbar__profile {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.25rem 0.75rem 0.25rem 0.25rem;
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.85rem;
+  font-weight: 550;
+  color: var(--color-text);
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.topbar__profile:hover {
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-border);
+}
+
+.topbar__avatar {
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+/* Sem foto no Moodle, as iniciais no azul da marca. A silhueta cinza padrão
+   ocupa o mesmo espaço e não diz de quem é a conta. */
+.topbar__avatar--iniciais {
+  display: grid;
+  place-items: center;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 0.72rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+}
+
+.topbar__profile-name {
+  max-width: 9rem;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding-right: 0.35rem;
-  border-right: 1px solid var(--color-border);
-  margin-right: 0.25rem;
+}
+
+/* O foco do teclado é desenhado pelo app, não pelo navegador: o anel padrão
+   muda de cor e espessura em cada sistema e não combina com nada aqui. */
+.topbar__profile:focus-visible,
+.topbar .btn-ghost:focus-visible,
+.topbar .btn-icon:focus-visible,
+.account-menu__item:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
 }
 
 .app-main {
@@ -136,6 +397,8 @@ body {
   margin: 0;
   padding: 0;
   display: flex;
+  /* Âncora do botão de tema, que fica solto no canto desta tela. */
+  position: relative;
 }
 
 /* Banner de largura total, logo abaixo da barra (erro de atualização). */
@@ -171,8 +434,8 @@ body {
 }
 
 .btn-ghost:hover:not(:disabled) {
-  background: #eff6ff;
-  border-color: #bfdbfe;
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-border);
   color: var(--color-primary);
 }
 
@@ -217,7 +480,7 @@ body {
 }
 
 .btn-back:hover {
-  background: #eff6ff;
+  background: var(--color-primary-soft);
 }
 
 /* ---- Menu da conta ---- */
@@ -233,11 +496,47 @@ body {
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: 0.65rem;
-  box-shadow: 0 10px 25px -5px rgb(15 23 42 / 0.18);
+  box-shadow: var(--shadow-lg);
   padding: 0.3rem;
   display: flex;
   flex-direction: column;
   z-index: 40;
+  transform-origin: top right;
+  animation: menu-entrada 0.16s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Curto e vindo do próprio botão: o painel aparecendo do nada parece falha de
+   renderização, e qualquer coisa mais longa atrasa quem já sabe onde clicar. */
+@keyframes menu-entrada {
+  from {
+    opacity: 0;
+    transform: translateY(-0.35rem) scale(0.97);
+  }
+}
+
+/* De quem é a conta que os itens abaixo vão limpar, encerrar ou apagar. */
+.account-menu__identity {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+  padding: 0.5rem 0.6rem 0.4rem;
+  min-width: 0;
+}
+
+.account-menu__identity strong {
+  font-size: 0.875rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-menu__identity span {
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .account-menu__item {
@@ -306,9 +605,9 @@ body {
   height: 3rem;
   margin: 0 auto;
   border-radius: 0.9rem;
-  color: #ffffff;
-  background: linear-gradient(140deg, var(--color-primary) 0%, #4f46e5 100%);
-  box-shadow: 0 3px 10px -2px rgb(29 78 216 / 0.4);
+  color: var(--color-on-primary);
+  background: linear-gradient(140deg, var(--color-primary) 0%, var(--color-brand-2) 100%);
+  box-shadow: 0 3px 10px -2px var(--shadow-primary-color);
 }
 
 .auth__title {
@@ -396,8 +695,8 @@ body {
 }
 
 .auth__help-links a:hover {
-  background: #eff6ff;
-  border-color: #bfdbfe;
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-border);
 }
 
 .auth .login-form {
@@ -448,6 +747,10 @@ body {
 }
 
 .form-group input {
+  /* Fundo e cor explícitos: sem eles o campo herda o cinza-azulado que o
+     navegador desenha sozinho no modo escuro, que não é cor de nenhum tema. */
+  background: var(--color-surface);
+  color: var(--color-text);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   padding: 0.5rem 0.75rem;
@@ -456,9 +759,27 @@ body {
   outline: none;
 }
 
+/* O texto de dica dentro do campo vive no limite do contraste; sem cor
+   própria ele sai quase invisível no escuro. */
+.form-group input::placeholder {
+  color: var(--color-text-muted);
+}
+
+/* Campo preenchido pelo navegador. O Chrome pinta o autofill de azul-acinzentado
+   por conta própria e ignora `background`; a sombra interna é a única forma de
+   cobrir isso — sem ela, o único campo azulado da tela é o que o aluno nem
+   digitou. */
+.form-group input:-webkit-autofill,
+.form-group input:-webkit-autofill:hover,
+.form-group input:-webkit-autofill:focus {
+  -webkit-text-fill-color: var(--color-text);
+  -webkit-box-shadow: 0 0 0 100px var(--color-surface) inset;
+  caret-color: var(--color-text);
+}
+
 .form-group input:focus {
   border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px rgb(29 78 216 / 0.15);
+  box-shadow: 0 0 0 3px var(--color-primary-ghost);
 }
 
 .form-group input:disabled {
@@ -469,7 +790,7 @@ body {
 /* ---- Botões ---- */
 .btn-primary {
   background-color: var(--color-primary);
-  color: #ffffff;
+  color: var(--color-on-primary);
   border: none;
   border-radius: var(--radius);
   padding: 0.6rem 1.2rem;
@@ -501,8 +822,8 @@ body {
   display: inline-block;
   width: 1rem;
   height: 1rem;
-  border: 2px solid rgba(255, 255, 255, 0.4);
-  border-top-color: #fff;
+  border: 2px solid var(--color-on-primary-faint);
+  border-top-color: var(--color-on-primary);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
 }
@@ -528,7 +849,7 @@ body {
   background: linear-gradient(
     100deg,
     var(--color-border) 20%,
-    #eef2f7 40%,
+    var(--color-skeleton-highlight) 40%,
     var(--color-border) 60%
   );
   background-size: 220% 100%;
@@ -553,9 +874,9 @@ body {
   gap: 0.5rem;
   margin-bottom: 1.5rem;
   padding: 0.45rem 0.8rem;
-  border: 1px solid #bfdbfe;
+  border: 1px solid var(--color-primary-border);
   border-radius: 999px;
-  background: #eff6ff;
+  background: var(--color-primary-soft);
   color: var(--color-primary);
   font-size: 0.85rem;
   font-weight: 500;
@@ -671,16 +992,16 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0.5rem;
-  background: #fef2f2;
-  color: #b91c1c;
-  border-bottom: 1px solid #fecaca;
+  background: var(--color-error-bg);
+  color: var(--color-error-ink);
+  border-bottom: 1px solid var(--color-error-border);
   padding: 0.7rem 1.5rem;
   font-size: 0.85rem;
   font-weight: 500;
 }
 
 .backend-offline-banner code {
-  background: rgba(255, 255, 255, 0.5);
+  background: var(--color-code-bg);
   padding: 0.1rem 0.35rem;
   border-radius: 0.25rem;
   font-size: 0.85em;
@@ -717,7 +1038,7 @@ body {
   gap: 0.5rem;
   background-color: var(--color-error-bg);
   color: var(--color-error);
-  border: 1px solid #fca5a5;
+  border: 1px solid var(--color-error-border-strong);
   border-radius: var(--radius);
   padding: 0.6rem 0.9rem;
   font-size: 0.875rem;
@@ -778,12 +1099,12 @@ body {
 
 .subject-card:hover {
   border-color: var(--color-primary);
-  background-color: #eff6ff;
+  background-color: var(--color-primary-soft);
 }
 
 .subject-card--selected {
   border-color: var(--color-primary);
-  background-color: #eff6ff;
+  background-color: var(--color-primary-soft);
 }
 
 .subject-checkbox {
@@ -878,14 +1199,14 @@ body {
   padding: 0.15rem 0.6rem;
 }
 
-.badge--webconference { background-color: #dbeafe; color: #1d4ed8; }
-.badge--deadline      { background-color: #fef3c7; color: #b45309; }
-.badge--exam          { background-color: #fce7f3; color: #9d174d; }
-.badge--other         { background-color: #f1f5f9; color: #475569; }
+.badge--webconference { background-color: var(--color-primary-soft-2); color: var(--color-primary-ink); }
+.badge--deadline      { background-color: var(--color-warn-bg); color: var(--color-warn-ink); }
+.badge--exam          { background-color: var(--color-exam-bg); color: var(--color-exam-ink); }
+.badge--other         { background-color: var(--color-surface-2); color: var(--color-surface-2-ink); }
 
 .sync-status {
   font-size: 0.75rem;
-  color: var(--color-success);
+  color: var(--color-ok-ink);
   font-weight: 500;
 }
 
@@ -964,7 +1285,7 @@ body {
 }
 
 .btn-secondary:hover:not(:disabled) {
-  background-color: #eff6ff;
+  background-color: var(--color-primary-soft);
   border-color: var(--color-primary);
 }
 
@@ -974,7 +1295,7 @@ body {
 }
 
 .spinner--dark {
-  border-color: rgba(29, 78, 216, 0.25);
+  border-color: var(--color-primary-ghost);
   border-top-color: var(--color-primary);
 }
 
@@ -1050,7 +1371,7 @@ body {
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
-  background: #eff6ff;
+  background: var(--color-primary-soft);
   color: var(--color-primary);
   padding: 0.2rem 0.6rem;
   border-radius: 9999px;
@@ -1126,7 +1447,7 @@ body {
 }
 
 .btn-link:hover {
-  background-color: #eff6ff;
+  background-color: var(--color-primary-soft);
 }
 
 .subject-detail__header {
@@ -1200,13 +1521,13 @@ body {
   width: 1.75rem;
   height: 1.75rem;
   border-radius: 0.5rem;
-  background: #f1f5f9;
-  color: #475569;
+  background: var(--color-surface-2);
+  color: var(--color-surface-2-ink);
 }
 
-.event-section__icon--webconference { background: #dbeafe; color: #1d4ed8; }
-.event-section__icon--deadline      { background: #fef3c7; color: #b45309; }
-.event-section__icon--exam          { background: #fce7f3; color: #9d174d; }
+.event-section__icon--webconference { background: var(--color-primary-soft-2); color: var(--color-primary-ink); }
+.event-section__icon--deadline      { background: var(--color-warn-bg); color: var(--color-warn-ink); }
+.event-section__icon--exam          { background: var(--color-exam-bg); color: var(--color-exam-ink); }
 
 .event-section__count,
 .alerts-count {
@@ -1331,26 +1652,26 @@ body {
 
 /* Cores por urgência */
 .alert-pill--today {
-  background: #fef2f2;
-  border-color: #fecaca;
-  color: #b91c1c;
+  background: var(--color-error-bg);
+  border-color: var(--color-error-border);
+  color: var(--color-error-ink);
 }
 
 .alert-pill--tomorrow {
-  background: #fff7ed;
-  border-color: #fed7aa;
-  color: #c2410c;
+  background: var(--color-alert-orange-bg);
+  border-color: var(--color-alert-orange-border);
+  color: var(--color-alert-orange-ink);
 }
 
 .alert-pill--soon {
-  background: #fefce8;
-  border-color: #fde68a;
-  color: #a16207;
+  background: var(--color-alert-yellow-bg);
+  border-color: var(--color-alert-yellow-border);
+  color: var(--color-alert-yellow-ink);
 }
 
 .alert-pill--week {
-  background: #eff6ff;
-  border-color: #bfdbfe;
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-border);
   color: var(--color-primary);
 }
 
@@ -1381,8 +1702,8 @@ body {
   min-width: 64px;
   padding: 0.55rem 0.7rem;
   border-radius: var(--radius);
-  background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
-  border: 1px solid #bfdbfe;
+  background: linear-gradient(180deg, var(--color-primary-soft) 0%, var(--color-primary-soft-2) 100%);
+  border: 1px solid var(--color-primary-border);
   color: var(--color-primary);
 }
 
@@ -1407,7 +1728,7 @@ body {
 }
 
 .event-card--past .event-date-badge {
-  background: #f1f5f9;
+  background: var(--color-surface-2);
   border-color: var(--color-border);
   color: var(--color-text-muted);
 }
@@ -1426,7 +1747,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--color-primary);
-  background: #eff6ff;
+  background: var(--color-primary-soft);
   padding: 0.15rem 0.55rem;
   border-radius: 9999px;
 }
@@ -1444,18 +1765,18 @@ body {
 }
 
 .status-pill--past {
-  background: #f1f5f9;
-  color: #64748b;
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
 }
 
 .status-pill--synced {
   background: var(--color-success-bg);
-  color: var(--color-success);
+  color: var(--color-ok-ink);
 }
 
 .status-pill--done {
-  background: #dcfce7;
-  color: #166534;
+  background: var(--color-ok-bg);
+  color: var(--color-ok-ink);
   font-weight: 700;
 }
 
@@ -1497,7 +1818,7 @@ body {
 .event-done-toggle input:checked + .event-done-toggle__check {
   background: var(--color-success);
   border-color: var(--color-success);
-  color: #ffffff;
+  color: var(--color-on-primary);
 }
 
 .event-done-toggle input:focus-visible + .event-done-toggle__check {
@@ -1533,7 +1854,7 @@ body {
 
 .event-card--done {
   opacity: 0.7;
-  background: #f8fafc;
+  background: var(--color-bg);
 }
 
 .event-card--done .event-title {
@@ -1543,9 +1864,9 @@ body {
 }
 
 .event-card--done .event-date-badge {
-  background: #dcfce7;
-  border-color: #bbf7d0;
-  color: #166534;
+  background: var(--color-ok-bg);
+  border-color: var(--color-ok-border);
+  color: var(--color-ok-ink);
 }
 
 /* Contador de "concluídos" no card de disciplina */
@@ -1555,7 +1876,7 @@ body {
   gap: 0.3rem;
   font-size: 0.75rem;
   font-weight: 600;
-  color: var(--color-success);
+  color: var(--color-ok-ink);
   background: var(--color-success-bg);
   padding: 0.2rem 0.55rem;
   border-radius: 9999px;
@@ -1577,7 +1898,7 @@ body {
   align-items: center;
   gap: 0.4rem;
   background: var(--color-success);
-  color: #ffffff;
+  color: var(--color-on-primary);
   border: none;
   border-radius: var(--radius);
   padding: 0.55rem 1.1rem;
@@ -1589,7 +1910,7 @@ body {
 }
 
 .btn-done:hover {
-  background: #15803d;
+  background: var(--color-success-strong);
 }
 
 /* Eventos passados ficam atenuados */
@@ -1607,7 +1928,7 @@ body {
 .modal-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.55);
+  background: var(--color-overlay);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1620,7 +1941,7 @@ body {
   position: relative;
   background: var(--color-surface);
   border-radius: 0.75rem;
-  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2), 0 10px 10px -5px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow-modal);
   width: 100%;
   max-width: 600px;
   max-height: 90vh;
@@ -1682,8 +2003,8 @@ body {
   align-items: baseline;
   gap: 0.75rem;
   flex-wrap: wrap;
-  background: linear-gradient(135deg, #eff6ff 0%, #dbeafe 100%);
-  border: 1px solid #bfdbfe;
+  background: linear-gradient(135deg, var(--color-primary-soft) 0%, var(--color-primary-soft-2) 100%);
+  border: 1px solid var(--color-primary-border);
   border-radius: var(--radius);
   padding: 0.85rem 1rem;
   margin-bottom: 1rem;
@@ -1705,7 +2026,7 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.05em;
   color: var(--color-primary-hover);
-  background: rgba(255, 255, 255, 0.7);
+  background: var(--color-glass);
   padding: 0.15rem 0.55rem;
   border-radius: 9999px;
 }
@@ -1997,7 +2318,7 @@ body {
 .assistant__msg--user {
   align-self: flex-end;
   background: var(--color-primary);
-  color: #fff;
+  color: var(--color-on-primary);
 }
 
 .assistant__msg--bot {
@@ -2107,8 +2428,20 @@ body {
   }
 
   .brand__tagline,
-  .topbar__user {
+  .topbar__profile-name {
     display: none;
+  }
+
+  /* Só o avatar sobra, e ele precisa continuar sendo alvo de dedo: 44px é o
+     mínimo confortável, e a barra do celular tem espaço para isso. */
+  .topbar__profile {
+    padding: 0.35rem;
+  }
+
+  .topbar__avatar {
+    width: 2.2rem;
+    height: 2.2rem;
+    font-size: 0.8rem;
   }
 
   .brand__name {
@@ -2231,8 +2564,8 @@ body {
 }
 
 .activity__files a:hover {
-  background: #eff6ff;
-  border-color: #bfdbfe;
+  background: var(--color-primary-soft);
+  border-color: var(--color-primary-border);
 }
 
 .activity__files-hint {
@@ -2380,10 +2713,10 @@ body {
   width: calc(100% - 2rem);
   max-width: 30rem;
   padding: 0.7rem 0.75rem 0.7rem 1rem;
-  background: #1e293b;
-  color: #ffffff;
+  background: var(--color-inverse-surface);
+  color: var(--color-inverse-text);
   border-radius: 0.7rem;
-  box-shadow: 0 10px 25px -5px rgb(15 23 42 / 0.35), 0 4px 8px -4px rgb(15 23 42 / 0.25);
+  box-shadow: var(--shadow-modal);
   animation: undo-in 0.2s ease-out;
 }
 
@@ -2416,7 +2749,7 @@ body {
   font: inherit;
   font-size: 0.85rem;
   font-weight: 600;
-  color: #bfdbfe;
+  color: var(--color-inverse-accent);
   background: none;
   border: none;
   padding: 0.5rem 0.6rem;
@@ -2425,8 +2758,8 @@ body {
 }
 
 .undo-toast__button:hover {
-  background: rgb(255 255 255 / 0.1);
-  color: #ffffff;
+  background: var(--color-inverse-hover);
+  color: var(--color-inverse-text);
 }
 
 .undo-toast__close {
@@ -2435,7 +2768,7 @@ body {
   place-items: center;
   width: 2rem;
   height: 2rem;
-  color: rgb(255 255 255 / 0.6);
+  color: var(--color-inverse-muted);
   background: none;
   border: none;
   border-radius: var(--radius);
@@ -2443,12 +2776,200 @@ body {
 }
 
 .undo-toast__close:hover {
-  background: rgb(255 255 255 / 0.1);
-  color: #ffffff;
+  background: var(--color-inverse-hover);
+  color: var(--color-inverse-text);
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .undo-toast {
+  .undo-toast,
+  .account-menu__panel {
     animation: none;
   }
+}
+
+/* =========================================================
+   Perfil do aluno
+   O cadastro que está no Moodle e o resumo da agenda na mesma
+   tela — é como o aluno pensa neles: "meus dados".
+   ========================================================= */
+
+.profile {
+  padding-bottom: 2rem;
+}
+
+.profile__head {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1rem 0 1.5rem;
+}
+
+.profile__avatar {
+  flex-shrink: 0;
+  width: 4.5rem;
+  height: 4.5rem;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--color-border);
+}
+
+/* Sem foto, as iniciais no azul da marca. Uma silhueta cinza ocuparia o mesmo
+   espaço sem dizer de quem é a conta. */
+.profile__avatar--iniciais {
+  display: grid;
+  place-items: center;
+  background: var(--color-primary);
+  color: var(--color-on-primary);
+  font-size: 1.5rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  border-color: transparent;
+}
+
+.profile__name {
+  font-size: 1.5rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
+  text-wrap: balance;
+}
+
+.profile__email {
+  margin-top: 0.15rem;
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+  word-break: break-word;
+}
+
+/* Quatro números curtos. No celular viram duas colunas em vez de encolher a
+   fonte — número de prazo pendente é o que o aluno vem conferir. */
+.profile__stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.profile__stat {
+  padding: 0.9rem 1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.profile__stat-number {
+  display: block;
+  font-size: 1.6rem;
+  font-weight: 650;
+  line-height: 1.1;
+  color: var(--color-primary);
+}
+
+.profile__stat-label {
+  display: block;
+  margin-top: 0.2rem;
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.profile__next {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  padding: 0.9rem 1rem;
+  margin-bottom: 1.75rem;
+  background: var(--color-success-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.profile__next-label {
+  display: block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.profile__next-meta {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+.profile__section-title {
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+  margin-bottom: 0.6rem;
+}
+
+.profile__list {
+  margin-bottom: 1.75rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+/* Rótulo e valor em duas colunas no desktop; empilhados no celular, onde
+   180px de rótulo deixariam o valor em uma palavra por linha. */
+.profile__row {
+  display: grid;
+  grid-template-columns: 12rem 1fr;
+  gap: 0.25rem 1rem;
+  padding: 0.7rem 1rem;
+  border-bottom: 1px solid var(--color-border);
+  font-size: 0.9rem;
+}
+
+.profile__row:last-child {
+  border-bottom: none;
+}
+
+.profile__row dt {
+  color: var(--color-text-muted);
+}
+
+.profile__row dd {
+  word-break: break-word;
+}
+
+.profile__note {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+}
+
+@media (max-width: 640px) {
+  .profile__row {
+    grid-template-columns: 1fr;
+  }
+
+  .profile__avatar {
+    width: 3.5rem;
+    height: 3.5rem;
+    font-size: 1.2rem;
+  }
+}
+
+/* O botão de tema na tela de entrada, que não tem barra para abrigá-lo. Fica
+   no canto, acima da faixa do formulário, sem entrar na coluna de leitura. */
+.theme-toggle--solto {
+  position: absolute;
+  top: 0.85rem;
+  right: 1rem;
+  z-index: 10;
+  color: var(--color-text-muted);
+}
+
+/* Superfícies que o navegador desenha e que ninguém lembra de vestir: a
+   seleção de texto e a barra de rolagem saem com a cor do sistema e denunciam
+   que o tema parou na borda do app. */
+::selection {
+  background: var(--color-primary-soft-2);
+  color: var(--color-text);
 }

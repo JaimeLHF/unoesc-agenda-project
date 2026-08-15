@@ -1,14 +1,21 @@
 import React, { useEffect, useRef, useState } from 'react';
 import Icon from './Icon';
+import { iniciais, primeiroNome } from '../lib/nome';
+import ThemeToggle from './ThemeToggle';
 
 interface AppHeaderProps {
   /** Sem sessão, a barra mostra só a marca — não há conta para agir sobre. */
   authenticated: boolean;
   username?: string | null;
+  /** Nome do aluno no Moodle. Chega depois do login, junto com a foto. */
+  fullName?: string | null;
+  /** Foto do Moodle já embutida como `data:`; sem ela, entram as iniciais. */
+  avatar?: string | null;
   onRefresh: () => void;
   refreshing: boolean;
   onOpenAssistant?: () => void;
   assistantAvailable?: boolean;
+  onOpenProfile: () => void;
   onClearCache: () => void;
   onLogout: () => void;
   onDeleteAccount: () => void;
@@ -29,15 +36,19 @@ interface AppHeaderProps {
 const AppHeader: React.FC<AppHeaderProps> = ({
   authenticated,
   username,
+  fullName,
+  avatar,
   onRefresh,
   refreshing,
   onOpenAssistant,
   assistantAvailable,
+  onOpenProfile,
   onClearCache,
   onLogout,
   onDeleteAccount,
 }) => {
   const [menuAberto, setMenuAberto] = useState(false);
+  const [rolado, setRolado] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Fecha no Esc e no clique fora — um menu que só fecha no próprio botão
@@ -60,13 +71,28 @@ const AppHeader: React.FC<AppHeaderProps> = ({
     };
   }, [menuAberto]);
 
+  /*
+    A sombra só aparece quando há conteúdo passando por baixo. Parada no topo,
+    a barra é parte da página; rolando, ela precisa se descolar do que desliza
+    embaixo — a linha de 1px sozinha some quando um card branco encosta nela.
+  */
+  useEffect(() => {
+    const aoRolar = () => setRolado(window.scrollY > 4);
+    aoRolar();
+    window.addEventListener('scroll', aoRolar, { passive: true });
+    return () => window.removeEventListener('scroll', aoRolar);
+  }, []);
+
   const executar = (acao: () => void) => () => {
     setMenuAberto(false);
     acao();
   };
 
+  const nome = fullName || username || '';
+  const rotuloPerfil = nome ? primeiroNome(nome) : 'Perfil';
+
   return (
-    <header className="topbar">
+    <header className={rolado ? 'topbar topbar--rolado' : 'topbar'}>
       <div className="topbar__inner">
         <div className="brand">
           <span className="brand__mark" aria-hidden="true">
@@ -78,56 +104,88 @@ const AppHeader: React.FC<AppHeaderProps> = ({
           </span>
         </div>
 
-        {authenticated && (
-          <div className="topbar__actions">
-            {username && (
-              <span className="topbar__user" title={username}>
-                {username}
-              </span>
-            )}
+        <div className="topbar__actions">
+          {/* Fora do bloco de conta de propósito: trocar o tema não depende
+              de estar logado, e na tela de carregamento ele continua ali. */}
+          <ThemeToggle />
 
-            {assistantAvailable && onOpenAssistant && (
+          {authenticated && (
+            <>
+              {assistantAvailable && onOpenAssistant && (
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={onOpenAssistant}
+                  title="Pedir ajuda para organizar seus prazos"
+                >
+                  <Icon name="organizar" />
+                  <span className="btn-ghost__label">Organizar</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 className="btn-ghost"
-                onClick={onOpenAssistant}
-                title="Pedir ajuda para organizar seus prazos"
+                onClick={onRefresh}
+                disabled={refreshing}
+                title="Buscar disciplinas e eventos novamente no Moodle"
               >
-                <Icon name="organizar" />
-                <span className="btn-ghost__label">Organizar</span>
+                {refreshing ? (
+                  <span className="spinner spinner--dark" aria-hidden="true" />
+                ) : (
+                  <Icon name="atualizar" />
+                )}
+                <span className="btn-ghost__label">
+                  {refreshing ? 'Atualizando…' : 'Atualizar'}
+                </span>
               </button>
-            )}
 
-            <button
-              type="button"
-              className="btn-ghost"
-              onClick={onRefresh}
-              disabled={refreshing}
-              title="Buscar disciplinas e eventos novamente no Moodle"
-            >
-              {refreshing ? (
-                <span className="spinner spinner--dark" aria-hidden="true" />
-              ) : (
-                <Icon name="atualizar" />
-              )}
-              <span className="btn-ghost__label">
-                {refreshing ? 'Atualizando…' : 'Atualizar'}
-              </span>
-            </button>
-
-            <div className="account-menu" ref={menuRef}>
+              {/*
+                O rosto da conta abre o perfil. A matrícula que ficava aqui como
+                texto morto ninguém reconhece de relance; a foto do Moodle, sim —
+                e no celular ela é a única coisa que sobra, já do tamanho de um
+                alvo de toque.
+              */}
               <button
                 type="button"
-                className="btn-icon"
-                onClick={() => setMenuAberto((v) => !v)}
-                aria-haspopup="menu"
-                aria-expanded={menuAberto}
+                className="topbar__profile"
+                onClick={onOpenProfile}
+                title={username ? `Perfil de ${username}` : 'Ver seu perfil'}
               >
-                <Icon name="menu" label="Opções da conta" />
+                {avatar ? (
+                  <img className="topbar__avatar" src={avatar} alt="" />
+                ) : (
+                  <span className="topbar__avatar topbar__avatar--iniciais" aria-hidden="true">
+                    {iniciais(nome, username || '?')}
+                  </span>
+                )}
+                <span className="topbar__profile-name">{rotuloPerfil}</span>
               </button>
 
-              {menuAberto && (
-                <div className="account-menu__panel" role="menu">
+              <div className="account-menu" ref={menuRef}>
+                <button
+                  type="button"
+                  className="btn-icon"
+                  onClick={() => setMenuAberto((v) => !v)}
+                  aria-haspopup="menu"
+                  aria-expanded={menuAberto}
+                >
+                  <Icon name="menu" label="Opções da conta" />
+                </button>
+
+                {menuAberto && (
+                  <div className="account-menu__panel" role="menu">
+                    {/* Qual conta o menu vai mexer. As três ações abaixo apagam
+                        ou encerram alguma coisa; vale dizer de quem. */}
+                    {username && (
+                      <>
+                        <div className="account-menu__identity">
+                          {nome !== username && <strong>{nome}</strong>}
+                          <span>{username}</span>
+                        </div>
+                        <div className="account-menu__separator" />
+                    </>
+                  )}
                   <button
                     type="button"
                     role="menuitem"
@@ -159,8 +217,9 @@ const AppHeader: React.FC<AppHeaderProps> = ({
                 </div>
               )}
             </div>
-          </div>
-        )}
+            </>
+          )}
+        </div>
       </div>
     </header>
   );

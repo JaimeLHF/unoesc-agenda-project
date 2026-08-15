@@ -35,6 +35,9 @@ export type IconName =
   | 'sair'
   | 'lixeira'
   | 'fechar'
+  | 'perfil'
+  | 'sol'
+  | 'lua'
   | 'sem-conexao';
 
 /**
@@ -169,6 +172,19 @@ const PATHS: Record<IconName, React.ReactNode> = {
     </>
   ),
   fechar: <path d="M6 6l12 12M18 6 6 18" />,
+  perfil: (
+    <>
+      <circle cx="12" cy="8" r="3.75" />
+      <path d="M4.5 20.5a7.5 7.5 0 0 1 15 0" />
+    </>
+  ),
+  sol: (
+    <>
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2.5v2M12 19.5v2M2.5 12h2M19.5 12h2M5.2 5.2l1.4 1.4M17.4 17.4l1.4 1.4M18.8 5.2l-1.4 1.4M6.6 17.4l-1.4 1.4" />
+    </>
+  ),
+  lua: <path d="M20 13.5A8.5 8.5 0 0 1 10.5 4a8.5 8.5 0 1 0 9.5 9.5Z" />,
   'sem-conexao': (
     <>
       <path d="M3 3l18 18" />

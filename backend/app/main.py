@@ -9,6 +9,7 @@ deploy, um domínio, sem CORS entre front e back.
 import asyncio
 import os
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -25,7 +26,7 @@ from app import repository as repo
 from app import session as app_session
 from app.calendar_sync import CalendarSyncService
 from app.database import init_db, utc_now
-from app.moodle import MoodleClient, clear_session_cache
+from app.moodle import TZ_BR, MoodleClient, clear_session_cache
 from app.observability import mensagem_amigavel, registrar_falha
 
 # ---------------------------------------------------------------------------
@@ -115,6 +116,53 @@ class MeResponse(BaseModel):
     assistant_available: bool
     assistant_used: int
     assistant_limit: int
+
+
+class MoodleProfile(BaseModel):
+    """O cadastro do aluno como o Moodle o guarda."""
+    moodle_id: Optional[int] = None
+    fullname: str = ""
+    firstname: str = ""
+    lastname: str = ""
+    username: str = ""
+    email: str = ""
+    department: str = ""
+    institution: str = ""
+    city: str = ""
+    country: str = ""
+    timezone: str = ""
+    first_access: Optional[str] = None
+    last_access: Optional[str] = None
+    avatar: Optional[str] = None
+
+
+class ProfileStats(BaseModel):
+    """O que a agenda do aluno diz sobre ele — contado no banco, não no Moodle."""
+    subjects: int
+    events_total: int
+    events_upcoming: int
+    events_done: int
+    next_event_title: Optional[str] = None
+    next_event_date: Optional[str] = None
+    next_event_time: Optional[str] = None
+    next_event_subject: Optional[str] = None
+    last_scraped_at: Optional[str] = None
+
+
+class ProfileResponse(BaseModel):
+    """
+    Perfil = cadastro no Moodle + conta no app + resumo da agenda.
+
+    `moodle` vem nulo quando o Moodle não responde; `moodle_error` explica. O
+    resto da tela não depende dele e continua de pé.
+    """
+    account_username: str
+    plan: str
+    member_since: Optional[str] = None
+    last_login_at: Optional[str] = None
+    moodle: Optional[MoodleProfile] = None
+    moodle_error: Optional[str] = None
+    stats: ProfileStats
 
 
 class AssistantMessage(BaseModel):
@@ -265,6 +313,73 @@ async def me(session: app_session.PortalSession = Depends(require_session)):
             assistant_used=quota.used,
             assistant_limit=quota.limit,
         )
+
+
+@app.get("/api/profile", response_model=ProfileResponse)
+async def profile(session: app_session.PortalSession = Depends(require_session)):
+    """
+    Perfil do aluno: o cadastro que o Moodle guarda, mais a conta no app e um
+    resumo da agenda dele.
+
+    Tudo é lido a partir da sessão — o `user_id` para as contagens no banco e a
+    própria sessão do Moodle para o cadastro. Não existe parâmetro de quem ver.
+
+    O Moodle é consultado a cada visita em vez de guardado: nome, e-mail e
+    departamento mudam pela secretaria, sem o app saber, e uma cópia velha aqui
+    seria mais confusa do que útil. Se ele não responder, a tela abre com o que
+    o app já sabe e diz o que faltou.
+    """
+    with repo.get_session() as db:
+        user = repo.get_user(db, session.user_id)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Conta não encontrada.")
+
+        eventos = repo.list_events(db, session.user_id)
+        concluidos = set(repo.list_done_keys(db, session.user_id))
+        stats = ProfileStats(
+            subjects=len(repo.list_subjects(db, session.user_id)),
+            events_total=len(eventos),
+            events_upcoming=0,
+            events_done=len([e for e in eventos if e.stable_key in concluidos]),
+            last_scraped_at=repo.get_meta(db, session.user_id, "last_scraped_at"),
+        )
+
+        # "Futuro" é do dia de hoje em diante, pelo calendário de Brasília: um
+        # prazo que vence hoje às 23h59 ainda conta como pendente.
+        hoje = datetime.now(TZ_BR).strftime("%Y-%m-%d")
+        pendentes = sorted(
+            (e for e in eventos
+             if e.stable_key not in concluidos and (e.date or "") >= hoje),
+            key=lambda e: (e.date or "", e.time or "00:00"),
+        )
+        stats.events_upcoming = len(pendentes)
+        if pendentes:
+            proximo = pendentes[0]
+            stats.next_event_title = proximo.title
+            stats.next_event_date = proximo.date
+            stats.next_event_time = proximo.time
+            stats.next_event_subject = proximo.subject
+
+        resposta = ProfileResponse(
+            account_username=user.moodle_username,
+            plan=user.plan,
+            member_since=user.created_at.isoformat() if user.created_at else None,
+            last_login_at=user.last_login_at.isoformat() if user.last_login_at else None,
+            stats=stats,
+        )
+
+    try:
+        with MoodleClient() as moodle:
+            await asyncio.to_thread(moodle.login, session.username, session.password)
+            dados = await asyncio.to_thread(moodle.profile)
+            resposta.moodle = MoodleProfile(**dados)
+    except PermissionError as exc:
+        resposta.moodle_error = str(exc)
+    except Exception as exc:
+        codigo = registrar_falha(f"perfil no Moodle (user={session.user_id})", exc)
+        resposta.moodle_error = mensagem_amigavel(codigo, "buscar seu cadastro no Moodle")
+
+    return resposta
 
 
 @app.delete("/api/account")
