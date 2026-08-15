@@ -757,6 +757,184 @@ class MoodleClient:
             "url": str(resp.url),
         }
 
+    # -- envio de tarefa -------------------------------------------------
+    #
+    # O envio no Moodle tem duas etapas, e é importante saber onde cada uma
+    # para:
+    #
+    #   1. o arquivo sobe para a **área de rascunho** do aluno, que é a gaveta
+    #      do seletor de arquivos e não pertence a tarefa nenhuma;
+    #   2. `savesubmission` amarra esse rascunho à tarefa — daí em diante o
+    #      professor já vê o arquivo, com o status "rascunho (não enviado)".
+    #
+    # Existe uma terceira, `action=submit`, que é o "enviar para avaliação" e
+    # na maioria das tarefas o aluno não consegue desfazer. **Ela não está
+    # aqui de propósito.** O app salva o rascunho, que é reversível, e deixa o
+    # clique irreversível para o aluno dar no Moodle, sabendo o que faz.
+
+    _HIDDEN_RE = re.compile(r"(?is)<input[^>]*type=[\"']hidden[\"'][^>]*>")
+
+    @staticmethod
+    def _hidden_fields(html: str) -> dict:
+        campos = {}
+        for tag in MoodleClient._HIDDEN_RE.findall(html):
+            n = re.search(r"name=[\"']([^\"']+)[\"']", tag)
+            v = re.search(r"value=[\"']([^\"']*)[\"']", tag)
+            if n:
+                campos[n.group(1)] = v.group(1) if v else ""
+        return campos
+
+    @staticmethod
+    def _cmid_from_url(url: str) -> Optional[str]:
+        m = re.search(r"/mod/assign/view\.php\?(?:[^#]*&)?id=(\d+)", url)
+        return m.group(1) if m else None
+
+    def submission_form(self, url: str) -> dict:
+        """
+        Lê o formulário de envio de uma tarefa e devolve o que a tela precisa
+        mostrar e o que o POST vai precisar mandar.
+
+        Nada aqui altera a tarefa: é um GET na mesma página que o aluno abriria.
+        O `itemid` do rascunho é gerado **a cada abertura do formulário**, então
+        ele não pode ser guardado: quem sobe o arquivo e quem salva o envio têm
+        que usar o mesmo, na mesma sequência.
+        """
+        cmid = self._cmid_from_url(url)
+        if not cmid:
+            return {"can_submit": False,
+                    "reason": "Esta atividade não é uma tarefa com envio."}
+
+        resp = self._client.get(
+            f"{self.base}/mod/assign/view.php",
+            params={"id": cmid, "action": "editsubmission"},
+            follow_redirects=True,
+        )
+        if "/login/index.php" in str(resp.url):
+            raise PermissionError("A sessão do Moodle expirou.")
+        resp.raise_for_status()
+        pagina = resp.text
+
+        ocultos = self._hidden_fields(pagina)
+        itemid_arquivos = ocultos.get("files_filemanager")
+        itemid_texto = ocultos.get("onlinetext_editor[itemid]")
+
+        # Sem formulário de envio o Moodle devolve a página normal da tarefa —
+        # prazo encerrado, envio já entregue e travado, ou tarefa sem envio.
+        if not (itemid_arquivos or itemid_texto):
+            return {"can_submit": False,
+                    "reason": "O Moodle não está aceitando envio nesta tarefa agora. "
+                              "O prazo pode ter encerrado, ou o envio já foi entregue."}
+
+        ctx = (re.search(r'"contextid"\s*:\s*(\d+)', pagina)
+               or re.search(r'"context"\s*:\s*\{\s*"id"\s*:\s*(\d+)', pagina)
+               or re.search(r"contextid=(\d+)", pagina))
+
+        repo_id = None
+        for m_up in re.finditer(r'"type"\s*:\s*"upload"', pagina):
+            ids = re.findall(r'"id"\s*:\s*"?(\d+)"?', pagina[max(0, m_up.start() - 400):m_up.start()])
+            if ids:
+                repo_id = ids[-1]
+                break
+
+        limite = re.search(r"(?i)tamanho máximo para arquivos:\s*([\d.,]+)\s*([kmg])b", pagina)
+        max_arquivos = re.search(r"(?i)número máximo de anexos:\s*(\d+)", pagina)
+
+        return {
+            "can_submit": True,
+            "reason": None,
+            "cmid": cmid,
+            "accepts_files": bool(itemid_arquivos),
+            "accepts_text": bool(itemid_texto),
+            "itemid_files": itemid_arquivos,
+            "itemid_text": itemid_texto,
+            "ctx_id": ctx.group(1) if ctx else None,
+            "repo_id": repo_id,
+            "max_files": int(max_arquivos.group(1)) if max_arquivos else None,
+            "moodle_max_label": limite.group(0) if limite else None,
+            "hidden": ocultos,
+        }
+
+    def upload_to_draft(self, form: dict, filename: str, content: bytes) -> dict:
+        """
+        Põe um arquivo na área de rascunho do aluno.
+
+        Ainda não é envio: enquanto `save_submission` não rodar, a tarefa
+        continua exatamente como estava.
+        """
+        if not (form.get("ctx_id") and form.get("repo_id") and form.get("itemid_files")):
+            raise RuntimeError(
+                "Não consegui preparar o envio de arquivo nesta tarefa — o Moodle "
+                "não entregou o seletor de arquivos."
+            )
+
+        resp = self._client.post(
+            f"{self.base}/repository/repository_ajax.php",
+            params={"action": "upload"},
+            data={
+                "sesskey": self.sesskey or "",
+                "repo_id": form["repo_id"],
+                "itemid": form["itemid_files"],
+                "ctx_id": form["ctx_id"],
+                "savepath": "/",
+                "title": filename,
+                "author": "",
+                "license": "unknown",
+                "overwrite": "1",
+            },
+            files={"repo_upload_file": (filename, content, "application/octet-stream")},
+        )
+        resp.raise_for_status()
+        try:
+            dados = resp.json()
+        except ValueError as exc:
+            raise RuntimeError("O Moodle respondeu o upload num formato inesperado.") from exc
+
+        if isinstance(dados, dict) and dados.get("error"):
+            raise RuntimeError(str(dados["error"])[:300])
+        return dados if isinstance(dados, dict) else {"resposta": dados}
+
+    def save_submission(self, form: dict, online_text: str = "") -> list[dict]:
+        """
+        Amarra o rascunho à tarefa — o "salvar mudanças" do Moodle.
+
+        Devolve a tabela de status relida da página **depois** do POST. É o
+        único jeito honesto de dizer ao aluno que deu certo: nós não decidimos
+        que foi salvo, o Moodle é que diz.
+        """
+        dados = dict(form.get("hidden") or {})
+        dados["sesskey"] = self.sesskey or ""
+        dados["action"] = "savesubmission"
+        dados["submitbutton"] = "Salvar mudanças"
+        if form.get("accepts_text"):
+            # O editor do Moodle guarda HTML; um texto simples vira parágrafo.
+            corpo = unescape(online_text or "").strip()
+            dados["onlinetext_editor[text]"] = (
+                "<p>" + corpo.replace("\n", "<br>") + "</p>" if corpo else ""
+            )
+            dados.setdefault("onlinetext_editor[format]", "1")
+
+        resp = self._client.post(
+            f"{self.base}/mod/assign/view.php",
+            params={"id": form["cmid"]},
+            data=dados,
+            follow_redirects=True,
+        )
+        if "/login/index.php" in str(resp.url):
+            raise PermissionError("A sessão do Moodle expirou no meio do envio.")
+        resp.raise_for_status()
+
+        # Continuar no formulário significa que o Moodle recusou (arquivo fora
+        # do tipo aceito, prazo fechado, campo obrigatório vazio).
+        if "editsubmission" in str(resp.url) or "_qf__mod_assign_submission_form" in resp.text:
+            erro = re.search(r'(?is)class="[^"]*(?:alert-danger|error)[^"]*"[^>]*>(.*?)</div>',
+                             resp.text)
+            raise RuntimeError(
+                html_to_text(erro.group(1), 300) if erro
+                else "O Moodle não aceitou o envio e não disse o motivo."
+            )
+
+        return self._extract_status(main_region(resp.text))
+
     # A página de uma tarefa tem duas partes com naturezas diferentes: o
     # enunciado, que é texto corrido, e a tabela de status do envio, que é um
     # conjunto de pares rótulo/valor. Achatar as duas no mesmo bloco de texto

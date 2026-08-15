@@ -179,6 +179,7 @@ def main_teste() -> int:
             ("delete", "/api/account", None),
             ("get", "/api/activity/moodle:1", None),
             ("get", "/api/profile", None),
+            ("get", "/api/submission/moodle:1", None),
         ]
         for metodo, rota, corpo in sem_sessao:
             resp = getattr(client, metodo)(rota, json=corpo) if corpo else getattr(client, metodo)(rota)
@@ -204,6 +205,26 @@ def main_teste() -> int:
 
         resp = client.get(f"/api/activity/{chave_de_b}", headers=auth(token_b))
         verificar(resp.status_code == 200, "B abre a própria atividade")
+
+        # Envio de tarefa mexe no Moodle de quem envia. A chave vem da URL,
+        # então é o primeiro lugar onde um link de outro aluno tentaria entrar.
+        verificar(
+            client.get(f"/api/submission/{chave_de_b}", headers=auth(token_a)).status_code == 404,
+            "A não abre o envio da tarefa de B",
+        )
+        verificar(
+            client.post(
+                f"/api/submission/{chave_de_b}",
+                data={"online_text": "tentativa"},
+                headers=auth(token_a),
+            ).status_code == 404,
+            "A não consegue enviar na tarefa de B",
+        )
+        verificar(
+            client.post(f"/api/submission/{chave_de_b}",
+                        data={"online_text": "sem sessão"}).status_code == 401,
+            "POST /api/submission → 401 sem token",
+        )
 
         # O perfil é o endpoint que mistura duas fontes — cadastro do Moodle e
         # contagens do banco. As duas precisam vir da mesma conta.

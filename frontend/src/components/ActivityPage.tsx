@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Icon from './Icon';
+import SubmissionBox from './SubmissionBox';
 import { fetchActivity } from '../services/api';
 import type { ActivityDetail } from '../services/api';
 import { useDoneEvents } from '../contexts/DoneEventsContext';
@@ -224,6 +225,28 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ stableKey, onBack, onOpenPo
           </dl>
         </div>
       ) : null}
+
+      {/*
+        O envio vem logo depois da situação e antes do enunciado: quem abre a
+        página de uma tarefa com prazo em cima vem para entregar, não para
+        reler o que já leu.
+      */}
+      <SubmissionBox
+        stableKey={detalhe.stable_key}
+        onOpenMoodle={
+          onOpenPortal && detalhe.url
+            ? () => {
+                const aba = window.open('about:blank', '_blank');
+                void onOpenPortal(detalhe.subject, detalhe.url)
+                  .then((url) => {
+                    if (url && aba) aba.location.href = url;
+                    else aba?.close();
+                  })
+                  .catch(() => aba?.close());
+              }
+            : undefined
+        }
+      />
 
       {detalhe.content?.files?.length ? (
         <div className="activity__files">

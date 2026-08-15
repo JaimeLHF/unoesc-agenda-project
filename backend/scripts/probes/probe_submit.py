@@ -159,16 +159,45 @@ def main() -> int:
     for k, v in list(interessantes.items())[:20]:
         print(f"      {k:34} = {v}")
 
-    # O `itemid` do rascunho é o que liga o upload à submissão.
-    item = re.search(r'name="files_filemanager"\s+value="(\d+)"', form) \
-        or re.search(r'"itemid":(\d+)', form)
-    print(f"    itemid do rascunho: {item.group(1) if item else 'não achei'}")
+    # Dois rascunhos diferentes na mesma página: um para o texto online, outro
+    # para os arquivos. Quem recebe o upload é o do filemanager — confundir os
+    # dois envia o arquivo para um lugar que a tarefa não lê.
+    arquivos = re.search(r'name="files_filemanager"\s+value="(\d+)"', form)
+    texto_online = re.search(r'name="onlinetext_editor\[itemid\]"\s+value="(\d+)"', form)
+    print(f"    itemid dos ARQUIVOS (files_filemanager): "
+          f"{arquivos.group(1) if arquivos else 'não achei'}")
+    print(f"    itemid do texto online: "
+          f"{texto_online.group(1) if texto_online else 'não tem (tarefa só de arquivo)'}")
 
-    # Repositório "upload" — o destino do POST do arquivo.
-    repos = re.findall(r'"id":(\d+),"name":"([^"]*)","type":"([^"]*)"', form)
-    up = [r for r in repos if r[2] == "upload"]
-    print(f"    repositórios no seletor: {[(r[1], r[2]) for r in repos][:6] or 'não achei'}")
-    print(f"    repo_id de upload: {up[0][0] if up else 'não achei'}")
+    # Repositório "upload" — o destino do POST do arquivo. O Moodle escreve os
+    # repositórios como objeto indexado por id, e a ordem das chaves varia
+    # entre versões; por isso procuramos o tipo e voltamos atrás pelo id.
+    achados = []
+    for m_up in re.finditer(r'"type"\s*:\s*"upload"', form):
+        janela = form[max(0, m_up.start() - 400):m_up.start()]
+        ids = re.findall(r'"id"\s*:\s*"?(\d+)"?', janela)
+        if ids:
+            achados.append(ids[-1])
+    tipos = sorted(set(re.findall(r'"type"\s*:\s*"([a-z_]+)"', form)))
+    print(f"    tipos de repositório citados na página: {tipos[:12] or 'nenhum'}")
+    print(f"    repo_id de upload: {achados[0] if achados else 'não achei'}")
+
+    # Plano B: a própria API do seletor de arquivos lista os repositórios.
+    if not achados:
+        try:
+            lista = post(f"{BASE}/repository/repository_ajax.php?action=repositorylist",
+                         {"sesskey": sesskey})
+            dados = json.loads(lista)
+            for r in (dados if isinstance(dados, list) else dados.get("repositories", [])):
+                print(f"      repo: id={r.get('id')} type={r.get('type')} {r.get('name','')}")
+        except Exception as exc:
+            print(f"    · repositorylist não respondeu: {str(exc)[:100]}")
+
+    # A declaração de autoria é uma caixa que o Moodle exige marcar no envio
+    # final; sem ela o POST volta com o formulário e nada é enviado.
+    decl = re.search(r'(?is)name="submissionstatement".{0,400}?<label[^>]*>(.*?)</label>', form)
+    if decl:
+        print(f"    texto da declaração: {texto(decl.group(1), 160)}")
 
     # Regras da tarefa: o que o professor permite enviar.
     for rotulo, padrao in [

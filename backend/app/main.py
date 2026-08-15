@@ -13,7 +13,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
-from fastapi import Depends, FastAPI, Header, HTTPException
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
@@ -163,6 +163,30 @@ class ProfileResponse(BaseModel):
     moodle: Optional[MoodleProfile] = None
     moodle_error: Optional[str] = None
     stats: ProfileStats
+
+
+class StatusLinha(BaseModel):
+    """Uma linha da tabela de status do envio, como o Moodle a mostra."""
+    label: str
+    value: str
+
+
+class SubmissionInfo(BaseModel):
+    """O que esta tarefa aceita hoje — e por que não, quando não aceita."""
+    can_submit: bool
+    reason: Optional[str] = None
+    accepts_files: bool = False
+    accepts_text: bool = False
+    max_files: int = 0
+    max_file_mb: int = 0
+    status: list[StatusLinha] = []
+
+
+class SubmissionResult(BaseModel):
+    """O resultado lido de volta no Moodle depois de salvar."""
+    saved: bool
+    status: list[StatusLinha] = []
+    moodle_url: str
 
 
 class AssistantMessage(BaseModel):
@@ -738,6 +762,159 @@ async def activity_detail(
         detalhe["content_error"] = mensagem_amigavel(codigo, "abrir a atividade no Moodle")
 
     return detalhe
+
+
+# O limite do Moodle é 250 MB por arquivo. Não é o nosso: a máquina de
+# produção tem 512 MB de RAM e atende todo mundo ao mesmo tempo, e o arquivo
+# passa inteiro por ela no caminho. 20 MB cobre PDF, DOCX e slides — que é o
+# que essas tarefas pedem — e mantém a máquina de pé.
+MAX_ARQUIVO_BYTES = 20 * 1024 * 1024
+MAX_TOTAL_BYTES = 25 * 1024 * 1024
+MAX_ARQUIVOS = 5
+
+
+async def _tarefa_do_aluno(stable_key: str, user_id: str) -> str:
+    """A URL da atividade, se ela for mesmo da agenda deste aluno."""
+    with repo.get_session() as db:
+        evento = repo.get_event(db, user_id, stable_key)
+        if not evento:
+            raise HTTPException(status_code=404, detail="Atividade não encontrada.")
+        if not evento.url:
+            raise HTTPException(
+                status_code=409,
+                detail="Esta atividade não tem página de envio no Moodle.",
+            )
+        return evento.url
+
+
+@app.get("/api/submission/{stable_key:path}", response_model=SubmissionInfo)
+async def submission_info(
+    stable_key: str,
+    session: app_session.PortalSession = Depends(require_session),
+):
+    """
+    O que o Moodle aceita nesta tarefa: arquivo, texto, quantos, e o status de
+    envio de agora. Só lê — nada é alterado por aqui.
+    """
+    url = await _tarefa_do_aluno(stable_key, session.user_id)
+
+    try:
+        with MoodleClient() as moodle:
+            await asyncio.to_thread(moodle.login, session.username, session.password)
+            form = await asyncio.to_thread(moodle.submission_form, url)
+            status = await asyncio.to_thread(moodle.activity_content, url, "")
+    except PermissionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except Exception as exc:
+        codigo = registrar_falha(f"formulário de envio (user={session.user_id})", exc)
+        raise HTTPException(
+            status_code=502, detail=mensagem_amigavel(codigo, "abrir o envio no Moodle")
+        ) from exc
+
+    return SubmissionInfo(
+        can_submit=form.get("can_submit", False),
+        reason=form.get("reason"),
+        accepts_files=form.get("accepts_files", False),
+        accepts_text=form.get("accepts_text", False),
+        max_files=min(form.get("max_files") or MAX_ARQUIVOS, MAX_ARQUIVOS),
+        max_file_mb=MAX_ARQUIVO_BYTES // (1024 * 1024),
+        status=[StatusLinha(**linha) for linha in (status.get("status") or [])],
+    )
+
+
+@app.post("/api/submission/{stable_key:path}", response_model=SubmissionResult)
+async def submit_assignment(
+    stable_key: str,
+    files: list[UploadFile] = File(default=[]),
+    online_text: str = Form(default=""),
+    session: app_session.PortalSession = Depends(require_session),
+):
+    """
+    Salva o envio da tarefa como **rascunho** no Moodle.
+
+    O que o app faz aqui é o "salvar mudanças" do Moodle: o arquivo passa a
+    aparecer na tarefa e pode ser trocado ou apagado depois. O "enviar para
+    avaliação", que na maioria das tarefas o aluno não consegue desfazer,
+    continua sendo um clique dele lá dentro — não é o tipo de decisão que um
+    app de agenda deve tomar no lugar de alguém.
+
+    O sucesso não é declarado por nós: depois do POST a página é relida e o que
+    volta para a tela é a tabela de status que o próprio Moodle mostra.
+    """
+    url = await _tarefa_do_aluno(stable_key, session.user_id)
+
+    if len(files) > MAX_ARQUIVOS:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Envie no máximo {MAX_ARQUIVOS} arquivos por vez.",
+        )
+
+    conteudos: list[tuple[str, bytes]] = []
+    total = 0
+    for arquivo in files:
+        dados = await arquivo.read()
+        total += len(dados)
+        if len(dados) > MAX_ARQUIVO_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"“{arquivo.filename}” passa de "
+                       f"{MAX_ARQUIVO_BYTES // (1024 * 1024)} MB, o limite do app.",
+            )
+        if total > MAX_TOTAL_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Os arquivos somam mais que "
+                       f"{MAX_TOTAL_BYTES // (1024 * 1024)} MB juntos.",
+            )
+        conteudos.append((arquivo.filename or "arquivo", dados))
+
+    if not conteudos and not online_text.strip():
+        raise HTTPException(status_code=400, detail="Não há nada para enviar.")
+
+    try:
+        with MoodleClient() as moodle:
+            await asyncio.to_thread(moodle.login, session.username, session.password)
+
+            # O `itemid` do rascunho nasce neste GET e vale para os POSTs
+            # seguintes; por isso o formulário é aberto agora, e não na tela.
+            form = await asyncio.to_thread(moodle.submission_form, url)
+            if not form.get("can_submit"):
+                raise HTTPException(status_code=409, detail=form.get("reason") or
+                                    "O Moodle não está aceitando envio nesta tarefa.")
+            if conteudos and not form.get("accepts_files"):
+                raise HTTPException(status_code=409,
+                                    detail="Esta tarefa não aceita arquivo, só texto.")
+            if online_text.strip() and not form.get("accepts_text"):
+                raise HTTPException(status_code=409,
+                                    detail="Esta tarefa não aceita texto, só arquivo.")
+
+            for nome, dados in conteudos:
+                await asyncio.to_thread(moodle.upload_to_draft, form, nome, dados)
+
+            status = await asyncio.to_thread(moodle.save_submission, form, online_text)
+    except HTTPException:
+        raise
+    except PermissionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        # Recusa do próprio Moodle (tipo de arquivo, prazo, campo obrigatório):
+        # a mensagem é dele e é a que ajuda o aluno.
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    except Exception as exc:
+        codigo = registrar_falha(f"envio de tarefa (user={session.user_id})", exc)
+        raise HTTPException(
+            status_code=502, detail=mensagem_amigavel(codigo, "enviar a tarefa ao Moodle")
+        ) from exc
+
+    observability.logger.info(
+        "Envio salvo como rascunho: user=%s tarefa=%s arquivos=%d",
+        session.user_id, form.get("cmid"), len(conteudos),
+    )
+    return SubmissionResult(
+        saved=True,
+        status=[StatusLinha(**linha) for linha in status],
+        moodle_url=url,
+    )
 
 
 @app.post("/api/sync-calendar", response_model=SyncCalendarResponse)

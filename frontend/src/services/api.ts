@@ -322,6 +322,64 @@ export interface ActivityDetail {
   content_error: string | null;
 }
 
+/* -------------------------------------------------------------------------
+ * Envio de tarefa
+ *
+ * O app salva o envio como **rascunho** no Moodle: o arquivo passa a aparecer
+ * na tarefa e pode ser trocado ou apagado depois. O "enviar para avaliação",
+ * que quase nunca dá para desfazer, continua sendo um clique do aluno lá.
+ * ----------------------------------------------------------------------- */
+
+export interface StatusLinha {
+  label: string;
+  value: string;
+}
+
+export interface SubmissionInfo {
+  can_submit: boolean;
+  /** Por que não dá para enviar agora — prazo fechado, envio travado. */
+  reason: string | null;
+  accepts_files: boolean;
+  accepts_text: boolean;
+  max_files: number;
+  max_file_mb: number;
+  status: StatusLinha[];
+}
+
+export interface SubmissionResult {
+  saved: boolean;
+  /** A tabela de status relida no Moodle depois de salvar. */
+  status: StatusLinha[];
+  moodle_url: string;
+}
+
+/** O que esta tarefa aceita e como está o envio agora. */
+export async function fetchSubmissionInfo(stableKey: string): Promise<SubmissionInfo> {
+  const { data } = await api.get<SubmissionInfo>(
+    `/submission/${encodeURIComponent(stableKey)}`,
+  );
+  return data;
+}
+
+/** Salva arquivos e/ou texto na tarefa, como rascunho. */
+export async function submitAssignment(
+  stableKey: string,
+  files: File[],
+  onlineText: string,
+): Promise<SubmissionResult> {
+  const form = new FormData();
+  files.forEach((f) => form.append('files', f, f.name));
+  form.append('online_text', onlineText);
+
+  const { data } = await api.post<SubmissionResult>(
+    `/submission/${encodeURIComponent(stableKey)}`,
+    form,
+    // O axios monta o boundary sozinho quando o header sai do caminho.
+    { headers: { 'Content-Type': undefined } },
+  );
+  return data;
+}
+
 export async function fetchActivity(stableKey: string): Promise<ActivityDetail> {
   const { data } = await api.get<ActivityDetail>(
     `/activity/${encodeURIComponent(stableKey)}`,
