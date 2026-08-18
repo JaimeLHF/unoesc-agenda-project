@@ -233,31 +233,38 @@ const SubjectList: React.FC<SubjectListProps> = ({
             )}
             <span className="subject-card-large__name">{label}</span>
           </span>
-          <span className="subject-card-large__badges">
-            {ended && typeof subject.final_grade === 'number' && (
-              <span
-                className={`subject-card-large__status subject-card-large__status--${
-                  subject.final_grade / 10 >= MEDIA_APROVACAO ? 'aprovado' : 'reprovado'
-                }`}
-              >
-                {subject.final_grade / 10 >= MEDIA_APROVACAO ? 'Aprovado' : 'Reprovado'}
-              </span>
-            )}
-            {typeof subject.final_grade === 'number' && (
-              <span className="subject-card-large__grade">
-                Nota {formatGrade(subject.final_grade)}
-              </span>
-            )}
-            <span className="subject-card-large__total">
-              {total} {total === 1 ? 'evento' : 'eventos'}
-            </span>
+          <span className="subject-card-large__total">
+            {total} {total === 1 ? 'evento' : 'eventos'}
           </span>
         </div>
+
+        {/*
+          Resultado em linha própria: empilhado à direita do nome, ele espremia
+          o título em três linhas e disputava atenção com a contagem de eventos.
+          Aqui o aluno lê "Aprovado · nota" de uma vez, na altura em que o olho
+          já está depois do nome.
+        */}
+        {ended && typeof subject.final_grade === 'number' && (
+          <div className="subject-card-large__result">
+            <span
+              className={`subject-card-large__status subject-card-large__status--${
+                subject.final_grade / 10 >= MEDIA_APROVACAO ? 'aprovado' : 'reprovado'
+              }`}
+            >
+              {subject.final_grade / 10 >= MEDIA_APROVACAO ? 'Aprovado' : 'Reprovado'}
+            </span>
+            <span className="subject-card-large__grade">
+              nota {formatGrade(subject.final_grade)}
+            </span>
+          </div>
+        )}
 
         {total > 0 ? (
           <>
             <div className="subject-card-large__breakdown">{breakdown}</div>
-            {doneInSubject > 0 && (
+            {/* Numa encerrada o que conta é o resultado; a contagem de
+                marcações vira mais um verde disputando a mesma atenção. */}
+            {doneInSubject > 0 && !ended && (
               <div className="subject-card-large__done">
                 <Icon name="check" size={0.95} />
                 {doneInSubject} de {total} concluído{doneInSubject === 1 ? '' : 's'}
@@ -272,9 +279,13 @@ const SubjectList: React.FC<SubjectListProps> = ({
                 </span>
               </div>
             ) : (
-              <div className="subject-card-large__next subject-card-large__next--past">
-                Sem eventos futuros — {upcomingCount === 0 ? 'todos encerrados' : ''}
-              </div>
+              /* Numa disciplina encerrada isso é redundante: o card já está sob
+                 o título "Encerradas" e traz o resultado. */
+              !ended && (
+                <div className="subject-card-large__next subject-card-large__next--past">
+                  Sem eventos futuros — {upcomingCount === 0 ? 'todos encerrados' : ''}
+                </div>
+              )
             )}
           </>
         ) : (

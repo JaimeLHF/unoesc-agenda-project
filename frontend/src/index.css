@@ -3132,27 +3132,6 @@ body {
   color: var(--color-text-muted);
 }
 
-.subject-card-large__badges {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.3rem;
-  flex-shrink: 0;
-}
-
-/* A nota é o que o aluno procura numa disciplina encerrada, então ela ganha
-   destaque próprio em vez de dividir a etiqueta com a contagem de eventos. */
-.subject-card-large__grade {
-  font-size: 0.7rem;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 0.2rem 0.6rem;
-  border-radius: 9999px;
-  white-space: nowrap;
-  background: var(--color-success-bg);
-  color: var(--color-success-strong, var(--color-success));
-}
 
 .subject-card-large__status {
   font-size: 0.7rem;
@@ -3172,4 +3151,17 @@ body {
 .subject-card-large__status--reprovado {
   background: var(--color-error-bg);
   color: var(--color-error-ink, var(--color-error));
+}
+
+/* Linha de resultado da disciplina encerrada: o status é a informação, a nota
+   é o detalhe que a sustenta — daí um em pílula e o outro em texto. */
+.subject-card-large__result {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.subject-card-large__grade {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
 }

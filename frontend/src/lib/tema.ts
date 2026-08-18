@@ -5,9 +5,10 @@
  * e é como ele aparece na primeira visita. O escuro existe para quem pedir, no
  * botão da barra — e essa escolha, sim, fica guardada no navegador.
  *
- * `localStorage` guarda só a palavra "dark" ou "light". O token de sessão
- * continua fora dele, em memória, pelo motivo de sempre: XSS. Preferência de
- * cor não é segredo, e perdê-la a cada reload seria pior do que guardá-la.
+ * `localStorage` guarda só a palavra "dark" ou "light" — preferência de cor
+ * não é segredo, e perdê-la a cada reload seria pior do que guardá-la. O token
+ * de sessão fica em outro lugar, o `sessionStorage`, para morrer junto com a
+ * aba; o motivo está em `services/api.ts`.
  */
 
 import { useCallback, useState } from 'react';
