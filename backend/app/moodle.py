@@ -34,6 +34,8 @@ from urllib.parse import unquote
 
 import httpx
 
+from app import schedule_pdf
+
 logger = logging.getLogger("agenda.moodle")
 
 # ---------------------------------------------------------------------------
@@ -866,6 +868,82 @@ class MoodleClient:
         resp = self._client.get(f"{self.base}/course/view.php", params={"id": course_id})
         return html_to_text(main_region(resp.text))
 
+    def download_file(self, url: str, max_bytes: int = schedule_pdf.MAX_BYTES) -> bytes:
+        """
+        Conteúdo de um arquivo do Moodle, seguindo o desvio do `resource`.
+
+        `/mod/resource/view.php?id=…` ora responde o arquivo direto (o Moodle
+        redireciona para `/pluginfile.php/…`), ora devolve uma página com o
+        arquivo embutido — depende de como o professor configurou a exibição.
+        Os dois casos caem aqui: se não veio arquivo, procura o `pluginfile` no
+        HTML e busca de novo.
+        """
+        resp = self._client.get(url)
+        resp.raise_for_status()
+        tipo = resp.headers.get("content-type", "").lower()
+
+        if "text/html" in tipo:
+            m = re.search(
+                r'(?is)<(?:a|iframe|object|embed)[^>]+(?:href|src|data)="'
+                r'([^"]*/pluginfile\.php/[^"]+)"',
+                resp.text,
+            )
+            if not m:
+                return b""
+            resp = self._client.get(unescape(m.group(1)))
+            resp.raise_for_status()
+
+        conteudo = resp.content
+        if len(conteudo) > max_bytes:
+            logger.info("arquivo grande demais (%d bytes): %s", len(conteudo), url)
+            return b""
+        return conteudo
+
+    def course_schedule_events(self, course_id: int, subject: str,
+                               course_url: str) -> list[dict]:
+        """
+        Prazos garimpados dos PDFs da disciplina — o plano B de `schedule_pdf`.
+
+        Só os arquivos cujo nome sugere cronograma são abertos, e no máximo
+        `MAX_PDFS_POR_DISCIPLINA`. Quando nenhum nome casa, tenta o primeiro
+        arquivo da sala: nos cursos medidos, é a apresentação da disciplina, e
+        é ela que traz o quadro de avaliações.
+        """
+        try:
+            atividades = self.course_activities(course_id)
+        except Exception as exc:
+            logger.warning("%s: sem lista de atividades (%s)", subject, exc)
+            return []
+
+        arquivos = [a for a in atividades if a["modname"] == "resource"]
+        candidatos = [a for a in arquivos if schedule_pdf.looks_like_schedule(a["name"])]
+        if not candidatos and arquivos:
+            candidatos = arquivos[:1]
+
+        descartados = len(candidatos) - schedule_pdf.MAX_PDFS_POR_DISCIPLINA
+        if descartados > 0:
+            logger.info("%s: %d arquivo(s) candidatos além do teto, não lidos",
+                        subject, descartados)
+
+        eventos: list[dict] = []
+        for a in candidatos[:schedule_pdf.MAX_PDFS_POR_DISCIPLINA]:
+            try:
+                dados = self.download_file(a["url"])
+            except Exception as exc:
+                logger.info("%s: falhou baixar “%s” (%s)", subject, a["name"], exc)
+                continue
+            if not dados.startswith(b"%PDF"):
+                continue
+            texto = schedule_pdf.pdf_to_text(dados)
+            if not texto.strip():
+                # Lâmina escaneada: o `pypdf` não faz OCR e não há o que ler.
+                logger.info("%s: “%s” não tem texto extraível", subject, a["name"])
+                continue
+            eventos.extend(schedule_pdf.extract_schedule(
+                texto, subject, course_url, course_id, origem=a["name"],
+            ))
+        return eventos
+
     def activity_content(self, url: str, title: str = "") -> dict:
         """
         Página de uma atividade, lida com a sessão que o backend já mantém.
@@ -1259,6 +1337,10 @@ class MoodleClient:
         """
         Login → disciplinas → calendário. Substitui `ScraperService.run`.
 
+        Disciplina que não gerou nenhum evento de calendário ainda passa pelo
+        garimpo de PDF (`course_schedule_events`): é o caso do curso
+        presencial, que não cadastra atividade no Moodle.
+
         A página de cada curso continua sendo buscada, mas só para extrair as
         webconferências — que não existem como atividade no Moodle e por isso
         nunca aparecem no calendário. O texto em si é descartado:
@@ -1277,8 +1359,14 @@ class MoodleClient:
         cursos = self.list_courses()
         logger.info("%d disciplina(s) encontradas", len(cursos))
 
+        # O calendário vem antes do laço porque decide o trabalho dele: só a
+        # disciplina que não gerou nenhum evento tem seus PDFs abertos.
+        eventos = self.calendar_events()
+        com_evento = {e.get("course_id") for e in eventos}
+
         subjects = []
         webconfs: list[dict] = []
+        prazos_pdf: list[dict] = []
         for i, c in enumerate(cursos, start=1):
             conteudo = ""
             try:
@@ -1292,6 +1380,17 @@ class MoodleClient:
                 logger.warning(
                     "[%d/%d] %s: sem texto (%s)", i, len(cursos), c["name"], exc
                 )
+
+            # Plano B: disciplina sem nenhum evento de calendário. Acontece no
+            # curso presencial, onde o professor publica só arquivo e anuncia
+            # as datas dentro do PDF de apresentação — ver `schedule_pdf`.
+            if c["course_id"] not in com_evento:
+                try:
+                    prazos_pdf.extend(
+                        self.course_schedule_events(c["course_id"], c["name"], c["url"])
+                    )
+                except Exception as exc:  # acessório: não derruba a agenda
+                    logger.warning("%s: garimpo de PDF falhou (%s)", c["name"], exc)
 
             subjects.append({
                 "id": str(uuid.uuid4()),
@@ -1312,14 +1411,16 @@ class MoodleClient:
             if nota is not None:
                 sub["final_grade"] = nota
 
-        eventos = self.calendar_events()
         logger.info(
-            "%d evento(s) no calendário + %d webconferência(s) no texto",
+            "%d evento(s) no calendário + %d webconferência(s) no texto "
+            "+ %d prazo(s) em PDF",
             len(eventos),
             len(webconfs),
+            len(prazos_pdf),
         )
 
         eventos.extend(webconfs)
+        eventos.extend(prazos_pdf)
         eventos.sort(key=lambda e: (e["date"], e["time"] or ""))
         return {"subjects": subjects, "calendar_events": eventos}
 

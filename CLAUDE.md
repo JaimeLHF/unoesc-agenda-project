@@ -61,8 +61,16 @@ fora, e a tela avisa.
 outro domínio; a única saída seria um plugin instalado pelo admin da UNOESC. Não
 tente de novo.
 
-**O app só serve curso EAD.** Curso presencial não gera `assign`/`quiz` no
-Moodle, então a agenda abre vazia para esse público.
+**Curso presencial não cadastra atividade no Moodle — os prazos estão dentro
+do PDF.** Medido em 18/08/2026 numa conta de Medicina Veterinária: 4
+disciplinas, 58 `resource`, 4 fóruns de tira-dúvidas e **zero** eventos de
+calendário. O quadro de avaliações estava numa lâmina do PDF de apresentação.
+`backend/app/schedule_pdf.py` garimpa esse texto, e é **plano B**: só roda para
+a disciplina que não produziu nenhum evento de calendário, então para quem
+cursa EAD custa zero requisição. Data lida assim chega ao frontend com
+`source: "pdf_curso"` e a semana marca com o selo "PDF" — data interpretada por
+regex não vale o mesmo que data cadastrada pelo professor, e o aluno precisa
+saber a diferença. Sem OCR: lâmina escaneada não tem texto e fica de fora.
 
 **O `.ics` é buscado pelo servidor do Google, não pelo aluno.** Por isso
 `/calendario/{token}.ics` fica fora de `/api` e sem sessão: a chave da URL é a

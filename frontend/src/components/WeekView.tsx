@@ -144,6 +144,14 @@ const WeekView: React.FC<WeekViewProps> = ({ events, onOpenEvent }) => {
                       <Icon name={TIPO_ICONE[e.type as EventType] ?? 'pin'} size={0.85} />
                       {e.time && <span className="semana__hora">{e.time}</span>}
                       <span className="semana__evento-texto">{e.title}</span>
+                      {e.source === 'pdf_curso' && (
+                        <span
+                          className="semana__origem"
+                          title="Data lida do PDF da disciplina, não cadastrada no Moodle. Confira no arquivo."
+                        >
+                          PDF
+                        </span>
+                      )}
                       <span className="semana__disciplina">
                         {e.subject.replace(/^\d+\s*-\s*/, '')}
                       </span>

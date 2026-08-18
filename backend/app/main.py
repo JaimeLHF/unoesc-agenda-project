@@ -76,6 +76,11 @@ class AcademicEvent(BaseModel):
     stable_key: Optional[str] = None
     event_type: Optional[str] = None  # due | open | close
     module: Optional[str] = None      # assign | quiz | ...
+    # De onde o prazo veio: `moodle_calendar` (a atividade existe no Moodle),
+    # `moodle_course_text` (webconferência anunciada na página) ou `pdf_curso`
+    # (lido do PDF da disciplina). A tela avisa quando não é o calendário: o
+    # aluno precisa saber quando a data foi interpretada, não recebida.
+    source: Optional[str] = None
 
 
 class ScrapeResponse(BaseModel):
@@ -587,6 +592,7 @@ async def get_cache(session: app_session.PortalSession = Depends(require_session
                 type=e.type,
                 synced=e.google_event_id is not None,
                 url=e.url,
+                source=e.source,
             )
             for e in repo.list_events(db, session.user_id)
         ]

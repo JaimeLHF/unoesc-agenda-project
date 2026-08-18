@@ -44,6 +44,12 @@ export interface AcademicEvent {
   stable_key?: string;
   event_type?: 'due' | 'open' | 'close';
   module?: string;      // assign | quiz | ...
+  /**
+   * De onde a data veio. `moodle_calendar` é o prazo cadastrado pelo
+   * professor; `pdf_curso` foi lido do PDF da disciplina, e por isso a tela
+   * marca — data interpretada por regex não vale o mesmo que data recebida.
+   */
+  source?: 'moodle_calendar' | 'moodle_course_text' | 'pdf_curso' | string;
 }
 
 /** Resposta do endpoint /api/scrape */

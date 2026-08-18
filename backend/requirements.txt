@@ -19,6 +19,10 @@ python-multipart==0.0.32
 sqlalchemy==2.0.51
 cryptography==50.0.0
 python-dotenv==1.2.2
+# Prazos que só existem dentro do PDF da disciplina (curso presencial não
+# cadastra atividade no Moodle) — ver `backend/app/schedule_pdf.py`.
+# Python puro: não acrescenta binário à imagem do Fly.
+pypdf==6.16.1
 
 # Assistente de organização (opcional — sem chave, o recurso não aparece)
 anthropic==0.120.2
