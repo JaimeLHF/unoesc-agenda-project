@@ -84,21 +84,31 @@ function splitSubjectName(fullName: string): { code: string | null; label: strin
 }
 
 /**
- * Uma disciplina está encerrada quando o Moodle já passou da data de fim do
- * componente. A matrícula continua ativa depois disso — é por isso que a lista
- * misturava 2026/1 com 2026/2 — então `end_date` é o único critério confiável.
- * Curso sem data de fim (`end_date` 0 ou ausente) conta como em andamento.
+ * Período letivo ("2026/2") a que a disciplina pertence.
+ *
+ * Não use `end_date`: no Moodle da UNOESC ele é a data em que a *sala* fecha,
+ * meses depois do componente terminar — Engenharia de Software acabou em
+ * 12/07/2026 e a sala só fecha em 10/09. `start_date` é confiável, mas vem 7
+ * dias antes do início oficial (é quando o Moodle libera o acesso), então os
+ * 7 dias voltam antes de olhar o mês. Sem data, devolve null e a disciplina
+ * conta como do semestre corrente.
  */
-function isEnded(subject: Subject, now: number): boolean {
-  return !!subject.end_date && subject.end_date * 1000 < now;
+function academicTerm(subject: Subject): { year: number; half: 1 | 2 } | null {
+  if (!subject.start_date) return null;
+  const inicio = new Date((subject.start_date + 7 * 24 * 3600) * 1000);
+  return { year: inicio.getFullYear(), half: inicio.getMonth() < 6 ? 1 : 2 };
 }
 
-function formatEndDate(epochSeconds: number): string {
-  return new Date(epochSeconds * 1000).toLocaleDateString('pt-BR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-  });
+function currentTerm(now: Date): { year: number; half: 1 | 2 } {
+  return { year: now.getFullYear(), half: now.getMonth() < 6 ? 1 : 2 };
+}
+
+function termLabel(term: { year: number; half: 1 | 2 }): string {
+  return `${term.year}/${term.half}`;
+}
+
+function termRank(term: { year: number; half: 1 | 2 }): number {
+  return term.year * 10 + term.half;
 }
 
 function formatNextEventDate(iso: string, time?: string): string {
@@ -130,7 +140,7 @@ const SubjectList: React.FC<SubjectListProps> = ({
     atualização.
   */
   const cards = React.useMemo(() => {
-    const agora = Date.now();
+    const atual = termRank(currentTerm(new Date()));
     return subjects
       .map((subject) => {
         const subjEvents = events.filter((e) => e.subject === subject.name);
@@ -139,12 +149,14 @@ const SubjectList: React.FC<SubjectListProps> = ({
         const nextAt = stats.nextEvent
           ? new Date(`${stats.nextEvent.date}T${stats.nextEvent.time ?? '00:00'}:00`).getTime()
           : Infinity;
+        const term = academicTerm(subject);
         return {
           subject,
           subjEvents,
           stats,
           nextAt: isNaN(nextAt) ? Infinity : nextAt,
-          ended: isEnded(subject, agora),
+          term,
+          ended: term !== null && termRank(term) < atual,
         };
       })
       .sort((a, b) =>
@@ -163,9 +175,9 @@ const SubjectList: React.FC<SubjectListProps> = ({
   const emAndamento = cards.filter((c) => !c.ended);
   const encerradas = cards
     .filter((c) => c.ended)
-    .sort((a, b) => (b.subject.end_date ?? 0) - (a.subject.end_date ?? 0));
+    .sort((a, b) => (b.subject.start_date ?? 0) - (a.subject.start_date ?? 0));
 
-  const renderCard = ({ subject, subjEvents, stats, ended }: (typeof cards)[number]) => {
+  const renderCard = ({ subject, subjEvents, stats, term, ended }: (typeof cards)[number]) => {
     // Próximo evento ignora os já concluídos — esses não precisam mais aparecer em destaque
     const { counts, upcomingCount, nextEvent } = stats;
     const total = subjEvents.length;
@@ -194,7 +206,13 @@ const SubjectList: React.FC<SubjectListProps> = ({
               o código vira etiqueta e o nome fica legível de relance —
               que é o que o aluno procura ao varrer a grade.
             */}
-            {code && <span className="subject-card-large__code">{code}</span>}
+            {(code || term) && (
+              <span className="subject-card-large__code">
+                {code}
+                {code && term && ' · '}
+                {term && termLabel(term)}
+              </span>
+            )}
             <span className="subject-card-large__name">{label}</span>
           </span>
           <span className="subject-card-large__total">
@@ -221,18 +239,12 @@ const SubjectList: React.FC<SubjectListProps> = ({
               </div>
             ) : (
               <div className="subject-card-large__next subject-card-large__next--past">
-                {ended && subject.end_date
-                  ? `Terminou em ${formatEndDate(subject.end_date)}`
-                  : `Sem eventos futuros — ${upcomingCount === 0 ? 'todos encerrados' : ''}`}
+                Sem eventos futuros — {upcomingCount === 0 ? 'todos encerrados' : ''}
               </div>
             )}
           </>
         ) : (
-          <div className="subject-card-large__empty">
-            {ended && subject.end_date
-              ? `Terminou em ${formatEndDate(subject.end_date)}`
-              : 'Nenhum evento identificado'}
-          </div>
+          <div className="subject-card-large__empty">Nenhum evento identificado</div>
         )}
       </button>
     );
@@ -265,7 +277,7 @@ const SubjectList: React.FC<SubjectListProps> = ({
               <div className="subject-group-heading">
                 <h3 className="subject-group-heading__title">Encerradas</h3>
                 <p className="subject-group-heading__hint">
-                  Semestres anteriores — o Moodle mantém o acesso depois do fim do componente.
+                  Semestres anteriores — o Moodle mantém a sala aberta depois que o componente termina.
                 </p>
               </div>
               <div className="subject-grid-large">{encerradas.map(renderCard)}</div>
