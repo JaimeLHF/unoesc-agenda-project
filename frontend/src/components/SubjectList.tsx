@@ -1,7 +1,6 @@
 import React from 'react';
 import type { Subject, AcademicEvent, EventType } from '../types';
 import EventAlerts from './EventAlerts';
-import Insights from './Insights';
 import Icon from './Icon';
 import { useDoneEvents } from '../contexts/DoneEventsContext';
 
@@ -315,26 +314,12 @@ const SubjectList: React.FC<SubjectListProps> = ({
 
       <EventAlerts events={events} onOpenEvent={onOpenEvent} />
 
-      {/* O panorama abre a tela, logo abaixo do alerta do dia: é a leitura que
-          responde "como está minha semana" antes de descer disciplina por
-          disciplina. */}
-      {subjects.length > 0 && (
-        <Insights subjects={subjects} events={events} mediaAprovacao={MEDIA_APROVACAO} />
-      )}
-
       {subjects.length === 0 ? (
         <div className="empty-state">Nenhuma disciplina encontrada no portal.</div>
       ) : (
         <>
           {emAndamento.length > 0 && (
-            <>
-              {/* Com o panorama antes da grade, a lista precisa dizer onde
-                  começa — e o título faz par com o de "Encerradas". */}
-              <div className="subject-group-heading">
-                <h3 className="subject-group-heading__title">Semestre atual</h3>
-              </div>
-              <div className="subject-grid-large">{emAndamento.map(renderCard)}</div>
-            </>
+            <div className="subject-grid-large">{emAndamento.map(renderCard)}</div>
           )}
 
           {encerradas.length > 0 && (
@@ -348,7 +333,6 @@ const SubjectList: React.FC<SubjectListProps> = ({
               <div className="subject-grid-large">{encerradas.map(renderCard)}</div>
             </>
           )}
-
         </>
       )}
     </section>
