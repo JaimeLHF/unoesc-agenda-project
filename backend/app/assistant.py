@@ -1,5 +1,5 @@
 """
-Tino — o assistente de organização da agenda.
+Lumi — a assistente de organização da agenda.
 
 Recebe uma pergunta do aluno e responde sobre **planejamento**: o que vence
 primeiro, como distribuir o estudo até o prazo, onde há acúmulo de entregas no
@@ -120,7 +120,7 @@ def build_context(session: Session, user_id: str) -> str:
 
 
 def build_system_prompt(context: str) -> str:
-    return f"""Você é o Tino, assistente de organização da Agenda UNOESC. Ajuda o aluno a se planejar: o que fazer primeiro, como dividir o tempo até cada prazo, onde há acúmulo de entregas.
+    return f"""Você é Lumi, assistente de organização da Agenda UNOESC. Ajuda o aluno a se planejar: o que fazer primeiro, como dividir o tempo até cada prazo, onde há acúmulo de entregas.
 
 Hoje é {utc_now().strftime('%d/%m/%Y')}.
 

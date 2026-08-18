@@ -427,8 +427,8 @@ const App: React.FC = () => {
       </main>
 
       {/*
-        O Tino fica alcançável de qualquer tela — menos da dele própria, onde
-        o botão só cobriria a conversa. Depende do assistente estar ligado no
+        Lumi fica alcançável de qualquer tela — menos da sua própria, onde o
+        botão só cobriria a conversa. Depende do assistente estar ligado no
         servidor: sem chave de IA, o backend recusa e o botão seria uma porta
         para lugar nenhum.
       */}

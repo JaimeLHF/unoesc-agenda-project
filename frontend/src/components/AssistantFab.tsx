@@ -4,15 +4,15 @@ import Icon from './Icon';
 interface AssistantFabProps {
   onClick: () => void;
   /** Perguntas que ainda cabem no mês. Zero não esconde o botão: a tela do
-      Tino explica a cota melhor do que um botão que some sem dizer por quê. */
+      Lumi explica a cota melhor do que um botão que some sem dizer por quê. */
   restantes: number;
 }
 
 /**
- * Botão flutuante do Tino, no canto inferior direito.
+ * Botão flutuante da Lumi, no canto inferior direito.
  *
  * Ficava só na barra de cima, junto de Atualizar e do menu da conta — onde o
- * aluno passa uma vez, ao abrir o app, e não volta mais. A dúvida que o Tino
+ * aluno passa uma vez, ao abrir o app, e não volta mais. A dúvida que Lumi
  * responde ("por onde eu começo?") nasce olhando a agenda, e é ali que o botão
  * precisa estar.
  *
@@ -22,17 +22,17 @@ interface AssistantFabProps {
 const AssistantFab: React.FC<AssistantFabProps> = ({ onClick, restantes }) => (
   <button
     type="button"
-    className="fab-tino"
+    className="fab-lumi"
     onClick={onClick}
     title={
       restantes > 0
-        ? `Falar com o Tino sobre seus prazos (${restantes} perguntas neste mês)`
+        ? `Falar com Lumi sobre seus prazos (${restantes} perguntas neste mês)`
         : 'Você usou todas as perguntas deste mês'
     }
-    aria-label="Falar com o Tino"
+    aria-label="Falar com Lumi"
   >
     <Icon name="organizar" size={1.15} />
-    <span className="fab-tino__label">Tino</span>
+    <span className="fab-lumi__label">Lumi</span>
   </button>
 );
 

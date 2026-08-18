@@ -64,9 +64,9 @@ const Assistant: React.FC<AssistantProps> = ({ onBack, used, limit, onQuotaChang
           Voltar
         </button>
         <div>
-          <h2 className="section-title">Tino</h2>
+          <h2 className="section-title">Lumi</h2>
           <p className="section-subtitle">
-            Ele enxerga suas atividades pendentes — título, data e disciplina — e ajuda a
+            Enxerga suas atividades pendentes — título, data e disciplina — e ajuda a
             planejar. Não tem acesso ao conteúdo das atividades.
           </p>
         </div>
@@ -133,7 +133,7 @@ const Assistant: React.FC<AssistantProps> = ({ onBack, used, limit, onQuotaChang
           placeholder={
             restantes === 0
               ? 'Você usou todas as perguntas deste mês'
-              : 'Pergunte ao Tino sobre prazos, prioridades, plano de estudo…'
+              : 'Pergunte à Lumi sobre prazos, prioridades, plano de estudo…'
           }
           disabled={loading || restantes === 0}
         />

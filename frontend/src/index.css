@@ -3776,7 +3776,7 @@ body {
   border-left: 4px solid var(--color-warn-ink);
 }
 
-/* ---- Botão flutuante do Tino ---- */
+/* ---- Botão flutuante da Lumi ---- */
 /*
   Fica fixo no canto inferior direito, acima do rodapé. A dúvida que ele
   responde nasce olhando a agenda, e o botão da barra de cima estava fora do
@@ -3785,7 +3785,7 @@ body {
   `env(safe-area-inset-*)` mantém o botão longe da barra de gestos do iPhone,
   onde o toque é engolido pelo sistema.
 */
-.fab-tino {
+.fab-lumi {
   position: fixed;
   right: calc(1.25rem + env(safe-area-inset-right, 0px));
   bottom: calc(1.25rem + env(safe-area-inset-bottom, 0px));
@@ -3807,17 +3807,17 @@ body {
   transition: background-color 0.15s, transform 0.15s, box-shadow 0.15s;
 }
 
-.fab-tino:hover {
+.fab-lumi:hover {
   background-color: var(--color-primary-hover);
   transform: translateY(-2px);
   box-shadow: 0 10px 26px rgba(15, 23, 42, 0.32);
 }
 
-.fab-tino:active {
+.fab-lumi:active {
   transform: translateY(0);
 }
 
-.fab-tino:focus-visible {
+.fab-lumi:focus-visible {
   outline: 3px solid var(--color-primary-ghost);
   outline-offset: 3px;
 }
@@ -3825,12 +3825,12 @@ body {
 /* No celular o rótulo comeria a largura da lista que está atrás; fica o
    círculo, que já é reconhecível pela posição. */
 @media (max-width: 640px) {
-  .fab-tino {
+  .fab-lumi {
     padding: 0.9rem;
     border-radius: 50%;
   }
 
-  .fab-tino__label {
+  .fab-lumi__label {
     display: none;
   }
 }
@@ -3838,8 +3838,8 @@ body {
 /* Quem pediu menos animação recebe o botão parado — ele é fixo na tela e o
    movimento no hover fica no canto do olho o tempo todo. */
 @media (prefers-reduced-motion: reduce) {
-  .fab-tino,
-  .fab-tino:hover {
+  .fab-lumi,
+  .fab-lumi:hover {
     transition: none;
     transform: none;
   }
