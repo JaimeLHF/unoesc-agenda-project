@@ -620,6 +620,43 @@ class MoodleClient:
             })
         return cursos
 
+    def course_grades(self) -> dict[int, float]:
+        """
+        Nota final de cada disciplina, por `course_id`.
+
+        Vem do relatório geral (`/grade/report/overview`), que entrega todos os
+        cursos numa requisição só — o relatório por curso exigiria uma volta ao
+        servidor por disciplina. É HTML e não AJAX porque as funções de nota do
+        `service.php` respondem `servicenotavailable` nesta instância.
+
+        Disciplina sem nota lançada aparece com `-` e fica fora do dicionário:
+        ausência é informação (o semestre está em andamento), zero não seria.
+        """
+        try:
+            resp = self._client.get(f"{self.base}/grade/report/overview/index.php")
+            resp.raise_for_status()
+        except Exception as exc:  # nota é enfeite: nunca derruba a agenda
+            logger.warning("Relatório de notas não veio: %s", exc)
+            return {}
+
+        notas: dict[int, float] = {}
+        for linha in re.findall(r"(?is)<tr[^>]*>(.*?)</tr>", resp.text):
+            m = re.search(r"(?i)course/view\.php\?id=(\d+)", linha)
+            if not m:
+                continue
+            celulas = [
+                html_to_text(c).strip()
+                for c in re.findall(r"(?is)<td[^>]*>(.*?)</td>", linha)
+            ]
+            # A nota é a última célula preenchida da linha; o Moodle escreve em
+            # pt-BR ("95,00"), então a vírgula precisa virar ponto.
+            for texto in reversed(celulas):
+                valor = texto.replace(".", "").replace(",", ".")
+                if re.fullmatch(r"\d+(?:\.\d+)?", valor):
+                    notas[int(m.group(1))] = float(valor)
+                    break
+        return notas
+
     def raw_calendar_events(
         self,
         months_back: int = MONTHS_BACK,
@@ -1151,6 +1188,14 @@ class MoodleClient:
                 "start_date": c.get("start_date"),
                 "end_date": c.get("end_date"),
             })
+
+        # Uma requisição para todas as disciplinas — feita depois do laço para
+        # não repetir por curso.
+        notas = self.course_grades()
+        for sub in subjects:
+            nota = notas.get(sub["course_id"])
+            if nota is not None:
+                sub["final_grade"] = nota
 
         eventos = self.calendar_events()
         logger.info(

@@ -53,6 +53,8 @@ class SubjectModel(BaseModel):
     # corrente das disciplinas já encerradas.
     start_date: Optional[int] = None
     end_date: Optional[int] = None
+    # Nota final na escala 0–100 do Moodle; nula enquanto nada foi lançado.
+    final_grade: Optional[float] = None
 
 
 class AcademicEvent(BaseModel):
@@ -562,6 +564,7 @@ async def get_cache(session: app_session.PortalSession = Depends(require_session
                 content=s.content,
                 start_date=s.start_date,
                 end_date=s.end_date,
+                final_grade=s.final_grade,
             )
             for s in repo.list_subjects(db, session.user_id)
         ]

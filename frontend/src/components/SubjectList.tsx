@@ -111,6 +111,19 @@ function termRank(term: { year: number; half: 1 | 2 }): number {
   return term.year * 10 + term.half;
 }
 
+/**
+ * O total do curso no Moodle vem na escala 0–100, mas cada atividade vale de 0
+ * a 10 e é essa a média que o aluno reconhece — 95,00 no relatório é o 9,5 do
+ * boletim. Só a nota, sem rótulo: "Aprovado" é decisão da UNOESC e o Moodle
+ * não guarda isso em lugar nenhum.
+ */
+function formatGrade(grade: number): string {
+  return (grade / 10).toLocaleString('pt-BR', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 2,
+  });
+}
+
 function formatNextEventDate(iso: string, time?: string): string {
   try {
     const d = new Date(`${iso}T${time ?? '00:00'}:00`);
@@ -215,8 +228,15 @@ const SubjectList: React.FC<SubjectListProps> = ({
             )}
             <span className="subject-card-large__name">{label}</span>
           </span>
-          <span className="subject-card-large__total">
-            {total} {total === 1 ? 'evento' : 'eventos'}
+          <span className="subject-card-large__badges">
+            {typeof subject.final_grade === 'number' && (
+              <span className="subject-card-large__grade">
+                Nota {formatGrade(subject.final_grade)}
+              </span>
+            )}
+            <span className="subject-card-large__total">
+              {total} {total === 1 ? 'evento' : 'eventos'}
+            </span>
           </span>
         </div>
 

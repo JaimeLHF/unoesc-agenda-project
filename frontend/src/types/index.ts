@@ -18,6 +18,8 @@ export interface Subject {
    */
   start_date?: number | null;
   end_date?: number | null;
+  /** Nota final na escala 0–100 do Moodle; ausente enquanto nada foi lançado. */
+  final_grade?: number | null;
 }
 
 /** Tipos possíveis de evento acadêmico */

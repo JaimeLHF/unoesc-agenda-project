@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from sqlalchemy import String, Text, DateTime, Integer, create_engine
+from sqlalchemy import String, Text, DateTime, Integer, Float, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 logger = logging.getLogger("agenda.db")
@@ -128,6 +128,9 @@ class Subject(Base):
     # ativa depois do fim, então sem isso a lista mistura os períodos.
     start_date: Mapped[Optional[int]] = mapped_column(Integer)
     end_date: Mapped[Optional[int]] = mapped_column(Integer)
+    # Nota final do relatório de notas do Moodle, na escala 0–100 que ele usa.
+    # Nulo enquanto o professor não lança nada — ausência não é zero.
+    final_grade: Mapped[Optional[float]] = mapped_column(Float)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=utc_now, onupdate=utc_now
     )
