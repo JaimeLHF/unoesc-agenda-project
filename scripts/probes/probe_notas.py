@@ -17,6 +17,21 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[2] / "backend"))
 
 from app.moodle import MoodleClient, html_to_text, main_region  # noqa: E402
 
+# O que estamos procurando: se alguma dessas palavras aparecer, existe status
+# acadêmico para mostrar no card. Só nota numérica não resolve — "Aprovado" é
+# uma decisão da UNOESC, não do Moodle.
+PISTAS = ("situa", "aprovad", "reprovad", "exame", "conceito", "final")
+
+
+def destacar(texto: str) -> None:
+    achou = [
+        linha.strip()
+        for linha in texto.splitlines()
+        if any(p in linha.lower() for p in PISTAS) and linha.strip()
+    ]
+    print("--- linhas com pista de status ---")
+    print("\n".join(achou[:40]) or "(nenhuma)")
+
 
 def main() -> None:
     if len(sys.argv) != 3:
@@ -29,7 +44,9 @@ def main() -> None:
     print("== visão geral de notas (todos os cursos) ==")
     resp = cliente._client.get(f"{cliente.base}/grade/report/overview/index.php")
     print("HTTP", resp.status_code)
-    print(html_to_text(main_region(resp.text))[:3000])
+    texto = html_to_text(main_region(resp.text))
+    print(texto[:2000])
+    destacar(texto)
 
     for curso in cliente.list_courses()[:3]:
         print(f"\n== notas de {curso['name']} ({curso['course_id']}) ==")
@@ -38,7 +55,9 @@ def main() -> None:
             params={"id": curso["course_id"]},
         )
         print("HTTP", resp.status_code)
-        print(html_to_text(main_region(resp.text))[:2000])
+        texto = html_to_text(main_region(resp.text))
+        print(texto[:1200])
+        destacar(texto)
 
 
 if __name__ == "__main__":
