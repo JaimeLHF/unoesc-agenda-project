@@ -255,13 +255,24 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ stableKey, onBack, onOpenPo
 
       {detalhe.content?.files?.length ? (
         <div className="activity__files">
-          <h2 className="activity__section-title">Arquivos da atividade</h2>
-          <ul>
+          <h2 className="activity__section-title">
+            Arquivos da atividade
+            <span className="activity__files-count">{detalhe.content.files.length}</span>
+          </h2>
+          {/*
+            Em grade e não em linhas da largura toda: doze anexos viravam doze
+            faixas gigantes, e como o professor costuma escrever "Clique aqui"
+            no link, todas ficavam idênticas. O nome do arquivo agora vem da
+            URL quando o texto não identifica nada, e a extensão vira etiqueta.
+          */}
+          <ul className="activity__files-grid">
             {detalhe.content.files.map((f) => (
               <li key={f.url}>
-                <a href={f.url} target="_blank" rel="noreferrer">
-                  <Icon name="entrega" size={1} />
-                  {f.name}
+                <a href={f.url} target="_blank" rel="noreferrer" title={f.filename ?? f.name}>
+                  {/* Sai o ícone de envio: aqui o aluno baixa, não manda. */}
+                  <Icon name="link-externo" size={1} />
+                  <span className="activity__file-name">{f.name}</span>
+                  {f.ext && <span className="activity__file-ext">{f.ext}</span>}
                 </a>
               </li>
             ))}

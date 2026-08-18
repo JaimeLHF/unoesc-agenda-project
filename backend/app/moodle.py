@@ -218,6 +218,14 @@ def clean_course_name(fullname: str) -> str:
     return nome.strip(" -") or (fullname or "").strip() or "Disciplina"
 
 
+# Textos de link que não dizem nada sobre o arquivo. Comparados sem acento e
+# sem pontuação — ver `_normalizar`.
+_GENERICO_RE = re.compile(
+    r"(?i)\s*(clique\s*aqui|aqui|link|download|baixar|acesse|acessar|ver|abrir|"
+    r"clique|arquivo|anexo|material)\s*[.:!]?\s*"
+)
+
+
 def _numero_pt(texto: Optional[str]) -> Optional[float]:
     """Converte "95,00" ou "33,33 %" em float. Devolve None para "-" e vazio."""
     if not texto:
@@ -1224,8 +1232,24 @@ class MoodleClient:
                 continue
             vistos.add(href)
 
-            nome = html_to_text(m.group(2), 200) or href.rsplit("/", 1)[-1]
-            arquivos.append({"name": unquote(nome), "url": href})
+            texto = html_to_text(m.group(2), 200).strip()
+            # O nome do arquivo na URL, sem parâmetros — "Plano de ensino.pdf".
+            do_url = unquote(href.split("?")[0].rsplit("/", 1)[-1])
+
+            # Metade dos professores escreve "Clique aqui" no link, e uma lista
+            # de doze "Clique aqui" não diz qual é qual. Quando o texto não
+            # identifica nada, o nome do arquivo identifica.
+            generico = _GENERICO_RE.fullmatch(texto or "") is not None
+            nome = do_url if (generico or not texto) else texto
+
+            arquivos.append({
+                "name": unquote(nome),
+                "url": href,
+                "filename": do_url,
+                # Extensão em maiúscula ("PDF"), para a tela etiquetar o tipo
+                # sem precisar adivinhar pelo nome.
+                "ext": (do_url.rsplit(".", 1)[-1].upper() if "." in do_url else None),
+            })
 
         return arquivos
 

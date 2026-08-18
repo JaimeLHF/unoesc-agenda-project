@@ -321,8 +321,12 @@ export async function openCourse(
 
 /** Um anexo da atividade — quase sempre o PDF com o enunciado. */
 export interface ActivityFile {
+  /** Texto do link, ou o nome do arquivo quando o link só diz "Clique aqui". */
   name: string;
   url: string;
+  filename?: string | null;
+  /** Extensão em maiúscula ("PDF"), quando dá para saber pela URL. */
+  ext?: string | null;
 }
 
 export interface ActivityDetail {

@@ -2507,11 +2507,34 @@ body {
   margin-top: 2rem;
 }
 
-.activity__files ul {
+/* Grade: com doze anexos, uma coluna da largura da página vira uma escada de
+   faixas iguais. Em duas ou três colunas a lista cabe na tela e o olho compara
+   os nomes lado a lado. */
+.activity__files-grid {
   list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 0.4rem;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0;
+}
+
+/* Alturas iguais na fileira: um nome de duas linhas ao lado de um de uma
+   deixava as caixas desencontradas. */
+.activity__files-grid li,
+.activity__files-grid a {
+  height: 100%;
+}
+
+.activity__files-count {
+  margin-left: 0.5rem;
+  padding: 0.1rem 0.5rem;
+  border-radius: 9999px;
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  font-size: 0.72rem;
+  font-weight: 700;
+  vertical-align: middle;
 }
 
 /* Os anexos são o que o aluno mais procura: o enunciado costuma estar num PDF,
@@ -2530,6 +2553,29 @@ body {
   font-weight: 500;
   text-decoration: none;
   overflow-wrap: anywhere;
+}
+
+.activity__file-name {
+  flex: 1;
+  min-width: 0;
+  /* Duas linhas no máximo: nome de arquivo da UNOESC é longo, mas um cartão
+     de seis linhas quebra a grade. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+/* A extensão à direita diz o que vai abrir antes do clique. */
+.activity__file-ext {
+  flex-shrink: 0;
+  padding: 0.1rem 0.4rem;
+  border-radius: 0.25rem;
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
 .activity__files a:hover {
