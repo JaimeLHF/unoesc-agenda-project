@@ -1,6 +1,8 @@
 import React from 'react';
 import type { Subject, AcademicEvent, EventType } from '../types';
 import EventAlerts from './EventAlerts';
+import NextDeadline from './NextDeadline';
+import WeekView from './WeekView';
 import Icon from './Icon';
 import { useDoneEvents } from '../contexts/DoneEventsContext';
 
@@ -130,6 +132,19 @@ function formatGrade(grade: number): string {
   });
 }
 
+/**
+ * Faixa de urgência do próximo prazo, para pintar a borda do cartão. Varrer a
+ * grade procurando data é lento; cor se lê sem ler.
+ */
+function urgenciaDoCard(nextAt: number, agora: number): 'hoje' | 'perto' | null {
+  if (!isFinite(nextAt)) return null;
+  const dias = (nextAt - agora) / (24 * 60 * 60 * 1000);
+  if (dias < 0) return null;
+  if (dias <= 2) return 'hoje';
+  if (dias <= 7) return 'perto';
+  return null;
+}
+
 function formatNextEventDate(iso: string, time?: string): string {
   try {
     const d = new Date(`${iso}T${time ?? '00:00'}:00`);
@@ -148,6 +163,7 @@ const SubjectList: React.FC<SubjectListProps> = ({
   onOpenEvent,
 }) => {
   const { isDone } = useDoneEvents();
+  const [visao, setVisao] = React.useState<'semana' | 'disciplinas'>('disciplinas');
   const lastScrapedRel = formatRelative(lastScrapedAt);
 
   /*
@@ -175,6 +191,7 @@ const SubjectList: React.FC<SubjectListProps> = ({
           nextAt: isNaN(nextAt) ? Infinity : nextAt,
           term,
           ended: term !== null && termRank(term) < atual,
+          urgencia: urgenciaDoCard(isNaN(nextAt) ? Infinity : nextAt, Date.now()),
         };
       })
       .sort((a, b) =>
@@ -195,7 +212,14 @@ const SubjectList: React.FC<SubjectListProps> = ({
     .filter((c) => c.ended)
     .sort((a, b) => (b.subject.start_date ?? 0) - (a.subject.start_date ?? 0));
 
-  const renderCard = ({ subject, subjEvents, stats, term, ended }: (typeof cards)[number]) => {
+  const renderCard = ({
+    subject,
+    subjEvents,
+    stats,
+    term,
+    ended,
+    urgencia,
+  }: (typeof cards)[number]) => {
     // Próximo evento ignora os já concluídos — esses não precisam mais aparecer em destaque
     const { counts, upcomingCount, nextEvent } = stats;
     const total = subjEvents.length;
@@ -212,7 +236,13 @@ const SubjectList: React.FC<SubjectListProps> = ({
       <button
         key={subject.id}
         type="button"
-        className={`subject-card-large${ended ? ' subject-card-large--ended' : ''}`}
+        className={[
+          'subject-card-large',
+          ended ? 'subject-card-large--ended' : '',
+          urgencia ? `subject-card-large--${urgencia}` : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
         onClick={() => onSelectSubject(subject.id)}
         disabled={total === 0}
       >
@@ -312,11 +342,34 @@ const SubjectList: React.FC<SubjectListProps> = ({
         </p>
       </div>
 
+      <NextDeadline events={events} onOpenEvent={onOpenEvent} />
+
       <EventAlerts events={events} onOpenEvent={onOpenEvent} />
+
+      {/* Duas formas de olhar a mesma agenda: por dia, que é como o aluno
+          planeja a semana, e por disciplina, que é como o Moodle guarda. */}
+      <div className="visao">
+        <button
+          type="button"
+          className={`visao__botao${visao === 'semana' ? ' visao__botao--ativo' : ''}`}
+          onClick={() => setVisao('semana')}
+        >
+          Por semana
+        </button>
+        <button
+          type="button"
+          className={`visao__botao${visao === 'disciplinas' ? ' visao__botao--ativo' : ''}`}
+          onClick={() => setVisao('disciplinas')}
+        >
+          Por disciplina
+        </button>
+      </div>
+
+      {visao === 'semana' && <WeekView events={events} onOpenEvent={onOpenEvent} />}
 
       {subjects.length === 0 ? (
         <div className="empty-state">Nenhuma disciplina encontrada no portal.</div>
-      ) : (
+      ) : visao === 'semana' ? null : (
         <>
           {emAndamento.length > 0 && (
             <div className="subject-grid-large">{emAndamento.map(renderCard)}</div>
