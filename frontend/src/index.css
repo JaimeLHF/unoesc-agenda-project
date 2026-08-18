@@ -2597,8 +2597,8 @@ body {
    no bloco de cima, e o texto do professor parecia continuação da interface em
    vez de conteúdo dele. */
 .activity__text {
-  font-size: 0.92rem;
-  line-height: 1.65;
+  font-size: 1rem;
+  line-height: 1.7;
   color: var(--color-text);
   overflow-wrap: anywhere;
   background: var(--color-surface);
@@ -2611,20 +2611,30 @@ body {
    o começo da seguinte. */
 /* A linha ainda tem medida, só que mais larga: sem nenhum teto, o olho perde
    o começo da linha seguinte num monitor de 27". */
+/* Medida de leitura: ~70 caracteres. A 90 o olho já perdia o começo da linha
+   seguinte num monitor largo — e enunciado é texto para ler inteiro, não para
+   varrer. */
 .activity__text > p,
 .activity__text > h3,
 .activity__text > ul {
-  max-width: 90ch;
+  max-width: 70ch;
 }
 
 /* A hierarquia é do professor — ele escreveu "Você deverá:" como seção. Ela só
    se perdia porque tudo saía com o mesmo peso de parágrafo. */
 .activity__subhead {
-  font-size: 0.95rem;
+  font-size: 1rem;
   font-weight: 650;
   letter-spacing: -0.01em;
-  margin-top: 1.25rem;
-  margin-bottom: 0.15rem;
+  margin-top: 1.6rem;
+  margin-bottom: 0.35rem;
+  padding-top: 0.8rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.activity__text > *:first-child.activity__subhead {
+  padding-top: 0;
+  border-top: none;
 }
 
 .activity__text > *:first-child {
@@ -2636,7 +2646,70 @@ body {
 }
 
 .activity__text p + p {
-  margin-top: 0.7rem;
+  margin-top: 0.8rem;
+}
+
+.activity__text ul {
+  margin: 0.5rem 0 0;
+  padding-left: 1.1rem;
+}
+
+.activity__text li + li {
+  margin-top: 0.3rem;
+}
+
+/* "Importante: trabalhos com plágio serão zerados" é a linha mais cara do
+   enunciado e saía com o mesmo peso de um "bons estudos". */
+.activity__aviso {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  margin-top: 1rem;
+  padding: 0.75rem 0.9rem;
+  background: var(--color-warn-bg);
+  border-left: 3px solid var(--color-warn-ink);
+  border-radius: 0.35rem;
+}
+
+.activity__aviso strong {
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-warn-ink);
+}
+
+/* Peso, prazo e formato: o que o aluno volta para conferir depois de ler o
+   enunciado uma vez. Em par rótulo/valor eles se acham sem releitura. */
+/* Grade e não flex: com rótulos de larguras diferentes ("Peso" e "Formato de
+   entrega"), os valores saíam desalinhados um do outro. */
+.activity__dado {
+  display: grid;
+  grid-template-columns: 10rem 1fr;
+  align-items: baseline;
+  gap: 0.25rem 0.75rem;
+  margin-top: 0.5rem;
+}
+
+@media (max-width: 520px) {
+  .activity__dado {
+    grid-template-columns: 1fr;
+  }
+}
+
+.activity__dado-rotulo {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+.activity__dado-valor {
+  font-weight: 600;
+}
+
+.activity__cortesia {
+  color: var(--color-text-muted);
 }
 
 .activity__empty {

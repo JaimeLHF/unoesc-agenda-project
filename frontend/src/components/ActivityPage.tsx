@@ -369,9 +369,46 @@ const Prosa: React.FC<{ texto: string }> = ({ texto }) => {
     // frente dos dois pontos é o que o olho procura ao varrer o enunciado.
     const rotulado = linha.match(/^([A-ZÀ-Ú][^:]{2,45}):\s+(.+)$/);
     if (rotulado) {
+      const rotulo = rotulado[1];
+      // Aviso ganha faixa própria: "trabalhos com plágio serão zerados" no
+      // meio de parágrafos iguais passa batido, e é a linha mais cara do
+      // enunciado inteiro.
+      if (AVISO_RE.test(rotulo)) {
+        blocos.push(
+          <p key={`a${blocos.length}`} className="activity__aviso">
+            <strong>{rotulo}</strong>
+            {comLinks(rotulado[2])}
+          </p>,
+        );
+        continue;
+      }
+
+      // Dado de entrega (peso, prazo, formato) vira par rótulo/valor: são as
+      // três coisas que o aluno volta para conferir depois de ler uma vez.
+      if (DADO_RE.test(rotulo)) {
+        blocos.push(
+          <p key={`d${blocos.length}`} className="activity__dado">
+            <span className="activity__dado-rotulo">{rotulo}</span>
+            <span className="activity__dado-valor">{comLinks(rotulado[2])}</span>
+          </p>,
+        );
+        continue;
+      }
+
       blocos.push(
         <p key={`p${blocos.length}`}>
-          <strong>{rotulado[1]}:</strong> {comLinks(rotulado[2])}
+          <strong>{rotulo}:</strong> {comLinks(rotulado[2])}
+        </p>,
+      );
+      continue;
+    }
+
+    // Saudação e despedida existem em quase todo enunciado e não informam
+    // nada; ficam, mas em voz mais baixa que o resto.
+    if (CORTESIA_RE.test(linha)) {
+      blocos.push(
+        <p key={`c${blocos.length}`} className="activity__cortesia">
+          {linha}
         </p>,
       );
       continue;
@@ -383,6 +420,17 @@ const Prosa: React.FC<{ texto: string }> = ({ texto }) => {
 
   return <div className="activity__text">{blocos}</div>;
 };
+
+/** Rótulos que valem uma faixa de atenção. */
+const AVISO_RE = /^(importante|aten[çc][ãa]o|obs|observa[çc][ãa]o|aviso|cuidado|lembre[- ]se)$/i;
+
+/** Rótulos que descrevem a entrega em si — viram par rótulo/valor. */
+const DADO_RE =
+  /^(peso|valor|nota|pontua[çc][ãa]o|prazo|entrega|formato( de entrega)?|data( de entrega)?|extens[ãa]o|tamanho|p[áa]ginas?)$/i;
+
+/** Saudação e despedida: ficam, em voz mais baixa. */
+const CORTESIA_RE =
+  /^(prezad[oa]s?[^.]{0,40}[,.!]?|bons estudos!?|boa (atividade|sorte|leitura)!?|abra[çc]os?!?|at(?:enciosamente)?[.,]?)$/i;
 
 /** Transforma URLs soltas no texto em links clicáveis. */
 function comLinks(linha: string): React.ReactNode {
