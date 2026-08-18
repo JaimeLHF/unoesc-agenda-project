@@ -20,8 +20,20 @@ ARQUIVO="$DESTINO/agenda-$CARIMBO.db"
 
 mkdir -p "$DESTINO"
 
+# A máquina dorme quando ninguém acessa (`min_machines_running = 0`), e o
+# `sftp get` não a acorda — ele falha com "app has no started VMs" e derruba o
+# `make deploy` inteiro, que roda o backup antes de subir. Quem acorda é uma
+# requisição HTTP comum, pelo proxy do Fly.
+DOMINIO="${APP_URL:-https://$APP.fly.dev}"
+echo "Acordando $DOMINIO…"
+for _ in $(seq 1 10); do
+  if curl -sf -o /dev/null --max-time 20 "$DOMINIO/api/health/live"; then
+    break
+  fi
+  sleep 3
+done
+
 echo "Baixando /data/agenda.db de $APP…"
-# `sftp get` acorda a máquina se ela estiver suspensa e copia o arquivo.
 fly ssh sftp get /data/agenda.db "$ARQUIVO" -a "$APP"
 
 TAMANHO="$(du -h "$ARQUIVO" | cut -f1)"
