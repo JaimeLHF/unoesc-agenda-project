@@ -154,7 +154,9 @@ def _call_gemini(system_prompt: str, messages: list[dict]) -> str:
     from google.genai import types as genai_types
 
     client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
-    model = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+    # O padrão precisa ser um modelo vivo: o `gemini-2.0-flash` foi aposentado
+    # pelo Google em 18/08/2026 e a API passou a responder 404 pedindo a troca.
+    model = os.getenv("GEMINI_MODEL", "gemini-3.6-flash")
 
     contents = [
         genai_types.Content(

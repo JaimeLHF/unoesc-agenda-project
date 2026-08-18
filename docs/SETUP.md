@@ -87,10 +87,12 @@ Ele recebe **apenas** título, data e disciplina das atividades pendentes. Não 
 ```env
 AI_PROVIDER=gemini
 GEMINI_API_KEY=AIzaSy...sua_chave
-GEMINI_MODEL=gemini-2.0-flash
+GEMINI_MODEL=gemini-3.6-flash
 ```
 
-> Use `gemini-2.0-flash`: são 1.500 requisições/dia grátis. O `gemini-2.5-flash` tem cota de apenas 20/dia.
+> O `gemini-2.0-flash` foi aposentado pelo Google em 18/08/2026 — a API responde
+> 404 pedindo para trocar. O nome atual está acima; confira a cota grátis do modelo
+> em aistudio.google.com antes de abrir o app para mais gente.
 
 6. Reinicie o backend.
 

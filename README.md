@@ -101,7 +101,7 @@ No `backend/.env`:
 ```env
 AI_PROVIDER=gemini
 GEMINI_API_KEY=AIzaSy...
-GEMINI_MODEL=gemini-2.0-flash
+GEMINI_MODEL=gemini-3.6-flash
 ```
 
 Chave gratuita em [aistudio.google.com](https://aistudio.google.com/). Para usar Claude, troque `AI_PROVIDER=claude` e preencha `ANTHROPIC_API_KEY`.
