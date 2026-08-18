@@ -13,7 +13,7 @@ buscar a versão nova. Nenhum consentimento, nenhuma biblioteca.
 A contrapartida é que o app não escolhe a hora da atualização — cada cliente
 tem o seu ritmo, o do Google costuma ser de horas. Para prazo de entrega, que
 é marcado com semanas de antecedência, isso serve; para avisar de algo que
-mudou hoje, não. Por isso o lembrete por e-mail existe à parte.
+mudou hoje, não.
 
 ## Sobre o conteúdo
 

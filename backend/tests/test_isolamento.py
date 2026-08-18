@@ -182,7 +182,6 @@ def main_teste() -> int:
             ("get", "/api/submission/moodle:1", None),
             ("get", "/api/calendar-feed", None),
             ("post", "/api/calendar-feed/reset", None),
-            ("post", "/api/reminders", {"enabled": True}),
             ("post", "/api/grades", {"subject_name": "Cálculo I"}),
         ]
         for metodo, rota, corpo in sem_sessao:
@@ -215,28 +214,6 @@ def main_teste() -> int:
         nova = client.post("/api/calendar-feed/reset", headers=auth(token_a)).json()["url"]
         verificar(nova != url_a, "reset gera uma chave nova")
         verificar(client.get(caminho_a).status_code == 404, "a chave antiga para de responder")
-
-        print("\n[3.2] Lembrete é opt-in e a fila só roda com a chave")
-        # O endpoint da fila é chamado por um cron de fora. Sem a chave certa
-        # ele não pode nem admitir que existe — senão vira botão de disparar
-        # e-mail para todo mundo.
-        verificar(
-            client.post("/api/tasks/reminders").status_code == 404,
-            "fila de lembretes não responde sem a chave",
-        )
-        verificar(
-            client.post("/api/tasks/reminders", headers={"X-Task-Key": "chave-errada"})
-            .status_code == 404,
-            "fila de lembretes recusa chave errada",
-        )
-
-        # Ligar o aviso sem e-mail conhecido não pode "dar certo" silenciosamente:
-        # o aluno ficaria confiando num lembrete que nunca sairia.
-        resp = client.post("/api/reminders", json={"enabled": True}, headers=auth(token_a))
-        verificar(
-            resp.status_code == 400,
-            "não dá para ligar o lembrete antes de o app saber o e-mail",
-        )
 
         print("\n[4] Token de A não alcança dados de B")
         # `open-course` sem `target_url` resolve pelo cache do dono do token.

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import Icon from './Icon';
 import CalendarFeed from './CalendarFeed';
-import ReminderToggle from './ReminderToggle';
 import { fetchProfile } from '../services/api';
 import type { Profile } from '../services/api';
 import { iniciais } from '../lib/nome';
@@ -197,12 +196,6 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onBack }) => {
             </div>
           ))}
       </dl>
-
-      <h3 className="profile__section-title">Lembretes</h3>
-      <ReminderToggle
-        enabled={perfil.reminders_enabled}
-        email={perfil.reminder_email ?? perfil.moodle?.email ?? null}
-      />
 
       <h3 className="profile__section-title">Assinar no seu calendário</h3>
       <CalendarFeed />

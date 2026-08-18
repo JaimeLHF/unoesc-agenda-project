@@ -3226,39 +3226,6 @@ body {
   color: var(--color-text);
 }
 
-/* ---- Lembrete por e-mail, na tela de perfil ---- */
-.lembrete__linha {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.6rem;
-  font-size: 0.9rem;
-  color: var(--color-text);
-  cursor: pointer;
-}
-
-.lembrete__linha input {
-  margin-top: 0.2rem;
-  accent-color: var(--color-primary);
-}
-
-/* O endereço fica embaixo da frase: é o que decide se vale ligar. */
-.lembrete__email {
-  display: block;
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-}
-
-.lembrete__nota,
-.lembrete__erro {
-  margin: 0.4rem 0 0;
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-}
-
-.lembrete__erro {
-  color: var(--color-error-ink);
-}
-
 /* ---- Boletim da disciplina ---- */
 .boletim {
   display: flex;
