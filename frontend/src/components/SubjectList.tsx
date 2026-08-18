@@ -1,6 +1,7 @@
 import React from 'react';
 import type { Subject, AcademicEvent, EventType } from '../types';
 import EventAlerts from './EventAlerts';
+import Insights from './Insights';
 import Icon from './Icon';
 import { useDoneEvents } from '../contexts/DoneEventsContext';
 
@@ -333,6 +334,10 @@ const SubjectList: React.FC<SubjectListProps> = ({
               <div className="subject-grid-large">{encerradas.map(renderCard)}</div>
             </>
           )}
+
+          {/* Os gráficos ficam depois da lista: quem abre o app quer ver o
+              próximo prazo, não uma tela de estatística. */}
+          <Insights subjects={subjects} events={events} mediaAprovacao={MEDIA_APROVACAO} />
         </>
       )}
     </section>

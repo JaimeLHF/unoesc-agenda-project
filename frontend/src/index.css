@@ -28,6 +28,13 @@
   --color-primary-ghost: rgba(29, 78, 216, 0.25);
   --color-brand-2: #4f46e5;
 
+  /* Séries dos gráficos. Passam nos seis testes da paleta categórica sobre a
+     superfície clara (banda de luminosidade, croma, separação sob daltonismo e
+     contraste); no escuro há um jogo próprio, mais escuro, logo abaixo. */
+  --chart-webconf: #1d4ed8;
+  --chart-entrega: #b45309;
+  --chart-prova: #9d174d;
+
   --color-bg: #f8fafc;
   --color-surface: #ffffff;
   --color-surface-2: #f1f5f9;
@@ -108,6 +115,10 @@
   --color-primary-border: #33507e;
   --color-primary-ghost: rgba(124, 176, 255, 0.3);
   --color-brand-2: #818cf8;
+
+  --chart-webconf: #3b82f6;
+  --chart-entrega: #d97706;
+  --chart-prova: #db2777;
 
   --color-bg: #0f172a;
   --color-surface: #1a2334;
@@ -3180,5 +3191,175 @@ body {
 
 .subject-card-large__grade {
   font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+/* ---- Panorama: os três gráficos da tela de disciplinas ---- */
+.insights {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.insights__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 1rem;
+  margin-top: 1rem;
+}
+
+.insights__card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 1.1rem 1.2rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.insights__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-text);
+}
+
+.insights__sub {
+  margin: 0 0 0.35rem;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.chart__svg {
+  width: 100%;
+  height: auto;
+}
+
+/* Grade e escala recuam: a informação são as barras. */
+.chart__grid {
+  stroke: var(--color-border);
+  stroke-width: 1;
+}
+
+.chart__tick,
+.chart__label {
+  fill: var(--color-text-muted);
+  font-size: 8px;
+}
+
+.chart__label {
+  text-anchor: middle;
+}
+
+.chart__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.15rem 0.9rem;
+  margin: 0.5rem 0 0;
+  padding: 0;
+  list-style: none;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}
+
+.chart__legend li {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.chart__swatch {
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 2px;
+}
+
+.chart__bars {
+  display: flex;
+  flex-direction: column;
+  gap: 0.45rem;
+  margin: 0.25rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.chart__bar-row {
+  display: grid;
+  grid-template-columns: minmax(0, 9rem) 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.75rem;
+}
+
+/* Duas linhas em vez de reticências: "Práticas Exten…" aparecia idêntico para
+   a III e a IV, e aí a barra não dizia de quem era. */
+.chart__bar-label {
+  color: var(--color-text-muted);
+  line-height: 1.25;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+.chart__bar-track {
+  position: relative;
+  height: 0.55rem;
+  background: var(--color-surface-2);
+  border-radius: 9999px;
+}
+
+.chart__bar-fill {
+  display: block;
+  height: 100%;
+  border-radius: 9999px;
+  background: var(--chart-webconf);
+}
+
+.chart__bar-fill--ok {
+  background: var(--color-success);
+}
+
+.chart__bar-fill--ruim {
+  background: var(--color-error);
+}
+
+/* Corte da aprovação: sem essa marca, 6,9 e 7,1 parecem a mesma barra. */
+.chart__bar-cut {
+  position: absolute;
+  top: -0.15rem;
+  bottom: -0.15rem;
+  width: 0;
+  border-left: 1px dashed var(--color-text-muted);
+}
+
+.chart__bar-value {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: var(--color-text);
+}
+
+.chart__hero {
+  margin: 0.15rem 0 0.5rem;
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+  font-size: 1.6rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+}
+
+.chart__hero-label {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--color-text-muted);
+}
+
+.chart__empty,
+.chart__foot {
+  margin: 0.35rem 0 0;
+  font-size: 0.75rem;
   color: var(--color-text-muted);
 }
