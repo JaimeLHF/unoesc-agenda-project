@@ -1240,8 +1240,14 @@ body {
 }
 
 .subject-card-large {
-  display: flex;
-  flex-direction: column;
+  /* `subgrid`: as quatro faixas do cartão (nome, estado, contagem, próximo)
+     herdam as linhas da grade, então elas começam na mesma altura em todos os
+     cartões da fileira. Onde não houver suporte, o cartão volta a ser uma
+     coluna simples e só perde o alinhamento. */
+  display: grid;
+  grid-template-rows: subgrid;
+  grid-row: span 4;
+  align-content: start;
   gap: 0.6rem;
   padding: 1.1rem 1.2rem;
   background: var(--color-surface);
@@ -1321,9 +1327,12 @@ body {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
+  font-size: 0.825rem;
+}
+
+.subject-card-large__next:not(:empty) {
   padding-top: 0.6rem;
   border-top: 1px dashed var(--color-border);
-  font-size: 0.825rem;
 }
 
 /* "Próximo" e a data na mesma linha: o rótulo sozinho numa linha empurrava o

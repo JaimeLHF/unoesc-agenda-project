@@ -216,6 +216,12 @@ const SubjectList: React.FC<SubjectListProps> = ({
         onClick={() => onSelectSubject(subject.id)}
         disabled={total === 0}
       >
+        {/*
+          Os quatro blocos são sempre renderizados, mesmo vazios: com `subgrid`
+          é isso que faz a mesma faixa de todos os cartões da linha começar na
+          mesma altura. Sem eles, um nome que quebra em duas linhas empurrava
+          todo o resto do cartão para baixo e a grade ficava serrilhada.
+        */}
         <div className="subject-card-large__header">
           <span className="subject-card-large__title">
             {/*
@@ -239,61 +245,59 @@ const SubjectList: React.FC<SubjectListProps> = ({
         </div>
 
         {/*
-          Uma linha de estado logo abaixo do nome, no mesmo lugar nos dois
-          grupos: "Aprovado · nota" na encerrada, o progresso na que está
-          rolando. Empilhado à direita do título, isso espremia o nome em três
-          linhas e disputava atenção com a contagem de eventos.
+          Linha de estado, no mesmo lugar nos dois grupos: "Aprovado · nota" na
+          encerrada, o progresso na que está rolando.
         */}
-        {ended && typeof subject.final_grade === 'number' ? (
-          <div className="subject-card-large__result">
-            <span
-              className={`subject-card-large__status subject-card-large__status--${
-                subject.final_grade / 10 >= MEDIA_APROVACAO ? 'aprovado' : 'reprovado'
-              }`}
-            >
-              {subject.final_grade / 10 >= MEDIA_APROVACAO ? 'Aprovado' : 'Reprovado'}
-            </span>
-            <span className="subject-card-large__grade">
-              nota {formatGrade(subject.final_grade)}
-            </span>
-          </div>
-        ) : (
-          doneInSubject > 0 && (
-            <div className="subject-card-large__result">
+        <div className="subject-card-large__result">
+          {ended && typeof subject.final_grade === 'number' ? (
+            <>
+              <span
+                className={`subject-card-large__status subject-card-large__status--${
+                  subject.final_grade / 10 >= MEDIA_APROVACAO ? 'aprovado' : 'reprovado'
+                }`}
+              >
+                {subject.final_grade / 10 >= MEDIA_APROVACAO ? 'Aprovado' : 'Reprovado'}
+              </span>
+              <span className="subject-card-large__grade">
+                nota {formatGrade(subject.final_grade)}
+              </span>
+            </>
+          ) : (
+            doneInSubject > 0 && (
               <span className="subject-card-large__done">
                 <Icon name="check" size={0.95} />
                 {doneInSubject} de {total} concluído{doneInSubject === 1 ? '' : 's'}
               </span>
-            </div>
-          )
-        )}
+            )
+          )}
+        </div>
 
-        {total > 0 ? (
-          <>
-            <div className="subject-card-large__breakdown">{breakdown}</div>
-            {nextEvent ? (
-              <div className="subject-card-large__next">
-                <span className="subject-card-large__next-title">{nextEvent.title}</span>
-                <span className="subject-card-large__next-when">
-                  <span className="subject-card-large__next-label">Próximo</span>
-                  <span className="subject-card-large__next-date">
-                    {formatNextEventDate(nextEvent.date, nextEvent.time)}
-                  </span>
+        <div className="subject-card-large__breakdown">
+          {total > 0 ? breakdown : <span className="subject-card-large__empty">Nenhum evento identificado</span>}
+        </div>
+
+        <div className="subject-card-large__next">
+          {nextEvent ? (
+            <>
+              <span className="subject-card-large__next-title">{nextEvent.title}</span>
+              <span className="subject-card-large__next-when">
+                <span className="subject-card-large__next-label">Próximo</span>
+                <span className="subject-card-large__next-date">
+                  {formatNextEventDate(nextEvent.date, nextEvent.time)}
                 </span>
-              </div>
-            ) : (
-              /* Numa disciplina encerrada isso é redundante: o card já está sob
-                 o título "Encerradas" e traz o resultado. */
-              !ended && (
-                <div className="subject-card-large__next subject-card-large__next--past">
-                  Sem eventos futuros — {upcomingCount === 0 ? 'todos encerrados' : ''}
-                </div>
-              )
-            )}
-          </>
-        ) : (
-          <div className="subject-card-large__empty">Nenhum evento identificado</div>
-        )}
+              </span>
+            </>
+          ) : (
+            /* Numa disciplina encerrada isso é redundante: o card já está sob
+               o título "Encerradas" e traz o resultado. */
+            !ended &&
+            total > 0 && (
+              <span className="subject-card-large__next--past">
+                Sem eventos futuros — {upcomingCount === 0 ? 'todos encerrados' : ''}
+              </span>
+            )
+          )}
+        </div>
       </button>
     );
   };
