@@ -37,14 +37,16 @@ function intervalo(inicio: Date): string {
 }
 
 /**
- * A semana do aluno, de segunda a domingo.
+ * A semana do aluno, de segunda a domingo, em linhas.
  *
  * O app organiza tudo por disciplina, que é como o Moodle guarda; a cabeça de
  * quem estuda organiza por dia — "o que eu tenho essa semana?" é a pergunta
  * que ninguém consegue responder olhando seis cartões de disciplina.
  *
- * Dia sem nada aparece assim mesmo, vazio: o buraco na semana é informação —
- * é onde dá para adiantar o que vence na semana seguinte.
+ * Era uma grade de sete colunas, e numa semana real (um compromisso, seis dias
+ * livres) ela virava seis caixas grandes escritas "livre". Em linha, o dia
+ * vazio ocupa a altura de uma linha e o dia cheio cresce — o desenho passa a
+ * ter a forma da semana em vez de uma forma fixa.
  */
 const WeekView: React.FC<WeekViewProps> = ({ events, onOpenEvent }) => {
   const [offset, setOffset] = useState(0);
@@ -108,19 +110,26 @@ const WeekView: React.FC<WeekViewProps> = ({ events, onOpenEvent }) => {
 
       {vazia && <p className="semana__vazia">Nada marcado nesta semana.</p>}
 
-      <div className="semana__grade">
+      <div className="semana__lista">
         {dias.map(({ data, chave, nome, eventos }) => (
           <div
             key={chave}
-            className={`semana__dia${chave === hojeChave ? ' semana__dia--hoje' : ''}`}
+            className={[
+              'semana__linha',
+              chave === hojeChave ? 'semana__linha--hoje' : '',
+              eventos.length === 0 ? 'semana__linha--livre' : '',
+            ]
+              .filter(Boolean)
+              .join(' ')}
           >
-            <div className="semana__cabecalho">
-              <span className="semana__nome">{nome}</span>
+            <div className="semana__data">
+              <span className="semana__nome">{nome.slice(0, 3)}</span>
               <span className="semana__numero">{data.getDate()}</span>
+              {chave === hojeChave && <span className="semana__hoje">hoje</span>}
             </div>
 
             {eventos.length === 0 ? (
-              <p className="semana__livre">livre</p>
+              <span className="semana__livre">—</span>
             ) : (
               <ul className="semana__eventos">
                 {eventos.map((e) => (
@@ -131,12 +140,12 @@ const WeekView: React.FC<WeekViewProps> = ({ events, onOpenEvent }) => {
                         isDone(e) ? ' semana__evento--feito' : ''
                       }`}
                       onClick={() => onOpenEvent(e)}
-                      title={`${e.title} — ${e.subject}`}
                     >
                       <Icon name={TIPO_ICONE[e.type as EventType] ?? 'pin'} size={0.85} />
-                      <span className="semana__evento-texto">
-                        {e.time && <span className="semana__hora">{e.time}</span>}
-                        {e.title}
+                      {e.time && <span className="semana__hora">{e.time}</span>}
+                      <span className="semana__evento-texto">{e.title}</span>
+                      <span className="semana__disciplina">
+                        {e.subject.replace(/^\d+\s*-\s*/, '')}
                       </span>
                     </button>
                   </li>
@@ -146,6 +155,7 @@ const WeekView: React.FC<WeekViewProps> = ({ events, onOpenEvent }) => {
           </div>
         ))}
       </div>
+
     </section>
   );
 };

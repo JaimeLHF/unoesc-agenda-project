@@ -3472,37 +3472,49 @@ body {
   transform: rotate(180deg);
 }
 
-.semana__grade {
-  display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-  gap: 0.5rem;
-}
-
-.semana__dia {
+.semana__lista {
   display: flex;
   flex-direction: column;
-  gap: 0.4rem;
-  min-height: 7rem;
-  padding: 0.6rem 0.5rem;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
+  overflow: hidden;
 }
 
-.semana__dia--hoje {
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 1px var(--color-primary) inset;
+/* Uma linha por dia. O dia livre encolhe até quase sumir — mostrar sete
+   caixas do mesmo tamanho fazia uma semana com um compromisso parecer uma
+   tela quebrada. */
+.semana__linha {
+  display: grid;
+  /* Larga o bastante para "SEG 17" e a etiqueta "hoje" na mesma linha —
+     apertada, a etiqueta saía cortada pela metade. */
+  grid-template-columns: 6.5rem 1fr;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.5rem 0.9rem;
+  border-bottom: 1px solid var(--color-border);
 }
 
-.semana__cabecalho {
+.semana__linha:last-child {
+  border-bottom: none;
+}
+
+.semana__linha--livre {
+  padding: 0.3rem 0.9rem;
+}
+
+.semana__linha--hoje {
+  background: var(--color-primary-soft);
+}
+
+.semana__data {
   display: flex;
   align-items: baseline;
-  justify-content: space-between;
-  gap: 0.35rem;
+  gap: 0.4rem;
 }
 
 .semana__nome {
-  font-size: 0.68rem;
+  font-size: 0.7rem;
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -3510,16 +3522,22 @@ body {
 }
 
 .semana__numero {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   font-weight: 700;
   color: var(--color-text);
   font-variant-numeric: tabular-nums;
 }
 
+.semana__hoje {
+  font-size: 0.62rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-primary);
+}
+
 .semana__livre {
-  margin: 0;
-  font-size: 0.72rem;
-  font-style: italic;
+  font-size: 0.8rem;
   color: var(--color-text-muted);
 }
 
@@ -3534,20 +3552,23 @@ body {
 
 .semana__evento {
   display: flex;
-  align-items: flex-start;
-  gap: 0.3rem;
+  align-items: center;
+  gap: 0.5rem;
   width: 100%;
-  padding: 0.35rem 0.4rem;
+  padding: 0.4rem 0.6rem;
   text-align: left;
   font-family: inherit;
-  font-size: 0.72rem;
-  line-height: 1.25;
+  font-size: 0.82rem;
   color: var(--color-text);
   background: var(--color-surface-2);
   border: none;
   border-left: 3px solid var(--color-border);
   border-radius: 0.35rem;
   cursor: pointer;
+}
+
+.semana__evento:hover {
+  filter: brightness(1.06);
 }
 
 .semana__evento--webconference { border-left-color: var(--color-primary); }
@@ -3557,34 +3578,41 @@ body {
 /* Concluído continua na semana, mas apagado: sumir esconderia que o dia teve
    trabalho, e é isso que o aluno usa para lembrar do que já fez. */
 .semana__evento--feito {
-  opacity: 0.5;
+  opacity: 0.55;
   text-decoration: line-through;
 }
 
-/* "Webconferência" é mais larga que a coluna de um dia: sem hifenização ela
-   partia no meio da palavra, sem traço nenhum, e virava "Webconferê ncia". */
-.semana__evento-texto {
-  min-width: 0;
-  overflow-wrap: break-word;
-  hyphens: auto;
-}
-
 .semana__hora {
-  display: block;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: var(--color-text-muted);
 }
 
-/* No celular a semana vira lista: sete colunas de 40px não cabem em tela de
-   mão, e um dia por linha é como o aluno lê no ônibus. */
-@media (max-width: 720px) {
-  .semana__grade {
-    grid-template-columns: 1fr;
+.semana__evento-texto {
+  font-weight: 500;
+}
+
+/* A disciplina fica à direita, recuada: identifica sem competir com o título
+   da atividade, que é o que o aluno procura. */
+.semana__disciplina {
+  margin-left: auto;
+  padding-left: 0.75rem;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+@media (max-width: 620px) {
+  .semana__linha {
+    grid-template-columns: 5rem 1fr;
+    gap: 0.5rem;
   }
 
-  .semana__dia {
-    min-height: 0;
+  /* Em tela de mão não sobra largura para as duas coisas; o título ganha. */
+  .semana__disciplina {
+    display: none;
   }
 }
 
