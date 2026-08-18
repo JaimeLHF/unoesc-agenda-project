@@ -20,9 +20,14 @@ const api = axios.create({
  * Sessão
  *
  * A senha vai para o backend uma única vez, em /api/login, e o que fica no
- * navegador é um token opaco. Ele mora só em memória — nada de localStorage,
- * que sobreviveria ao fechar a aba e ficaria exposto a XSS. O custo é que um
- * reload da página exige login de novo.
+ * navegador é um token opaco, guardado em `sessionStorage`.
+ *
+ * Ficava só em memória, e qualquer reload derrubava a sessão. `sessionStorage`
+ * e não `localStorage`: o token morre quando a aba fecha, então um computador
+ * de laboratório não fica com sessão aberta para o próximo que sentar. Contra
+ * XSS os dois valem o mesmo — um script injetado na página usa o token em
+ * memória do mesmo jeito. A proteção real seria cookie httpOnly, que exige
+ * CSRF e um proxy no dev; está anotado como evolução.
  *
  * Isso vale para o navegador. No servidor a senha é guardada cifrada, porque
  * o cliente do Moodle precisa relogar sozinho quando a sessão de lá expira —
@@ -30,7 +35,29 @@ const api = axios.create({
  * avisa o aluno.
  * ----------------------------------------------------------------------- */
 
-let authToken: string | null = null;
+const TOKEN_KEY = 'agenda_token';
+
+/* Navegador em modo restrito (Safari privado antigo, iframe sem permissão)
+   pode barrar o storage. Aí a sessão volta a viver só em memória, como antes. */
+function lerToken(): string | null {
+  try {
+    return sessionStorage.getItem(TOKEN_KEY);
+  } catch {
+    return null;
+  }
+}
+
+let authToken: string | null = lerToken();
+
+function guardarToken(token: string | null): void {
+  authToken = token;
+  try {
+    if (token) sessionStorage.setItem(TOKEN_KEY, token);
+    else sessionStorage.removeItem(TOKEN_KEY);
+  } catch {
+    /* sem storage: o token continua valendo nesta aba, só não sobrevive ao reload */
+  }
+}
 
 export function isAuthenticated(): boolean {
   return authToken !== null;
@@ -60,7 +87,7 @@ api.interceptors.response.use(
     } else {
       window.dispatchEvent(new CustomEvent('backend-online'));
       if (error.response.status === 401) {
-        authToken = null;
+        guardarToken(null);
         window.dispatchEvent(new CustomEvent('session-expired'));
       }
     }
@@ -71,7 +98,7 @@ api.interceptors.response.use(
 /** Autentica no portal UNOESC e guarda o token da sessão. */
 export async function login(credentials: LoginCredentials): Promise<void> {
   const { data } = await api.post<{ token: string }>('/login', credentials);
-  authToken = data.token;
+  guardarToken(data.token);
 }
 
 /** Encerra a sessão no backend e descarta o token local. */
@@ -79,7 +106,7 @@ export async function logout(): Promise<void> {
   try {
     if (authToken) await api.post('/logout');
   } finally {
-    authToken = null;
+    guardarToken(null);
   }
 }
 

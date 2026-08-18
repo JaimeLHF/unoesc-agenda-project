@@ -117,6 +117,14 @@ function termRank(term: { year: number; half: 1 | 2 }): number {
  * boletim. Só a nota, sem rótulo: "Aprovado" é decisão da UNOESC e o Moodle
  * não guarda isso em lugar nenhum.
  */
+/**
+ * Nota mínima de aprovação, na escala 0–10. O Moodle não guarda situação
+ * acadêmica — "Aprovado" é decisão da UNOESC — então o rótulo é derivado aqui,
+ * e só para disciplina encerrada: no meio do semestre a nota ainda é parcial e
+ * chamar isso de "Reprovado" seria mentira.
+ */
+const MEDIA_APROVACAO = 7;
+
 function formatGrade(grade: number): string {
   return (grade / 10).toLocaleString('pt-BR', {
     minimumFractionDigits: 1,
@@ -229,6 +237,15 @@ const SubjectList: React.FC<SubjectListProps> = ({
             <span className="subject-card-large__name">{label}</span>
           </span>
           <span className="subject-card-large__badges">
+            {ended && typeof subject.final_grade === 'number' && (
+              <span
+                className={`subject-card-large__status subject-card-large__status--${
+                  subject.final_grade / 10 >= MEDIA_APROVACAO ? 'aprovado' : 'reprovado'
+                }`}
+              >
+                {subject.final_grade / 10 >= MEDIA_APROVACAO ? 'Aprovado' : 'Reprovado'}
+              </span>
+            )}
             {typeof subject.final_grade === 'number' && (
               <span className="subject-card-large__grade">
                 Nota {formatGrade(subject.final_grade)}

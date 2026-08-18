@@ -3153,3 +3153,23 @@ body {
   background: var(--color-success-bg);
   color: var(--color-success-strong, var(--color-success));
 }
+
+.subject-card-large__status {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 0.2rem 0.6rem;
+  border-radius: 9999px;
+  white-space: nowrap;
+}
+
+.subject-card-large__status--aprovado {
+  background: var(--color-success-bg);
+  color: var(--color-success-strong, var(--color-success));
+}
+
+.subject-card-large__status--reprovado {
+  background: var(--color-error-bg);
+  color: var(--color-error-ink, var(--color-error));
+}

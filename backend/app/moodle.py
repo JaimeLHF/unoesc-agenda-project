@@ -620,7 +620,7 @@ class MoodleClient:
             })
         return cursos
 
-    def course_grades(self) -> dict[int, float]:
+    def course_grades(self, cursos: list[dict]) -> dict[int, float]:
         """
         Nota final de cada disciplina, por `course_id`.
 
@@ -628,6 +628,11 @@ class MoodleClient:
         cursos numa requisição só — o relatório por curso exigiria uma volta ao
         servidor por disciplina. É HTML e não AJAX porque as funções de nota do
         `service.php` respondem `servicenotavailable` nesta instância.
+
+        A linha é casada pelo id no link e, se ele não vier, pelo nome completo
+        do curso: o Moodle mudou o destino desse link entre versões (ora a
+        disciplina, ora o relatório do usuário) e a primeira tentativa, que
+        exigia `course/view.php`, não casou nada.
 
         Disciplina sem nota lançada aparece com `-` e fica fora do dicionário:
         ausência é informação (o semestre está em andamento), zero não seria.
@@ -639,21 +644,32 @@ class MoodleClient:
             logger.warning("Relatório de notas não veio: %s", exc)
             return {}
 
+        por_nome = {
+            _normalizar(c.get("fullname") or ""): c["course_id"]
+            for c in cursos
+            if c.get("fullname")
+        }
+
         notas: dict[int, float] = {}
         for linha in re.findall(r"(?is)<tr[^>]*>(.*?)</tr>", resp.text):
-            m = re.search(r"(?i)course/view\.php\?id=(\d+)", linha)
-            if not m:
-                continue
             celulas = [
                 html_to_text(c).strip()
-                for c in re.findall(r"(?is)<td[^>]*>(.*?)</td>", linha)
+                for c in re.findall(r"(?is)<t[dh][^>]*>(.*?)</t[dh]>", linha)
             ]
-            # A nota é a última célula preenchida da linha; o Moodle escreve em
+            if len(celulas) < 2:
+                continue
+
+            m = re.search(r"(?i)href=\"[^\"]*(?:course/view|grade/report)[^\"]*[?&]id=(\d+)", linha)
+            course_id = int(m.group(1)) if m else por_nome.get(_normalizar(celulas[0]))
+            if not course_id:
+                continue
+
+            # A nota é a última célula numérica da linha; o Moodle escreve em
             # pt-BR ("95,00"), então a vírgula precisa virar ponto.
             for texto in reversed(celulas):
                 valor = texto.replace(".", "").replace(",", ".")
                 if re.fullmatch(r"\d+(?:\.\d+)?", valor):
-                    notas[int(m.group(1))] = float(valor)
+                    notas[course_id] = float(valor)
                     break
         return notas
 
@@ -1191,7 +1207,7 @@ class MoodleClient:
 
         # Uma requisição para todas as disciplinas — feita depois do laço para
         # não repetir por curso.
-        notas = self.course_grades()
+        notas = self.course_grades(cursos)
         for sub in subjects:
             nota = notas.get(sub["course_id"])
             if nota is not None:

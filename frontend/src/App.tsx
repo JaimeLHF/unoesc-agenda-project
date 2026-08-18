@@ -12,6 +12,7 @@ import ThemeToggle from './components/ThemeToggle';
 import {
   login,
   logout,
+  isAuthenticated,
   scrapePortal,
   syncToCalendar,
   fetchCache,
@@ -115,6 +116,22 @@ const App: React.FC = () => {
 
     try {
       await login(creds);
+      await abrirSessao();
+      setLoginLoading(false);
+      setStep('results');
+    } catch (err: unknown) {
+      setLoginLoading(false);
+      setLoginError(mensagemDeErro(err));
+    }
+  };
+
+  /**
+   * Carrega conta, marcações e agenda de uma sessão já autenticada. Serve tanto
+   * ao login quanto à retomada depois de um reload — o token vive no
+   * `sessionStorage`, então recarregar a página não pede senha de novo.
+   */
+  const abrirSessao = async () => {
+    {
       setAuthenticated(true);
       void fetchAccount().then(setAccount).catch(() => setAccount(null));
       void fetchProfile().then(setProfile).catch(() => setProfile(null));
@@ -144,14 +161,25 @@ const App: React.FC = () => {
           'Não consegui falar com o Moodle agora. Esta é a sua última agenda salva.',
         );
       }
-
-      setLoginLoading(false);
-      setStep('results');
-    } catch (err: unknown) {
-      setLoginLoading(false);
-      setLoginError(mensagemDeErro(err));
     }
   };
+
+  /*
+    Retomada de sessão: com um token guardado, o reload volta direto para a
+    agenda em vez de pedir a senha. O 401 do interceptor já cuida do token
+    vencido — cai no `catch` e a tela de login volta com o aviso.
+  */
+  useEffect(() => {
+    if (!isAuthenticated()) return;
+    setLoginLoading(true);
+    setLoadingMessage('Retomando sua sessão…');
+    void abrirSessao()
+      .then(() => setStep('results'))
+      .catch((err) => setLoginError(mensagemDeErro(err)))
+      .finally(() => setLoginLoading(false));
+    // Só no mount: é a retomada, não uma reação a mudança de estado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** Re-busca disciplinas e eventos. Pede login novamente se a sessão caiu. */
   const handleRefresh = async () => {
