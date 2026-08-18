@@ -3182,3 +3182,46 @@ body {
   font-size: 0.8rem;
   color: var(--color-text-muted);
 }
+
+/* ---- Assinatura de calendário (.ics), na tela de perfil ---- */
+.feed {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.6rem;
+}
+
+.feed__intro,
+.feed__aviso,
+.feed__erro {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  line-height: 1.5;
+}
+
+.feed__erro {
+  color: var(--color-error-ink);
+}
+
+/* O endereço é longo e ninguém digita: ele quebra, rola e tem botão de
+   copiar ao lado. */
+.feed__url {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  background: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.feed__url code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  color: var(--color-text);
+}

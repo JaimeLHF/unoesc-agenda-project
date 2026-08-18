@@ -15,6 +15,7 @@ from typing import Optional
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel
@@ -25,6 +26,7 @@ from app import ratelimit
 from app import repository as repo
 from app import session as app_session
 from app.calendar_sync import CalendarSyncService
+from app.icalendar import build_calendar
 from app.database import init_db, utc_now
 from app.moodle import TZ_BR, MoodleClient, clear_session_cache
 from app.observability import mensagem_amigavel, registrar_falha
@@ -253,6 +255,11 @@ app = FastAPI(
 # Em produção o frontend é servido por este mesmo processo (mesma origem), e
 # não há CORS a liberar. `ALLOWED_ORIGINS` existe para o desenvolvimento, onde
 # o Vite roda em outra porta, e para um eventual front hospedado à parte.
+# Endereço público do app, usado para montar o link do calendário assinável.
+# Em desenvolvimento o backend responde na 8880; em produção tudo sai do mesmo
+# domínio, então o padrão é o de produção.
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "https://unoesc-agenda.fly.dev").rstrip("/")
+
 _origins = [o.strip() for o in os.getenv("ALLOWED_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
@@ -623,6 +630,66 @@ async def unmark_event_done(
         repo.unmark_done(db, session.user_id, request.stable_key)
         db.commit()
         return DoneEventsResponse(done_keys=repo.list_done_keys(db, session.user_id))
+
+
+class CalendarFeedResponse(BaseModel):
+    """Endereço da assinatura de calendário do aluno."""
+    url: str
+
+
+@app.get("/api/calendar-feed", response_model=CalendarFeedResponse)
+async def get_calendar_feed(
+    session: app_session.PortalSession = Depends(require_session),
+):
+    """
+    Endereço que o aluno cola no Google Agenda, no Apple Calendário ou no
+    Outlook. A chave nasce aqui, na primeira vez que ele pede.
+    """
+    with repo.get_session() as db:
+        token = repo.get_or_create_ics_token(db, session.user_id)
+        db.commit()
+    return CalendarFeedResponse(url=f"{PUBLIC_BASE_URL}/calendario/{token}.ics")
+
+
+@app.post("/api/calendar-feed/reset", response_model=CalendarFeedResponse)
+async def reset_calendar_feed(
+    session: app_session.PortalSession = Depends(require_session),
+):
+    """Troca a chave — o endereço antigo para de responder na hora."""
+    with repo.get_session() as db:
+        token = repo.reset_ics_token(db, session.user_id)
+        db.commit()
+    return CalendarFeedResponse(url=f"{PUBLIC_BASE_URL}/calendario/{token}.ics")
+
+
+@app.get("/calendario/{token}.ics", response_class=PlainTextResponse)
+async def calendar_feed(token: str):
+    """
+    A agenda do aluno em iCalendar, buscada pelo cliente de calendário dele.
+
+    Fora de `/api` e sem sessão de propósito: quem faz esta requisição é o
+    servidor do Google ou do Apple, que não tem como carregar um token de
+    sessão. A chave da URL é a credencial — comprida, aleatória, trocável pelo
+    aluno e boa só para ler os eventos.
+
+    Os eventos saem do cache: este endereço não dispara busca no Moodle, que
+    precisaria da senha e demoraria mais do que um cliente de calendário
+    espera.
+    """
+    with repo.get_session() as db:
+        user = repo.get_user_by_ics_token(db, token)
+        if user is None:
+            # 404 e não 403: um endereço inválido não deve confirmar que
+            # existem endereços válidos parecidos.
+            raise HTTPException(status_code=404, detail="Calendário não encontrado.")
+        eventos = repo.list_events(db, user.id)
+        ics = build_calendar(eventos)
+
+    return PlainTextResponse(
+        ics,
+        media_type="text/calendar; charset=utf-8",
+        headers={"Content-Disposition": 'inline; filename="agenda-unoesc.ics"'},
+    )
 
 
 @app.delete("/api/cache")

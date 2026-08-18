@@ -426,3 +426,21 @@ export async function fetchActivity(stableKey: string): Promise<ActivityDetail> 
   );
   return data;
 }
+
+/* -------------------------------------------------------------------------
+ * Calendário assinável
+ *
+ * Um endereço `.ics` que o Google Agenda, o Apple Calendário ou o Outlook
+ * buscam sozinhos de tempos em tempos. A chave da URL é a credencial — quem
+ * tiver o endereço vê a agenda —, por isso existe o botão de trocar.
+ * ----------------------------------------------------------------------- */
+
+export async function fetchCalendarFeed(): Promise<string> {
+  const { data } = await api.get<{ url: string }>('/calendar-feed');
+  return data.url;
+}
+
+export async function resetCalendarFeed(): Promise<string> {
+  const { data } = await api.post<{ url: string }>('/calendar-feed/reset');
+  return data.url;
+}

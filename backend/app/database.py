@@ -89,6 +89,13 @@ class User(Base):
     ai_calls_used: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     ai_quota_period: Mapped[Optional[str]] = mapped_column(String)
 
+    # Chave do endereço .ics que o Google/Apple Calendar assina. É um segredo
+    # de leitura: quem tem o endereço vê a agenda, e por isso ele nasce só
+    # quando o aluno pede e pode ser trocado sem mexer na senha. Fica em claro
+    # porque o servidor precisa comparar com o que veio na URL — o valor não
+    # abre sessão nem dá acesso a mais nada além dos eventos.
+    ics_token: Mapped[Optional[str]] = mapped_column(String, unique=True, index=True)
+
 
 class AppSession(Base):
     """

@@ -180,10 +180,39 @@ def main_teste() -> int:
             ("get", "/api/activity/moodle:1", None),
             ("get", "/api/profile", None),
             ("get", "/api/submission/moodle:1", None),
+            ("get", "/api/calendar-feed", None),
+            ("post", "/api/calendar-feed/reset", None),
         ]
         for metodo, rota, corpo in sem_sessao:
             resp = getattr(client, metodo)(rota, json=corpo) if corpo else getattr(client, metodo)(rota)
             verificar(resp.status_code == 401, f"{metodo.upper()} {rota} → 401 sem token")
+
+        print("\n[3.1] Calendário assinável leva só a agenda do dono")
+        # O `.ics` é buscado pelo servidor do Google, que não carrega token de
+        # sessão: a chave da URL é a credencial inteira. Se ela alcançasse a
+        # agenda de outro aluno, bastaria um endereço vazado.
+        url_a = client.get("/api/calendar-feed", headers=auth(token_a)).json()["url"]
+        url_b = client.get("/api/calendar-feed", headers=auth(token_b)).json()["url"]
+        verificar(url_a != url_b, "cada aluno tem sua própria chave de calendário")
+
+        caminho_a = "/calendario/" + url_a.split("/calendario/")[1]
+        caminho_b = "/calendario/" + url_b.split("/calendario/")[1]
+        ics_a = client.get(caminho_a)
+        ics_b = client.get(caminho_b)
+        verificar(ics_a.status_code == 200, "o calendário do dono responde sem sessão")
+        verificar("Prova 1" in ics_a.text, "o calendário de A traz o evento de A")
+        verificar("Trabalho de Redes" not in ics_a.text, "o calendário de A não traz evento de B")
+        verificar("Trabalho de Redes" in ics_b.text, "o calendário de B traz o evento de B")
+        verificar(
+            client.get("/calendario/chave-inventada.ics").status_code == 404,
+            "chave inválida não devolve calendário",
+        )
+
+        # Trocar a chave precisa invalidar a antiga na hora — é o botão de
+        # "vazou o endereço, corta o acesso".
+        nova = client.post("/api/calendar-feed/reset", headers=auth(token_a)).json()["url"]
+        verificar(nova != url_a, "reset gera uma chave nova")
+        verificar(client.get(caminho_a).status_code == 404, "a chave antiga para de responder")
 
         print("\n[4] Token de A não alcança dados de B")
         # `open-course` sem `target_url` resolve pelo cache do dono do token.

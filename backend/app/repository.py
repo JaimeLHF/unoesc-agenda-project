@@ -9,6 +9,7 @@ chamam as funções daqui.
 aparecer uma, ela vaza a agenda de um aluno para outro.
 """
 
+import secrets
 from typing import Optional
 
 from sqlalchemy import delete, select, update
@@ -79,6 +80,42 @@ def delete_user(session: Session, user_id: str) -> None:
     session.execute(delete(Meta).where(Meta.user_id == user_id))
     session.execute(delete(AppSession).where(AppSession.user_id == user_id))
     session.execute(delete(User).where(User.id == user_id))
+
+
+def get_or_create_ics_token(session: Session, user_id: str) -> Optional[str]:
+    """Chave do calendário assinável do aluno, criada na primeira vez."""
+    user = session.get(User, user_id)
+    if user is None:
+        return None
+    if not user.ics_token:
+        user.ics_token = secrets.token_urlsafe(24)
+        session.flush()
+    return user.ics_token
+
+
+def reset_ics_token(session: Session, user_id: str) -> Optional[str]:
+    """Troca a chave: o endereço antigo para de funcionar na hora."""
+    user = session.get(User, user_id)
+    if user is None:
+        return None
+    user.ics_token = secrets.token_urlsafe(24)
+    session.flush()
+    return user.ics_token
+
+
+def get_user_by_ics_token(session: Session, token: str) -> Optional[User]:
+    """
+    Dono de uma chave de calendário.
+
+    É a única leitura do módulo que não recebe `user_id` — ela existe
+    justamente para descobrir de quem é a agenda, a partir de um segredo que
+    só o dono tem. Quem chama usa o `id` devolvido para filtrar tudo o mais.
+    """
+    if not token:
+        return None
+    return session.execute(
+        select(User).where(User.ics_token == token)
+    ).scalar_one_or_none()
 
 
 # ---------------------------------------------------------------------------
