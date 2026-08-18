@@ -46,6 +46,14 @@ todo F5 caía no login. Morre quando a aba fecha; contra XSS os dois valem o
 mesmo, e a proteção real seria cookie httpOnly — anotado em
 `frontend/src/services/api.ts`.
 
+**O assistente se chama Tino e é acessado por um botão flutuante.** O acesso
+ficava na barra de cima, junto de Atualizar — onde o aluno passa uma vez ao
+abrir o app e não volta mais. A pergunta que o Tino responde ("por onde eu
+começo?") nasce olhando a agenda, então o botão vive fixo no canto inferior
+direito (`frontend/src/components/AssistantFab.tsx`), em toda tela menos a
+dele. O prompt tem teto de 5 linhas por resposta: o aluno lê isso no celular,
+entre uma aula e outra.
+
 **O enunciado da atividade é lido, mas só para a tela.** `activity_content()` já
 foi apagado uma vez, porque alimentava um assistente que respondia provas.
 Voltou em 14/08/2026 com destino único: a página da atividade. `assistant.py`

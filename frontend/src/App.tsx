@@ -7,6 +7,7 @@ import LoginForm from './components/LoginForm';
 import SubjectList from './components/SubjectList';
 import SubjectDetail from './components/SubjectDetail';
 import Assistant from './components/Assistant';
+import AssistantFab from './components/AssistantFab';
 import ProfilePage from './components/ProfilePage';
 import ThemeToggle from './components/ThemeToggle';
 import {
@@ -314,8 +315,6 @@ const App: React.FC = () => {
           avatar={profile?.moodle?.avatar}
           onRefresh={handleRefresh}
           refreshing={refreshing}
-          onOpenAssistant={() => setStep('assistant')}
-          assistantAvailable={account?.assistantAvailable ?? false}
           onOpenProfile={() => setStep('profile')}
           onClearCache={handleClearCache}
           onLogout={handleLogout}
@@ -426,6 +425,22 @@ const App: React.FC = () => {
           />
         )}
       </main>
+
+      {/*
+        O Tino fica alcançável de qualquer tela — menos da dele própria, onde
+        o botão só cobriria a conversa. Depende do assistente estar ligado no
+        servidor: sem chave de IA, o backend recusa e o botão seria uma porta
+        para lugar nenhum.
+      */}
+      {authenticated &&
+        !loginLoading &&
+        step !== 'assistant' &&
+        account?.assistantAvailable && (
+          <AssistantFab
+            onClick={() => setStep('assistant')}
+            restantes={Math.max(0, account.assistantLimit - account.assistantUsed)}
+          />
+        )}
 
       {/*
         A autoria fica no rodapé, em duas linhas: primeiro quem fez, depois o

@@ -13,8 +13,6 @@ interface AppHeaderProps {
   avatar?: string | null;
   onRefresh: () => void;
   refreshing: boolean;
-  onOpenAssistant?: () => void;
-  assistantAvailable?: boolean;
   onOpenProfile: () => void;
   onClearCache: () => void;
   onLogout: () => void;
@@ -40,8 +38,6 @@ const AppHeader: React.FC<AppHeaderProps> = ({
   avatar,
   onRefresh,
   refreshing,
-  onOpenAssistant,
-  assistantAvailable,
   onOpenProfile,
   onClearCache,
   onLogout,
@@ -111,18 +107,6 @@ const AppHeader: React.FC<AppHeaderProps> = ({
 
           {authenticated && (
             <>
-              {assistantAvailable && onOpenAssistant && (
-                <button
-                  type="button"
-                  className="btn-ghost"
-                  onClick={onOpenAssistant}
-                  title="Pedir ajuda para organizar seus prazos"
-                >
-                  <Icon name="organizar" />
-                  <span className="btn-ghost__label">Organizar</span>
-                </button>
-              )}
-
               <button
                 type="button"
                 className="btn-ghost"
