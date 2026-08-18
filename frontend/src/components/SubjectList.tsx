@@ -8,8 +8,6 @@ interface SubjectListProps {
   subjects: Subject[];
   events: AcademicEvent[];
   onSelectSubject: (id: string) => void;
-  /** Só para avisar que os números na tela podem mudar em instantes. */
-  refreshing: boolean;
   lastScrapedAt?: string | null;
   /** Repassado para a faixa de alertas, que leva à página da atividade. */
   onOpenEvent: (event: AcademicEvent) => void;
@@ -146,7 +144,6 @@ const SubjectList: React.FC<SubjectListProps> = ({
   subjects,
   events,
   onSelectSubject,
-  refreshing,
   lastScrapedAt,
   onOpenEvent,
 }) => {
@@ -293,9 +290,7 @@ const SubjectList: React.FC<SubjectListProps> = ({
         <h2 className="section-title">Suas disciplinas</h2>
         <p className="section-subtitle">
           Clique em uma disciplina para ver os eventos dela.
-          {refreshing
-            ? ' · Buscando dados novos no Moodle…'
-            : lastScrapedRel && ` · Atualizado ${lastScrapedRel}`}
+          {lastScrapedRel && ` · Atualizado ${lastScrapedRel}`}
         </p>
       </div>
 

@@ -372,12 +372,23 @@ const App: React.FC = () => {
           />
         )}
 
-        {step === 'results' && !activityKey && !selectedSubject && (
+        {/*
+          Atualizar troca a lista pelo esqueleto, e não por números mudando por
+          baixo: a agenda não pode misturar o que já chegou com o que ainda é
+          da busca anterior — o aluno não teria como saber qual metade é velha.
+        */}
+        {step === 'results' && !activityKey && !selectedSubject && refreshing && (
+          <LoadingSkeleton
+            status={loadingMessage || 'Buscando seus dados no Moodle…'}
+            cards={Math.max(subjects.length, 3)}
+          />
+        )}
+
+        {step === 'results' && !activityKey && !selectedSubject && !refreshing && (
           <SubjectList
             subjects={subjects}
             events={events}
             onSelectSubject={setSelectedSubjectId}
-            refreshing={refreshing}
             lastScrapedAt={lastScrapedAt}
             onOpenEvent={abrirAtividade}
           />
