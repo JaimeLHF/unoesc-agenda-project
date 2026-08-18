@@ -106,6 +106,12 @@ GEMINI_MODEL=gemini-2.0-flash
 
 Chave gratuita em [aistudio.google.com](https://aistudio.google.com/). Para usar Claude, troque `AI_PROVIDER=claude` e preencha `ANTHROPIC_API_KEY`.
 
+Em produção a chave vai como secret do Fly — sem ela o `/api/health` responde `ai_key_optional: false` e o botão "Organizar" não aparece:
+
+```bash
+fly secrets set AI_PROVIDER=gemini GEMINI_API_KEY=AIzaSy... -a unoesc-agenda
+```
+
 ### Cota
 
 Como quem hospeda paga a conta, cada aluno tem um limite mensal — `FREE_AI_QUOTA` (padrão 5) e `PRO_AI_QUOTA` (padrão 200), com o plano gravado na coluna `plan` da tabela `users`. Só metadados vão no contexto, então cada pergunta custa fração de centavo.

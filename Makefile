@@ -10,11 +10,14 @@ dev:
 setup:
 	./setup.sh
 
-## Verifica o isolamento entre alunos — critério de aceite do multi-tenant
-## (e o garimpo de prazos em PDF, que é função pura e roda sem rede)
+## Verifica o isolamento entre alunos — critério de aceite do multi-tenant —
+## mais as funções puras (nome de disciplina, tipo de evento, parsers), que
+## quebram calado quando o Moodle muda de layout
+
 test:
 	cd backend && .venv/bin/python -m tests.test_isolamento
 	cd backend && .venv/bin/python -m tests.test_schedule_pdf
+	cd backend && .venv/bin/python -m tests.test_funcoes_puras
 
 ## Constrói a imagem de produção (frontend compilado + API num container só)
 docker:

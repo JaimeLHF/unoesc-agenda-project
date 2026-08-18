@@ -1368,6 +1368,20 @@ body {
   font-style: italic;
 }
 
+/*
+  A segunda linha do cartão vazio: explica por que não há prazo. Menor e mais
+  apagada que a primeira — é ressalva, e o aluno que já entendeu não precisa
+  reler a cada vez.
+*/
+.subject-card-large__empty-hint {
+  display: block;
+  margin-top: 0.15rem;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  color: var(--color-text-muted);
+  opacity: 0.85;
+}
+
 /* ---- Detalhe da disciplina (tela 2) ---- */
 .subject-detail {
   display: flex;

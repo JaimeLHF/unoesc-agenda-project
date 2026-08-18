@@ -303,7 +303,23 @@ const SubjectList: React.FC<SubjectListProps> = ({
         </div>
 
         <div className="subject-card-large__breakdown">
-          {total > 0 ? breakdown : <span className="subject-card-large__empty">Nenhum evento identificado</span>}
+          {total > 0 ? (
+            breakdown
+          ) : (
+            /*
+              Sala sem nenhum evento não é falha do app: em curso presencial o
+              professor não cadastra atividade no Moodle, e as datas ficam no
+              PDF ou são combinadas em aula. Dizer "Nenhum evento identificado"
+              e parar deixava o aluno sem saber se era bug ou se era assim
+              mesmo — foi o que aconteceu com a turma de Veterinária.
+            */
+            <span className="subject-card-large__empty">
+              Sem prazos cadastrados no Moodle
+              <span className="subject-card-large__empty-hint">
+                Alguns cursos combinam as datas em aula ou no PDF da disciplina
+              </span>
+            </span>
+          )}
         </div>
 
         <div className="subject-card-large__next">
