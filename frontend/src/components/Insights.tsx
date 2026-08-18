@@ -241,7 +241,9 @@ const Insights: React.FC<InsightsProps> = ({ subjects, events, mediaAprovacao })
 
   return (
     <section className="insights">
-      <div className="subject-group-heading">
+      {/* Sem a linha divisória do grupo: aqui é o começo da tela, não uma
+          separação entre duas listas. */}
+      <div className="insights__heading">
         <h3 className="subject-group-heading__title">Panorama</h3>
         <p className="subject-group-heading__hint">
           Os mesmos dados da lista, vistos de longe.

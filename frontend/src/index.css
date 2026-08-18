@@ -3201,6 +3201,10 @@ body {
   gap: 0.75rem;
 }
 
+.insights__heading {
+  margin-top: 0.5rem;
+}
+
 .insights__grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
