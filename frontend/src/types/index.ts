@@ -11,6 +11,13 @@ export interface Subject {
   id: string;
   name: string;
   content?: string;
+  /**
+   * Início e fim do componente no Moodle, epoch em segundos. A matrícula
+   * continua ativa depois do fim do semestre, então é `end_date` que diz se a
+   * disciplina ainda está rolando ou já encerrou.
+   */
+  start_date?: number | null;
+  end_date?: number | null;
 }
 
 /** Tipos possíveis de evento acadêmico */

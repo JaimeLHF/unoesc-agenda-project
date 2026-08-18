@@ -611,6 +611,12 @@ class MoodleClient:
                 "shortname": shortname,
                 "dof": dof_from_shortname(shortname),
                 "url": c.get("viewurl") or f"{self.base}/course/view.php?id={c.get('id')}",
+                # Epoch em segundos, ou 0 quando o curso não tem data marcada.
+                # É o que separa o semestre corrente das disciplinas encerradas:
+                # o Moodle mantém a matrícula viva depois do fim do componente,
+                # então sem isso a lista mistura 2026/1 com 2026/2.
+                "start_date": c.get("startdate") or None,
+                "end_date": c.get("enddate") or None,
             })
         return cursos
 
@@ -1142,6 +1148,8 @@ class MoodleClient:
                 "dof": c["dof"],
                 "course_id": c["course_id"],
                 "course_url": c["url"],
+                "start_date": c.get("start_date"),
+                "end_date": c.get("end_date"),
             })
 
         eventos = self.calendar_events()

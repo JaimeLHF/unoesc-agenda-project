@@ -83,6 +83,24 @@ function splitSubjectName(fullName: string): { code: string | null; label: strin
   return match ? { code: match[1], label: match[2] } : { code: null, label: fullName };
 }
 
+/**
+ * Uma disciplina está encerrada quando o Moodle já passou da data de fim do
+ * componente. A matrícula continua ativa depois disso — é por isso que a lista
+ * misturava 2026/1 com 2026/2 — então `end_date` é o único critério confiável.
+ * Curso sem data de fim (`end_date` 0 ou ausente) conta como em andamento.
+ */
+function isEnded(subject: Subject, now: number): boolean {
+  return !!subject.end_date && subject.end_date * 1000 < now;
+}
+
+function formatEndDate(epochSeconds: number): string {
+  return new Date(epochSeconds * 1000).toLocaleDateString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+  });
+}
+
 function formatNextEventDate(iso: string, time?: string): string {
   try {
     const d = new Date(`${iso}T${time ?? '00:00'}:00`);
@@ -112,6 +130,7 @@ const SubjectList: React.FC<SubjectListProps> = ({
     atualização.
   */
   const cards = React.useMemo(() => {
+    const agora = Date.now();
     return subjects
       .map((subject) => {
         const subjEvents = events.filter((e) => e.subject === subject.name);
@@ -120,7 +139,13 @@ const SubjectList: React.FC<SubjectListProps> = ({
         const nextAt = stats.nextEvent
           ? new Date(`${stats.nextEvent.date}T${stats.nextEvent.time ?? '00:00'}:00`).getTime()
           : Infinity;
-        return { subject, subjEvents, stats, nextAt: isNaN(nextAt) ? Infinity : nextAt };
+        return {
+          subject,
+          subjEvents,
+          stats,
+          nextAt: isNaN(nextAt) ? Infinity : nextAt,
+          ended: isEnded(subject, agora),
+        };
       })
       .sort((a, b) =>
         a.nextAt !== b.nextAt
@@ -128,6 +153,91 @@ const SubjectList: React.FC<SubjectListProps> = ({
           : a.subject.name.localeCompare(b.subject.name, 'pt-BR'),
       );
   }, [subjects, events, isDone]);
+
+  /*
+    O Moodle não separa semestres: a matrícula continua ativa depois que o
+    componente termina, então a lista vinha com 2026/1 e 2026/2 embaralhados.
+    As encerradas descem para uma seção própria — da mais recente para a mais
+    antiga, que é a ordem em que o aluno lembra delas.
+  */
+  const emAndamento = cards.filter((c) => !c.ended);
+  const encerradas = cards
+    .filter((c) => c.ended)
+    .sort((a, b) => (b.subject.end_date ?? 0) - (a.subject.end_date ?? 0));
+
+  const renderCard = ({ subject, subjEvents, stats, ended }: (typeof cards)[number]) => {
+    // Próximo evento ignora os já concluídos — esses não precisam mais aparecer em destaque
+    const { counts, upcomingCount, nextEvent } = stats;
+    const total = subjEvents.length;
+    const doneInSubject = subjEvents.filter((e) => isDone(e)).length;
+
+    const { code, label } = splitSubjectName(subject.name);
+
+    const breakdown = TYPE_ORDER
+      .filter((t) => counts[t] > 0)
+      .map((t) => `${counts[t]} ${counts[t] === 1 ? TYPE_LABELS[t].singular : TYPE_LABELS[t].plural}`)
+      .join(' · ');
+
+    return (
+      <button
+        key={subject.id}
+        type="button"
+        className={`subject-card-large${ended ? ' subject-card-large--ended' : ''}`}
+        onClick={() => onSelectSubject(subject.id)}
+        disabled={total === 0}
+      >
+        <div className="subject-card-large__header">
+          <span className="subject-card-large__title">
+            {/*
+              "28743 - Desenvolvimento Mobile" quebrava em três linhas
+              tortas porque o código disputava espaço com o nome. Separado,
+              o código vira etiqueta e o nome fica legível de relance —
+              que é o que o aluno procura ao varrer a grade.
+            */}
+            {code && <span className="subject-card-large__code">{code}</span>}
+            <span className="subject-card-large__name">{label}</span>
+          </span>
+          <span className="subject-card-large__total">
+            {total} {total === 1 ? 'evento' : 'eventos'}
+          </span>
+        </div>
+
+        {total > 0 ? (
+          <>
+            <div className="subject-card-large__breakdown">{breakdown}</div>
+            {doneInSubject > 0 && (
+              <div className="subject-card-large__done">
+                <Icon name="check" size={0.95} />
+                {doneInSubject} de {total} concluído{doneInSubject === 1 ? '' : 's'}
+              </div>
+            )}
+            {nextEvent ? (
+              <div className="subject-card-large__next">
+                <span className="subject-card-large__next-label">Próximo:</span>
+                <span className="subject-card-large__next-title">{nextEvent.title}</span>
+                <span className="subject-card-large__next-date">
+                  {formatNextEventDate(nextEvent.date, nextEvent.time)}
+                </span>
+              </div>
+            ) : (
+              <div className="subject-card-large__next subject-card-large__next--past">
+                {ended && subject.end_date
+                  ? `Terminou em ${formatEndDate(subject.end_date)}`
+                  : `Sem eventos futuros — ${upcomingCount === 0 ? 'todos encerrados' : ''}`}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="subject-card-large__empty">
+            {ended && subject.end_date
+              ? `Terminou em ${formatEndDate(subject.end_date)}`
+              : 'Nenhum evento identificado'}
+          </div>
+        )}
+      </button>
+    );
+  };
+
   return (
     <section className="subject-grid-section">
       <div className="page-heading">
@@ -145,74 +255,23 @@ const SubjectList: React.FC<SubjectListProps> = ({
       {subjects.length === 0 ? (
         <div className="empty-state">Nenhuma disciplina encontrada no portal.</div>
       ) : (
-        <div className="subject-grid-large">
-        {cards.map(({ subject, subjEvents, stats }) => {
-          // Próximo evento ignora os já concluídos — esses não precisam mais aparecer em destaque
-          const { counts, upcomingCount, nextEvent } = stats;
-          const total = subjEvents.length;
-          const doneInSubject = subjEvents.filter((e) => isDone(e)).length;
+        <>
+          {emAndamento.length > 0 && (
+            <div className="subject-grid-large">{emAndamento.map(renderCard)}</div>
+          )}
 
-          const { code, label } = splitSubjectName(subject.name);
-
-          const breakdown = TYPE_ORDER
-            .filter((t) => counts[t] > 0)
-            .map((t) => `${counts[t]} ${counts[t] === 1 ? TYPE_LABELS[t].singular : TYPE_LABELS[t].plural}`)
-            .join(' · ');
-
-          return (
-            <button
-              key={subject.id}
-              type="button"
-              className="subject-card-large"
-              onClick={() => onSelectSubject(subject.id)}
-              disabled={total === 0}
-            >
-              <div className="subject-card-large__header">
-                <span className="subject-card-large__title">
-                  {/*
-                    "28743 - Desenvolvimento Mobile" quebrava em três linhas
-                    tortas porque o código disputava espaço com o nome. Separado,
-                    o código vira etiqueta e o nome fica legível de relance —
-                    que é o que o aluno procura ao varrer a grade.
-                  */}
-                  {code && <span className="subject-card-large__code">{code}</span>}
-                  <span className="subject-card-large__name">{label}</span>
-                </span>
-                <span className="subject-card-large__total">
-                  {total} {total === 1 ? 'evento' : 'eventos'}
-                </span>
+          {encerradas.length > 0 && (
+            <>
+              <div className="subject-group-heading">
+                <h3 className="subject-group-heading__title">Encerradas</h3>
+                <p className="subject-group-heading__hint">
+                  Semestres anteriores — o Moodle mantém o acesso depois do fim do componente.
+                </p>
               </div>
-
-              {total > 0 ? (
-                <>
-                  <div className="subject-card-large__breakdown">{breakdown}</div>
-                  {doneInSubject > 0 && (
-                    <div className="subject-card-large__done">
-                      <Icon name="check" size={0.95} />
-                      {doneInSubject} de {total} concluído{doneInSubject === 1 ? '' : 's'}
-                    </div>
-                  )}
-                  {nextEvent ? (
-                    <div className="subject-card-large__next">
-                      <span className="subject-card-large__next-label">Próximo:</span>
-                      <span className="subject-card-large__next-title">{nextEvent.title}</span>
-                      <span className="subject-card-large__next-date">
-                        {formatNextEventDate(nextEvent.date, nextEvent.time)}
-                      </span>
-                    </div>
-                  ) : (
-                    <div className="subject-card-large__next subject-card-large__next--past">
-                      Sem eventos futuros — {upcomingCount === 0 ? 'todos encerrados' : ''}
-                    </div>
-                  )}
-                </>
-              ) : (
-                <div className="subject-card-large__empty">Nenhum evento identificado</div>
-              )}
-            </button>
-          );
-        })}
-        </div>
+              <div className="subject-grid-large">{encerradas.map(renderCard)}</div>
+            </>
+          )}
+        </>
       )}
     </section>
   );

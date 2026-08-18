@@ -49,6 +49,10 @@ class SubjectModel(BaseModel):
     id: str
     name: str
     content: Optional[str] = None
+    # Epoch em segundos. O frontend usa `end_date` para separar o semestre
+    # corrente das disciplinas já encerradas.
+    start_date: Optional[int] = None
+    end_date: Optional[int] = None
 
 
 class AcademicEvent(BaseModel):
@@ -552,7 +556,13 @@ async def get_cache(session: app_session.PortalSession = Depends(require_session
     """
     with repo.get_session() as db:
         subjects = [
-            SubjectModel(id=s.name, name=s.name, content=s.content)
+            SubjectModel(
+                id=s.name,
+                name=s.name,
+                content=s.content,
+                start_date=s.start_date,
+                end_date=s.end_date,
+            )
             for s in repo.list_subjects(db, session.user_id)
         ]
         events = [

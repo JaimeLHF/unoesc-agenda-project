@@ -95,6 +95,8 @@ def upsert_subjects(session: Session, user_id: str, subjects: list[dict]) -> Non
             dof=s.get("dof"),
             course_id=str(s["course_id"]) if s.get("course_id") else None,
             course_url=s.get("course_url"),
+            start_date=s.get("start_date"),
+            end_date=s.get("end_date"),
             updated_at=utc_now(),
         )
         stmt = stmt.on_conflict_do_update(
@@ -104,6 +106,8 @@ def upsert_subjects(session: Session, user_id: str, subjects: list[dict]) -> Non
                 "dof": stmt.excluded.dof,
                 "course_id": stmt.excluded.course_id,
                 "course_url": stmt.excluded.course_url,
+                "start_date": stmt.excluded.start_date,
+                "end_date": stmt.excluded.end_date,
                 "updated_at": utc_now(),
             },
         )

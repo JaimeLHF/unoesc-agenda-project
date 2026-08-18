@@ -3097,3 +3097,37 @@ body {
   background: transparent;
   padding-left: 0;
 }
+
+/* ---- Grupo "Encerradas" na lista de disciplinas ---- */
+/* O Moodle mantém a matrícula viva depois do fim do componente, então a lista
+   vinha misturando semestres. As encerradas continuam clicáveis — o aluno ainda
+   consulta o que entregou — mas recuam de peso visual. */
+.subject-group-heading {
+  margin-top: 1.75rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--color-border);
+}
+
+.subject-group-heading__title {
+  margin: 0;
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--color-text);
+}
+
+.subject-group-heading__hint {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.subject-card-large--ended {
+  background: transparent;
+  box-shadow: none;
+}
+
+.subject-card-large--ended .subject-card-large__total {
+  background: var(--color-border);
+  color: var(--color-text-muted);
+}

@@ -123,6 +123,11 @@ class Subject(Base):
     dof: Mapped[Optional[str]] = mapped_column(String)  # código da disciplina no portal
     course_id: Mapped[Optional[str]] = mapped_column(String)   # id do curso no Moodle
     course_url: Mapped[Optional[str]] = mapped_column(String)  # link direto pra disciplina
+    # Início e fim do componente no Moodle, epoch em segundos. É o único dado
+    # que diz a qual semestre a disciplina pertence — a matrícula continua
+    # ativa depois do fim, então sem isso a lista mistura os períodos.
+    start_date: Mapped[Optional[int]] = mapped_column(Integer)
+    end_date: Mapped[Optional[int]] = mapped_column(Integer)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=utc_now, onupdate=utc_now
     )
