@@ -1326,6 +1326,14 @@ body {
   font-size: 0.825rem;
 }
 
+/* "Próximo" e a data na mesma linha: o rótulo sozinho numa linha empurrava o
+   cartão para cinco alturas de texto e não dizia nada que a data já não diga. */
+.subject-card-large__next-when {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+}
+
 .subject-card-large__next-label {
   font-size: 0.7rem;
   font-weight: 700;
