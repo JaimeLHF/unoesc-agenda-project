@@ -183,6 +183,7 @@ def main_teste() -> int:
             ("get", "/api/calendar-feed", None),
             ("post", "/api/calendar-feed/reset", None),
             ("post", "/api/reminders", {"enabled": True}),
+            ("post", "/api/grades", {"subject_name": "Cálculo I"}),
         ]
         for metodo, rota, corpo in sem_sessao:
             resp = getattr(client, metodo)(rota, json=corpo) if corpo else getattr(client, metodo)(rota)
@@ -245,6 +246,18 @@ def main_teste() -> int:
             headers=auth(token_a),
         )
         verificar(resp.status_code == 404, "A não consegue abrir disciplina de B")
+
+        # O boletim recebe o nome da disciplina no corpo — é o mesmo formato do
+        # open-course e, portanto, o mesmo caminho por onde um nome alheio
+        # tentaria entrar.
+        verificar(
+            client.post(
+                "/api/grades",
+                json={"subject_name": "Redes de Computadores"},
+                headers=auth(token_a),
+            ).status_code == 404,
+            "A não lê o boletim da disciplina de B",
+        )
 
         # A página de atividade tem endereço próprio e compartilhável. A busca
         # é por (user_id, stable_key), então o link de B abre 404 para A — é o

@@ -453,3 +453,30 @@ export async function resetCalendarFeed(): Promise<string> {
   const { data } = await api.post<{ url: string }>('/calendar-feed/reset');
   return data.url;
 }
+
+/* -------------------------------------------------------------------------
+ * Boletim da disciplina
+ * ----------------------------------------------------------------------- */
+
+export interface GradeItem {
+  name: string;
+  weight: number | null;
+  grade: number | null;
+  max: number | null;
+}
+
+export interface Grades {
+  items: GradeItem[];
+  /** Média parcial na escala 0–10. */
+  current: number | null;
+  pending_count: number;
+  pending_weight: number;
+  /** Nota necessária no que falta; nulo quando o cálculo não é confiável. */
+  needed: number | null;
+  passing_grade: number;
+}
+
+export async function fetchGrades(subjectName: string): Promise<Grades> {
+  const { data } = await api.post<Grades>('/grades', { subject_name: subjectName });
+  return data;
+}

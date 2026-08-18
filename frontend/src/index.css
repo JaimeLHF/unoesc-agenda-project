@@ -3258,3 +3258,87 @@ body {
 .lembrete__erro {
   color: var(--color-error-ink);
 }
+
+/* ---- Boletim da disciplina ---- */
+.boletim {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  padding: 1rem 1.1rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.boletim__estado {
+  margin: 0;
+  padding: 0.9rem 1.1rem;
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+/* A nota grande e a frase ao lado: é a resposta da pergunta que trouxe o aluno
+   até aqui. A tabela abaixo só serve para ele conferir a conta. */
+.boletim__destaque {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin: 0;
+}
+
+.boletim__nota {
+  font-size: 1.9rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+}
+
+.boletim__recado {
+  font-size: 0.9rem;
+  color: var(--color-text-muted);
+}
+
+.boletim__tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.82rem;
+}
+
+.boletim__tabela th {
+  text-align: left;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+  padding-bottom: 0.35rem;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.boletim__tabela td {
+  padding: 0.4rem 0.5rem 0.4rem 0;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+
+.boletim__tabela td:not(:first-child),
+.boletim__tabela th:not(:first-child) {
+  text-align: right;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.boletim__linha--pendente td {
+  color: var(--color-text-muted);
+  font-style: italic;
+}
+
+.boletim__rodape {
+  margin: 0;
+  font-size: 0.75rem;
+  color: var(--color-text-muted);
+}

@@ -218,6 +218,25 @@ def clean_course_name(fullname: str) -> str:
     return nome.strip(" -") or (fullname or "").strip() or "Disciplina"
 
 
+def _numero_pt(texto: Optional[str]) -> Optional[float]:
+    """Converte "95,00" ou "33,33 %" em float. Devolve None para "-" e vazio."""
+    if not texto:
+        return None
+    limpo = texto.replace("%", "").strip().replace(".", "").replace(",", ".")
+    try:
+        return float(limpo)
+    except ValueError:
+        return None
+
+
+def _procurar(celulas: list[str], padrao: str) -> Optional[str]:
+    """Primeira célula que casa com o padrão — a ordem das colunas varia."""
+    for c in celulas:
+        if re.fullmatch(padrao, c.strip()) or re.search(padrao, c.strip()):
+            return c
+    return None
+
+
 def dof_from_shortname(shortname: str) -> Optional[str]:
     """
     O `dof` vinha do HTML do portal (`a.link-moodle[data-dof]`). Descobrimos que
@@ -672,6 +691,62 @@ class MoodleClient:
                     notas[course_id] = float(valor)
                     break
         return notas
+
+    def course_grade_items(self, course_id: int) -> list[dict]:
+        """
+        Itens de nota de uma disciplina: nome, peso, nota e nota máxima.
+
+        Sai do relatório do usuário (`/grade/report/user`), a mesma página que
+        o aluno vê no Moodle. A tabela tem uma linha por atividade e uma última
+        de total; a de total é descartada aqui — quem quiser o total pega em
+        `course_grades`, que custa uma requisição para todas as disciplinas.
+
+        Item sem nota lançada volta com `nota=None`. É essa diferença que
+        permite dizer o que ainda falta em vez de tratar vazio como zero.
+        """
+        try:
+            resp = self._client.get(
+                f"{self.base}/grade/report/user/index.php", params={"id": course_id}
+            )
+            resp.raise_for_status()
+        except Exception as exc:  # nota é acessório: nunca derruba a tela
+            logger.warning("Relatório de notas do curso %s não veio: %s", course_id, exc)
+            return []
+
+        itens: list[dict] = []
+        for linha in re.findall(r"(?is)<tr[^>]*>(.*?)</tr>", resp.text):
+            celulas = [
+                html_to_text(c).strip()
+                for c in re.findall(r"(?is)<t[dh][^>]*>(.*?)</t[dh]>", linha)
+            ]
+            if len(celulas) < 4:
+                continue
+
+            nome = celulas[0]
+            # A primeira coluna do Moodle vem com o tipo na frente ("Tarefa X",
+            # "Questionário Y") e é assim que o aluno lê na tela de lá.
+            if not nome or nome.lower().startswith(("item de nota", "forma de agrega")):
+                continue
+
+            peso = _numero_pt(_procurar(celulas, r"%$"))
+            nota = _numero_pt(_procurar(celulas, r"^\d+[.,]\d+$"))
+            maximo = None
+            for c in celulas:
+                m = re.fullmatch(r"(\d+)\s*[–-]\s*(\d+)", c)
+                if m:
+                    maximo = float(m.group(2))
+                    break
+
+            if peso is None and nota is None and maximo is None:
+                continue
+
+            itens.append({
+                "nome": nome,
+                "peso": peso,       # em % do total do curso, como o Moodle calcula
+                "nota": nota,       # None = ainda não lançada
+                "maximo": maximo,   # topo da escala do item (normalmente 10)
+            })
+        return itens
 
     def raw_calendar_events(
         self,

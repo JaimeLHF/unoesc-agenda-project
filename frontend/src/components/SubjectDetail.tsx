@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import type { Subject, AcademicEvent, EventType } from '../types';
 import Icon from './Icon';
+import GradesPanel from './GradesPanel';
 import type { IconName } from './Icon';
 import { useDoneEvents } from '../contexts/DoneEventsContext';
 
@@ -180,6 +181,10 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
           {error}
         </div>
       )}
+
+      {/* O boletim vem antes da lista de eventos: quem abre uma disciplina no
+          fim do semestre está atrás da nota, não do calendário. */}
+      <GradesPanel subjectName={subject.name} />
 
       {events.length === 0 ? (
         <div className="empty-state">Nenhum evento identificado nesta disciplina.</div>

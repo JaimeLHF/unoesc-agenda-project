@@ -826,6 +826,104 @@ async def ask_assistant(
     return AssistantResponse(response=answer, used=quota.used, limit=quota.limit)
 
 
+class GradeItem(BaseModel):
+    """Uma linha do boletim da disciplina."""
+    name: str
+    weight: Optional[float] = None   # % do total do curso
+    grade: Optional[float] = None    # nota lançada; nulo = ainda não avaliada
+    max: Optional[float] = None      # topo da escala do item
+
+
+class GradesResponse(BaseModel):
+    """
+    Boletim da disciplina e o que ainda falta para atingir a média.
+
+    `needed` é a nota necessária **no que sobrou**, e vem nulo quando o cálculo
+    não é honesto — ver o endpoint.
+    """
+    items: list[GradeItem]
+    current: Optional[float] = None       # média parcial, escala 0–10
+    pending_count: int = 0
+    pending_weight: float = 0.0           # soma dos pesos sem nota, em %
+    needed: Optional[float] = None
+    passing_grade: float = 7.0
+
+
+class GradesRequest(BaseModel):
+    subject_name: str
+
+
+@app.post("/api/grades", response_model=GradesResponse)
+async def grades(
+    request: GradesRequest,
+    session: app_session.PortalSession = Depends(require_session),
+):
+    """
+    Boletim de uma disciplina e a conta de quanto falta para passar.
+
+    A disciplina é resolvida por (user_id, nome) — o nome vem do corpo, mas
+    quem não tiver a disciplina no próprio cache recebe 404.
+
+    Sobre o cálculo: o Moodle só dá peso a um item **depois** que a nota é
+    lançada, então na maior parte do semestre a soma dos pesos pendentes é
+    zero. Nesse caso `needed` volta nulo e a tela diz que ainda não dá para
+    calcular, em vez de inventar um número — errar para menos aqui faria o
+    aluno relaxar numa prova que decide a aprovação.
+    """
+    with repo.get_session() as db:
+        subject = repo.get_subject(db, session.user_id, request.subject_name)
+        if not subject or not subject.course_id:
+            raise HTTPException(status_code=404, detail="Disciplina não encontrada.")
+        course_id = int(subject.course_id)
+
+    try:
+        with MoodleClient() as moodle:
+            await asyncio.to_thread(moodle.login, session.username, session.password)
+            itens = await asyncio.to_thread(moodle.course_grade_items, course_id)
+    except PermissionError as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    except Exception as exc:
+        codigo = registrar_falha(f"boletim (user={session.user_id})", exc)
+        raise HTTPException(
+            status_code=502, detail=mensagem_amigavel(codigo, "ler suas notas no Moodle")
+        ) from exc
+
+    parcial = 0.0
+    peso_pendente = 0.0
+    pendentes = 0
+    for item in itens:
+        peso = (item.get("peso") or 0) / 100
+        maximo = item.get("maximo") or 10
+        nota = item.get("nota")
+        if nota is None:
+            pendentes += 1
+            peso_pendente += item.get("peso") or 0
+            continue
+        parcial += peso * (nota / maximo) * 10
+
+    passing = float(os.getenv("PASSING_GRADE", "7"))
+    needed = None
+    if peso_pendente > 0:
+        falta = (passing - parcial) / (peso_pendente / 100)
+        # Abaixo de zero significa aprovado independente do resto; acima de 10,
+        # inalcançável. Os dois casos a tela trata em texto, não em número.
+        needed = round(falta, 2)
+
+    return GradesResponse(
+        items=[
+            GradeItem(
+                name=i["nome"], weight=i.get("peso"), grade=i.get("nota"), max=i.get("maximo")
+            )
+            for i in itens
+        ],
+        current=round(parcial, 2) if itens else None,
+        pending_count=pendentes,
+        pending_weight=round(peso_pendente, 2),
+        needed=needed,
+        passing_grade=passing,
+    )
+
+
 class OpenCourseRequest(BaseModel):
     """Requisição para obter o link de uma atividade/disciplina no Moodle."""
     subject_name: str
