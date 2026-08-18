@@ -27,6 +27,9 @@ const SERIES: { type: EventType; label: string; cor: string }[] = [
   { type: 'webconference', label: 'Webconferências', cor: 'var(--chart-webconf)' },
 ];
 
+/** Ordem de importância quando um dia acumula mais de um tipo de evento. */
+const PESO: Record<EventType, number> = { exam: 0, deadline: 1, webconference: 2, other: 3 };
+
 const SEMANAS = 8;
 const DIA = 24 * 60 * 60 * 1000;
 
@@ -74,8 +77,8 @@ const MapaDasSemanas: React.FC<{ events: AcademicEvent[] }> = ({ events }) => {
 
   const L = 26; // espaço da escala à esquerda
   const W = 320;
-  const H = 130;
-  const base = H - 22;
+  const H = 180;
+  const base = H - 24;
   const largura = (W - L) / SEMANAS;
   const barra = largura - 8;
 
@@ -131,7 +134,7 @@ const MapaDasSemanas: React.FC<{ events: AcademicEvent[] }> = ({ events }) => {
                 </rect>
               );
             })}
-            <text x={L + i * largura + largura / 2} y={H - 6} className="chart__label">
+            <text x={L + i * largura + largura / 2} y={H - 8} className="chart__label">
               {rotuloSemana(s.inicio)}
             </text>
           </g>
@@ -141,40 +144,75 @@ const MapaDasSemanas: React.FC<{ events: AcademicEvent[] }> = ({ events }) => {
   );
 };
 
-/** Barras horizontais: quanto cada disciplina ainda cobra daqui para a frente. */
-const CargaPorDisciplina: React.FC<{ events: AcademicEvent[] }> = ({ events }) => {
-  const agora = Date.now();
-  const porDisciplina = new Map<string, number>();
+/**
+ * Calendário das próximas seis semanas: um quadradinho por dia, pintado quando
+ * há compromisso. A barra por semana diz *quanto*; isto diz *quando* — se as
+ * três entregas caem todas numa quarta ou estão espalhadas.
+ *
+ * Quando o dia tem mais de um tipo, vence o mais caro de perder: prova, depois
+ * entrega, depois webconferência.
+ */
+const CalendarioProximo: React.FC<{ events: AcademicEvent[] }> = ({ events }) => {
+  const hoje = new Date();
+  const primeira = inicioDaSemana(hoje);
+  const SEMANAS_CAL = 6;
+  const dias = new Map<string, { tipos: Set<EventType>; titulos: string[] }>();
+
   for (const e of events) {
     const t = dataDoEvento(e);
-    if (isNaN(t) || t < agora) continue;
-    porDisciplina.set(e.subject, (porDisciplina.get(e.subject) ?? 0) + 1);
+    if (isNaN(t)) continue;
+    const chave = new Date(t).toDateString();
+    const atual = dias.get(chave) ?? { tipos: new Set<EventType>(), titulos: [] };
+    atual.tipos.add(e.type as EventType);
+    atual.titulos.push(e.title);
+    dias.set(chave, atual);
   }
 
-  const linhas = [...porDisciplina.entries()].sort((a, b) => b[1] - a[1]);
-  if (linhas.length === 0) {
-    return <p className="chart__empty">Nenhum prazo à frente.</p>;
-  }
+  const corDoDia = (tipos: Set<EventType>): string | null => {
+    for (const { type, cor } of [...SERIES].sort((a, b) => PESO[a.type] - PESO[b.type])) {
+      if (tipos.has(type)) return cor;
+    }
+    return null;
+  };
 
-  const maior = Math.max(...linhas.map(([, n]) => n));
+  const hojeChave = hoje.toDateString();
+
   return (
-    <ul className="chart__bars">
-      {linhas.map(([nome, n]) => (
-        <li key={nome} className="chart__bar-row">
-          <span className="chart__bar-label" title={nome}>
-            {nome}
-          </span>
-          <span className="chart__bar-track">
-            <span
-              className="chart__bar-fill"
-              style={{ width: `${(n / maior) * 100}%` }}
-              aria-hidden="true"
-            />
-          </span>
-          <span className="chart__bar-value">{n}</span>
-        </li>
-      ))}
-    </ul>
+    <>
+      <div className="calendario">
+        <div className="calendario__cabecalho" aria-hidden="true">
+          {['S', 'T', 'Q', 'Q', 'S', 'S', 'D'].map((d, i) => (
+            <span key={i}>{d}</span>
+          ))}
+        </div>
+        {Array.from({ length: SEMANAS_CAL }, (_, semana) => (
+          <div className="calendario__semana" key={semana}>
+            {Array.from({ length: 7 }, (_, dia) => {
+              const data = new Date(primeira.getTime() + (semana * 7 + dia) * DIA);
+              const chave = data.toDateString();
+              const marcado = dias.get(chave);
+              const cor = marcado ? corDoDia(marcado.tipos) : null;
+              const ehHoje = chave === hojeChave;
+              return (
+                <span
+                  key={dia}
+                  className={`calendario__dia${ehHoje ? ' calendario__dia--hoje' : ''}`}
+                  style={cor ? { background: cor, color: 'var(--color-on-primary)' } : undefined}
+                  title={
+                    marcado
+                      ? `${data.toLocaleDateString('pt-BR')}: ${marcado.titulos.join(', ')}`
+                      : data.toLocaleDateString('pt-BR')
+                  }
+                >
+                  {data.getDate()}
+                </span>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+      <p className="chart__foot">O contorno marca hoje; a cor, o tipo do compromisso.</p>
+    </>
   );
 };
 
@@ -266,9 +304,9 @@ const Insights: React.FC<InsightsProps> = ({ subjects, events, mediaAprovacao })
         </article>
 
         <article className="insights__card">
-          <h4 className="insights__title">Onde estão os prazos</h4>
-          <p className="insights__sub">Eventos ainda por vir, por disciplina.</p>
-          <CargaPorDisciplina events={events} />
+          <h4 className="insights__title">Em que dias eles caem</h4>
+          <p className="insights__sub">As próximas seis semanas, dia a dia.</p>
+          <CalendarioProximo events={events} />
         </article>
 
         {temNota && (

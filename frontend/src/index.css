@@ -3207,7 +3207,9 @@ body {
 
 .insights__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  /* Cartões largos: o mapa das semanas com oito colunas e o calendário com
+     sete não cabem em 280px sem virar sopa de rótulo. */
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
   gap: 1rem;
   margin-top: 1rem;
 }
@@ -3224,7 +3226,7 @@ body {
 
 .insights__title {
   margin: 0;
-  font-size: 0.95rem;
+  font-size: 1.05rem;
   font-weight: 700;
   color: var(--color-text);
 }
@@ -3249,7 +3251,7 @@ body {
 .chart__tick,
 .chart__label {
   fill: var(--color-text-muted);
-  font-size: 8px;
+  font-size: 9px;
 }
 
 .chart__label {
@@ -3290,10 +3292,10 @@ body {
 
 .chart__bar-row {
   display: grid;
-  grid-template-columns: minmax(0, 9rem) 1fr auto;
+  grid-template-columns: minmax(0, 10rem) 1fr auto;
   align-items: center;
-  gap: 0.5rem;
-  font-size: 0.75rem;
+  gap: 0.6rem;
+  font-size: 0.8rem;
 }
 
 /* Duas linhas em vez de reticências: "Práticas Exten…" aparecia idêntico para
@@ -3309,7 +3311,7 @@ body {
 
 .chart__bar-track {
   position: relative;
-  height: 0.55rem;
+  height: 0.7rem;
   background: var(--color-surface-2);
   border-radius: 9999px;
 }
@@ -3366,4 +3368,47 @@ body {
   margin: 0.35rem 0 0;
   font-size: 0.75rem;
   color: var(--color-text-muted);
+}
+
+/* ---- Calendário das próximas semanas ---- */
+.calendario {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  margin-top: 0.35rem;
+}
+
+.calendario__cabecalho,
+.calendario__semana {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 0.25rem;
+}
+
+.calendario__cabecalho span {
+  text-align: center;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: var(--color-text-muted);
+}
+
+.calendario__dia {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1;
+  border-radius: 0.35rem;
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Hoje é contorno, não preenchimento: a cor de fundo já está reservada para
+   dizer que tipo de compromisso cai no dia. */
+.calendario__dia--hoje {
+  outline: 2px solid var(--color-primary);
+  outline-offset: -2px;
+  font-weight: 700;
 }
