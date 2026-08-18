@@ -21,6 +21,7 @@ from app.database import (
     DoneEvent,
     Event,
     Meta,
+    ReminderSent,
     SessionLocal,
     Subject,
     User,
@@ -78,8 +79,20 @@ def delete_user(session: Session, user_id: str) -> None:
     session.execute(delete(Subject).where(Subject.user_id == user_id))
     session.execute(delete(DoneEvent).where(DoneEvent.user_id == user_id))
     session.execute(delete(Meta).where(Meta.user_id == user_id))
+    session.execute(delete(ReminderSent).where(ReminderSent.user_id == user_id))
     session.execute(delete(AppSession).where(AppSession.user_id == user_id))
     session.execute(delete(User).where(User.id == user_id))
+
+
+def set_email(session: Session, user_id: str, email: str) -> None:
+    """Guarda o e-mail do cadastro do Moodle, usado só pelo lembrete."""
+    session.execute(update(User).where(User.id == user_id).values(email=email.strip()))
+
+
+def set_reminders_enabled(session: Session, user_id: str, enabled: bool) -> None:
+    session.execute(
+        update(User).where(User.id == user_id).values(reminders_enabled=enabled)
+    )
 
 
 def get_or_create_ics_token(session: Session, user_id: str) -> Optional[str]:

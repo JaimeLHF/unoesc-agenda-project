@@ -23,6 +23,7 @@ from pydantic import BaseModel
 from app import assistant
 from app import observability
 from app import ratelimit
+from app import reminders
 from app import repository as repo
 from app import session as app_session
 from app.calendar_sync import CalendarSyncService
@@ -171,6 +172,9 @@ class ProfileResponse(BaseModel):
     moodle: Optional[MoodleProfile] = None
     moodle_error: Optional[str] = None
     stats: ProfileStats
+    # Lembrete por e-mail: se está ligado e para qual endereço iria.
+    reminders_enabled: bool = False
+    reminder_email: Optional[str] = None
 
 
 class StatusLinha(BaseModel):
@@ -416,6 +420,8 @@ async def profile(session: app_session.PortalSession = Depends(require_session))
             member_since=user.created_at.isoformat() if user.created_at else None,
             last_login_at=user.last_login_at.isoformat() if user.last_login_at else None,
             stats=stats,
+            reminders_enabled=user.reminders_enabled,
+            reminder_email=user.email,
         )
 
     try:
@@ -429,7 +435,64 @@ async def profile(session: app_session.PortalSession = Depends(require_session))
         codigo = registrar_falha(f"perfil no Moodle (user={session.user_id})", exc)
         resposta.moodle_error = mensagem_amigavel(codigo, "buscar seu cadastro no Moodle")
 
+    # O e-mail é guardado nesta visita para o job de lembrete conseguir avisar
+    # com o app fechado — é o único dado do Moodle que o app persiste, e só
+    # porque sem ele não existe lembrete nenhum.
+    if resposta.moodle and resposta.moodle.email:
+        with repo.get_session() as db:
+            repo.set_email(db, session.user_id, resposta.moodle.email)
+            db.commit()
+        resposta.reminder_email = resposta.moodle.email
+
     return resposta
+
+
+class ReminderPrefRequest(BaseModel):
+    """Liga ou desliga o lembrete por e-mail."""
+    enabled: bool
+
+
+@app.post("/api/reminders")
+async def set_reminders(
+    request: ReminderPrefRequest,
+    session: app_session.PortalSession = Depends(require_session),
+):
+    """
+    Liga ou desliga o aviso por e-mail antes do prazo.
+
+    Nasce desligado: mandar e-mail para quem não pediu é spam, mesmo com a
+    melhor das intenções.
+    """
+    with repo.get_session() as db:
+        user = repo.get_user(db, session.user_id)
+        if user is None:
+            raise HTTPException(status_code=401, detail="Conta não encontrada.")
+        if request.enabled and not user.email:
+            raise HTTPException(
+                status_code=400,
+                detail="Ainda não sei seu e-mail — abra o perfil uma vez para eu ler do Moodle.",
+            )
+        repo.set_reminders_enabled(db, session.user_id, request.enabled)
+        db.commit()
+    return {"status": "ok", "enabled": request.enabled}
+
+
+@app.post("/api/tasks/reminders")
+async def run_reminders(x_task_key: Optional[str] = Header(default=None)):
+    """
+    Roda a fila de lembretes. Chamado por um cron de fora, não pelo aluno.
+
+    A máquina no Fly dorme quando ninguém acessa, então um agendador dentro do
+    processo não roda — quem acorda o app é a chamada externa. A chave está no
+    header para não ficar registrada no log de acesso junto da URL.
+    """
+    esperada = os.getenv("TASK_KEY")
+    if not esperada or x_task_key != esperada:
+        raise HTTPException(status_code=404, detail="Não encontrado.")
+
+    resumo = await asyncio.to_thread(reminders.enviar_lembretes)
+    observability.logger.info("Lembretes: %s", resumo)
+    return resumo
 
 
 @app.delete("/api/account")

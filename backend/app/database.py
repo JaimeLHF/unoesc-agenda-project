@@ -18,7 +18,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from sqlalchemy import String, Text, DateTime, Integer, Float, create_engine
+from sqlalchemy import String, Text, DateTime, Integer, Float, Boolean, create_engine
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, sessionmaker
 
 logger = logging.getLogger("agenda.db")
@@ -96,6 +96,14 @@ class User(Base):
     # abre sessão nem dá acesso a mais nada além dos eventos.
     ics_token: Mapped[Optional[str]] = mapped_column(String, unique=True, index=True)
 
+    # Lembrete por e-mail. O endereço vem do cadastro do Moodle e é guardado
+    # para o job conseguir avisar sem a sessão do aluno aberta — sem ele, só
+    # daria para lembrar quem já estivesse com o app na tela, que é justamente
+    # quem não precisa de lembrete. O envio é opt-in: `reminders_enabled`
+    # nasce desligado e só o próprio aluno liga.
+    email: Mapped[Optional[str]] = mapped_column(String)
+    reminders_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
 
 class AppSession(Base):
     """
@@ -117,6 +125,21 @@ class AppSession(Base):
     password_enc: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     last_used_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class ReminderSent(Base):
+    """
+    Marca que um lembrete já saiu, para o job não avisar duas vezes.
+
+    A identidade é (user_id, stable_key): o mesmo evento pode existir na agenda
+    de vários alunos, e cada um tem direito ao seu aviso.
+    """
+
+    __tablename__ = "reminders_sent"
+
+    user_id: Mapped[str] = mapped_column(String, primary_key=True)
+    stable_key: Mapped[str] = mapped_column(String, primary_key=True)
+    sent_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 
 
 class Subject(Base):
@@ -235,7 +258,7 @@ def init_db() -> None:
 
 
 # Tabelas de cache que passaram a ter `user_id` na chave primária.
-_TENANT_TABLES = ("subjects", "events", "done_events", "meta")
+_TENANT_TABLES = ("subjects", "events", "done_events", "meta", "reminders_sent")
 
 
 def _drop_pre_multitenant_tables() -> None:

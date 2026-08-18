@@ -256,6 +256,9 @@ export interface Profile {
   moodle: MoodleProfile | null;
   moodle_error: string | null;
   stats: ProfileStats;
+  /** Lembrete por e-mail: se está ligado e para qual endereço iria. */
+  reminders_enabled: boolean;
+  reminder_email: string | null;
 }
 
 /** Perfil completo: cadastro no Moodle + conta no app + resumo da agenda. */
@@ -434,6 +437,12 @@ export async function fetchActivity(stableKey: string): Promise<ActivityDetail> 
  * buscam sozinhos de tempos em tempos. A chave da URL é a credencial — quem
  * tiver o endereço vê a agenda —, por isso existe o botão de trocar.
  * ----------------------------------------------------------------------- */
+
+/** Liga ou desliga o lembrete por e-mail antes do prazo. */
+export async function setReminders(enabled: boolean): Promise<boolean> {
+  const { data } = await api.post<{ enabled: boolean }>('/reminders', { enabled });
+  return data.enabled;
+}
 
 export async function fetchCalendarFeed(): Promise<string> {
   const { data } = await api.get<{ url: string }>('/calendar-feed');
