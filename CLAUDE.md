@@ -162,6 +162,15 @@ a conta de volta perto de zero: `min_machines_running = 0` mais o secret
 `PUSH_CRON_TOKEN` e um cron externo batendo em `/api/push/run`. Está anotado no
 próprio `fly.toml`.
 
+**O convite de notificação volta a cada sessão, e a saída é o terceiro
+botão.** "Deseja receber notificações de compromissos?" abre a agenda enquanto
+o aluno não decidir — "Agora não" morre com a aba (`sessionStorage`) e "Não
+mostre isso novamente" fica no aparelho (`localStorage`). Preferência de
+aparelho e não de conta: dá para querer o aviso no celular e não no computador
+do laboratório. A chave inclui a matrícula, como no `lumiConversas`. Desligar
+os avisos pelo perfil devolve o convite, senão quem apertou "não mostre mais"
+ficaria sem caminho de volta. Ver `frontend/src/lib/avisoNotificacao.ts`.
+
 **Notificação demais queima o canal.** No Android, bloqueio de notificação não
 se recupera — o navegador não pergunta de novo. Por isso são no máximo três por
 dia, com conteúdo diferente em cada uma, e o `tag` faz o aviso novo substituir o

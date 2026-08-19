@@ -3,6 +3,7 @@ import ActivityPage from './components/ActivityPage';
 import AppHeader from './components/AppHeader';
 import Icon from './components/Icon';
 import LoadingSkeleton from './components/LoadingSkeleton';
+import ConviteNotificacoes from './components/ConviteNotificacoes';
 import LoginForm from './components/LoginForm';
 import SubjectList from './components/SubjectList';
 import SubjectDetail from './components/SubjectDetail';
@@ -402,6 +403,16 @@ const App: React.FC = () => {
             status={loadingMessage || 'Buscando seus dados no Moodle…'}
             cards={Math.max(subjects.length, 3)}
           />
+        )}
+
+        {/*
+          O convite das notificações abre a agenda enquanto o aluno não
+          decidir. Volta a cada sessão de propósito — quem quiser encerrar o
+          assunto tem o "Não mostre isso novamente" ali mesmo, sem precisar
+          caçar configuração.
+        */}
+        {step === 'results' && !activityKey && !selectedSubject && !refreshing && (
+          <ConviteNotificacoes username={account?.username} />
         )}
 
         {step === 'results' && !activityKey && !selectedSubject && !refreshing && (

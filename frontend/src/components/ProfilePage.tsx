@@ -204,7 +204,7 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onBack }) => {
 
       {/* Antes do "instalar": no iPhone o aviso só funciona com o app na tela
           inicial, e o bloco de baixo é exatamente onde ele aprende a fazer isso. */}
-      <NotificacoesPush />
+      <NotificacoesPush username={m?.username || perfil.account_username} />
 
       <InstalarNoCelular />
 
