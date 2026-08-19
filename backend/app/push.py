@@ -128,48 +128,70 @@ def _lista(nomes: list[str], limite: int = 2) -> str:
     return f"{', '.join(nomes[:limite])} e mais {len(nomes) - limite}"
 
 
-def resumo_do_dia(eventos: list[dict]) -> Optional[tuple[str, str, str]]:
-    """O que vence hoje. É o aviso que chega todo dia no mesmo horário."""
+def _plural(n: int, singular: str, plural: str) -> str:
+    """"1 prova" / "2 provas". Notificação não é lugar para "entrega(s)"."""
+    return f"{n} {singular if n == 1 else plural}"
+
+
+def _agrupar(eventos: list[dict]) -> dict[str, list[dict]]:
+    """
+    Separa por natureza. Webconferência não é entrega: tem hora marcada, quem
+    perde não recupera, e chamá-la de "entrega" no aviso mandava o aluno olhar
+    o lugar errado da agenda.
+    """
+    grupos: dict[str, list[dict]] = {"exam": [], "webconference": [], "outros": []}
+    for e in eventos:
+        grupos.get(e.get("type"), grupos["outros"]).append(e)
+    return grupos
+
+
+def _com_hora(evento: dict, prefixo: str) -> str:
+    """"Prova hoje às 19:00" — a hora entra só quando o evento tem hora."""
+    hora = evento.get("time")
+    return f"{prefixo} às {hora}" if hora else prefixo
+
+
+def _resumo(eventos: list[dict], quando: str) -> Optional[tuple[str, str, str]]:
+    """
+    O texto de "o que tem hoje" e "o que tem amanhã" — a diferença entre os
+    dois é uma palavra, então é o mesmo código.
+
+    O título é o compromisso mais duro do dia (prova, depois webconferência,
+    depois entrega) e o corpo é a disciplina. Um título genérico do tipo
+    "3 eventos" obrigaria a abrir o app para saber se dá para ignorar.
+    """
     if not eventos:
         return None
 
-    provas = [e for e in eventos if e["type"] == "exam"]
-    resto = [e for e in eventos if e["type"] != "exam"]
+    g = _agrupar(eventos)
+    resto = []
 
-    # A prova encabeça: é o compromisso que não dá para remarcar.
-    if provas:
-        p = provas[0]
-        hora = f" às {p['time']}" if p.get("time") else ""
-        titulo = f"Prova hoje{hora}"
-        corpo = _sem_codigo(p["subject"])
-        if len(provas) > 1:
-            corpo += f" — e mais {len(provas) - 1} prova(s)"
-        if resto:
-            corpo += f" · {len(resto)} entrega(s) também vencem hoje"
+    if g["exam"]:
+        titulo = _com_hora(g["exam"][0], f"Prova {quando}")
+        corpo = _sem_codigo(g["exam"][0]["subject"])
+        resto = g["exam"][1:] + g["webconference"] + g["outros"]
+    elif g["webconference"]:
+        titulo = _com_hora(g["webconference"][0], f"Webconferência {quando}")
+        corpo = _sem_codigo(g["webconference"][0]["subject"])
+        resto = g["webconference"][1:] + g["outros"]
     else:
-        titulo = f"Hoje: {len(resto)} entrega(s)"
-        corpo = _lista([_sem_codigo(e["subject"]) for e in resto])
+        titulo = f"{quando.capitalize()}: {_plural(len(g['outros']), 'entrega', 'entregas')}"
+        corpo = _lista([_sem_codigo(e["subject"]) for e in g["outros"]])
+
+    if resto:
+        corpo += f" · e mais {_plural(len(resto), 'compromisso', 'compromissos')}"
 
     return titulo, corpo, "/"
 
 
+def resumo_do_dia(eventos: list[dict]) -> Optional[tuple[str, str, str]]:
+    """O que vence hoje. É o aviso que chega todo dia no mesmo horário."""
+    return _resumo(eventos, "hoje")
+
+
 def vespera(eventos: list[dict]) -> Optional[tuple[str, str, str]]:
     """O que vence amanhã. Sai à noite, quando ainda dá tempo de fazer."""
-    if not eventos:
-        return None
-
-    provas = [e for e in eventos if e["type"] == "exam"]
-    if provas:
-        p = provas[0]
-        hora = f" às {p['time']}" if p.get("time") else ""
-        return f"Amanhã tem prova{hora}", _sem_codigo(p["subject"]), "/"
-
-    nomes = [_sem_codigo(e["subject"]) for e in eventos]
-    return (
-        f"Amanhã: {len(eventos)} entrega(s)",
-        _lista(nomes),
-        "/",
-    )
+    return _resumo(eventos, "amanhã")
 
 
 def notas_novas(disciplinas: list[dict]) -> Optional[tuple[str, str, str]]:

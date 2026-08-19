@@ -14,6 +14,7 @@ Sai com código 1 na primeira falha.
 import sys
 from datetime import datetime
 
+from app import push
 from app.database import event_key, moodle_event_key, stable_event_key
 from app.moodle import (
     TZ_BR,
@@ -143,6 +144,29 @@ def main_teste() -> int:
     igual(webconfs[0]["time"], "19:00", "o horário sai do “19h”")
     igual(webconfs[0]["moodle_event_id"], "webconf-7-1",
           "a chave é curso + número, porque não há evento no Moodle")
+
+    print("\n[9] Texto das notificações")
+    # Webconferência tem hora marcada e quem perde não recupera. Chamá-la de
+    # "entrega" mandava o aluno olhar o lugar errado da agenda.
+    webconf = [{"type": "webconference", "time": "19:30", "subject": "28743 - Eng. de Software"}]
+    igual(push.resumo_do_dia(webconf)[0], "Webconferência hoje às 19:30",
+          "webconferência não é anunciada como entrega")
+    igual(push.vespera(webconf)[0], "Webconferência amanhã às 19:30",
+          "a véspera muda só a palavra")
+
+    prova = [{"type": "exam", "time": "19:00", "subject": "90112 - Farmacologia"},
+             {"type": "deadline", "subject": "28743 - Eng. de Software"}]
+    igual(push.resumo_do_dia(prova)[0], "Prova hoje às 19:00",
+          "a prova encabeça o aviso, é o que não dá para remarcar")
+    igual(push.resumo_do_dia(prova)[1], "Farmacologia · e mais 1 compromisso",
+          "o resto do dia entra no corpo, sem sumir")
+
+    igual(push.resumo_do_dia([{"type": "deadline", "subject": "31002 - Banco de Dados"}])[0],
+          "Hoje: 1 entrega", "singular sem parêntese — é uma notificação, não um relatório")
+    igual(push.resumo_do_dia([]), None, "dia vazio não vira notificação")
+
+    igual(push.notas_novas([{"name": "90112 - Farmacologia", "final_grade": 85}])[1],
+          "Farmacologia — 8,5", "a nota aparece na escala que o aluno lê")
 
     print()
     if falhas:
