@@ -125,7 +125,12 @@ avisa. O service worker guarda só a casca (HTML, bundle, CSS, ícone) e é
 registrado apenas em `import.meta.env.PROD`, senão ele serviria por cima do hot
 reload do Vite e toda alteração pareceria não ter efeito. O `.webmanifest`
 precisa do `mimetypes.add_type` em `main.py`: sem ele o Chrome ignora o
-manifest sem erro nenhum na tela. Loja de aplicativo não entra nessa conta —
+manifest sem erro nenhum na tela. O QR que leva ao endereço é um SVG estático
+em `public/qr-instalar.svg`, gerado uma vez fora do projeto (`segno` num venv
+descartável) porque o endereço não muda — biblioteca de QR no bundle seria
+pagar JavaScript para desenhar um arquivo constante. Ele aparece no login e no
+perfil, e some abaixo de 640px: quem já está no celular não aponta a câmera
+para a própria tela. Loja de aplicativo não entra nessa conta —
 ver o próximo passo em `docs/PLANO_PUBLICO.md`.
 
 **O `.ics` é buscado pelo servidor do Google, não pelo aluno.** Por isso

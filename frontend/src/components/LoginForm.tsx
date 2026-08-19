@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import Icon from './Icon';
+import InstalarNoCelular from './InstalarNoCelular';
 import type { LoginCredentials } from '../types';
 
 interface LoginFormProps {
@@ -124,6 +125,13 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, loading, error }) => {
             )}
           </button>
         </form>
+
+        {/*
+          Fica depois do formulário: quem chegou aqui veio entrar, não instalar.
+          Só aparece em tela larga — no celular o aluno já está no lugar certo,
+          e o próprio componente cuida disso.
+        */}
+        <InstalarNoCelular compacto />
 
         {/*
           Recado de quem fez, junto com o que acontece com a senha. Curto de

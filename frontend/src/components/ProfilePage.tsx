@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Icon from './Icon';
 import CalendarFeed from './CalendarFeed';
+import InstalarNoCelular from './InstalarNoCelular';
 import { fetchProfile } from '../services/api';
 import type { Profile } from '../services/api';
 import { iniciais } from '../lib/nome';
@@ -199,6 +200,8 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onBack }) => {
 
       <h3 className="profile__section-title">Assinar no seu calendário</h3>
       <CalendarFeed />
+
+      <InstalarNoCelular />
 
       <p className="profile__note">
         Estes dados são lidos do Moodle a cada visita e não podem ser alterados aqui —
