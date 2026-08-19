@@ -4398,8 +4398,8 @@ body {
    desenho e o fundo, e azul sobre cinza-chumbo não é lido. */
 .instalar__qr img {
   display: block;
-  width: 140px;
-  height: 140px;
+  width: var(--qr-tamanho, 140px);
+  height: var(--qr-tamanho, 140px);
   padding: 0.5rem;
   background: #ffffff;
   border-radius: 0.5rem;
@@ -4445,6 +4445,22 @@ body {
 .instalar--compacto .instalar__corpo {
   flex-direction: column;
   align-items: center;
+}
+
+/*
+  Empilhado numa coluna inteira, o código tem largura de sobra — e um QR maior
+  é lido de mais longe e por câmera pior, que é a diferença entre funcionar e
+  o aluno desistir. Só quando as duas colunas existem: abaixo disso o código
+  nem é desenhado.
+*/
+@media (min-width: 62rem) {
+  .instalar--compacto {
+    --qr-tamanho: 208px;
+  }
+
+  .instalar--compacto .instalar__qr-legenda {
+    max-width: 13rem;
+  }
 }
 
 .instalar--compacto .instalar__texto {
