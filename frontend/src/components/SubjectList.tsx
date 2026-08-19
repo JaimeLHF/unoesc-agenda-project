@@ -226,6 +226,7 @@ const SubjectList: React.FC<SubjectListProps> = ({
     const doneInSubject = subjEvents.filter((e) => isDone(e)).length;
 
     const { code, label } = splitSubjectName(subject.name);
+    const novidades = subject.new_materials?.length ?? 0;
 
     const breakdown = TYPE_ORDER
       .filter((t) => counts[t] > 0)
@@ -244,7 +245,12 @@ const SubjectList: React.FC<SubjectListProps> = ({
           .filter(Boolean)
           .join(' ')}
         onClick={() => onSelectSubject(subject.id)}
-        disabled={total === 0}
+        /*
+          Sala sem evento nenhum não é sala vazia: em curso presencial ela só
+          tem arquivo. Enquanto houver novidade para mostrar, o cartão continua
+          clicável — antes essa disciplina era a única que não abria.
+        */
+        disabled={total === 0 && novidades === 0}
       >
         {/*
           Os quatro blocos são sempre renderizados, mesmo vazios: com `subgrid`
@@ -279,6 +285,11 @@ const SubjectList: React.FC<SubjectListProps> = ({
           encerrada, o progresso na que está rolando.
         */}
         <div className="subject-card-large__result">
+          {novidades > 0 && (
+            <span className="subject-card-large__novo">
+              {novidades} {novidades === 1 ? 'novidade' : 'novidades'} na sala
+            </span>
+          )}
           {ended && typeof subject.final_grade === 'number' ? (
             <>
               <span

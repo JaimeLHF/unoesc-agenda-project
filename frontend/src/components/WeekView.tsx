@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { AcademicEvent, EventType } from '../types';
 import { useDoneEvents } from '../contexts/DoneEventsContext';
 import Icon from './Icon';
+import { formatarPeso, mudancaDePrazo } from '../lib/avisos';
 
 interface WeekViewProps {
   events: AcademicEvent[];
@@ -132,7 +133,10 @@ const WeekView: React.FC<WeekViewProps> = ({ events, onOpenEvent }) => {
               <span className="semana__livre">—</span>
             ) : (
               <ul className="semana__eventos">
-                {eventos.map((e) => (
+                {eventos.map((e) => {
+                  const mudanca = mudancaDePrazo(e);
+                  const peso = formatarPeso(e.weight);
+                  return (
                   <li key={e.id}>
                     <button
                       type="button"
@@ -144,6 +148,19 @@ const WeekView: React.FC<WeekViewProps> = ({ events, onOpenEvent }) => {
                       <Icon name={TIPO_ICONE[e.type as EventType] ?? 'pin'} size={0.85} />
                       {e.time && <span className="semana__hora">{e.time}</span>}
                       <span className="semana__evento-texto">{e.title}</span>
+                      {mudanca && (
+                        <span
+                          className="semana__mudou"
+                          title={`Esta data era ${mudanca.de} e mudou.`}
+                        >
+                          {mudanca.rotulo}
+                        </span>
+                      )}
+                      {peso && (
+                        <span className="semana__peso" title="Peso informado no PDF da disciplina">
+                          {peso}
+                        </span>
+                      )}
                       {e.source === 'pdf_curso' && (
                         <span
                           className="semana__origem"
@@ -157,7 +174,8 @@ const WeekView: React.FC<WeekViewProps> = ({ events, onOpenEvent }) => {
                       </span>
                     </button>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             )}
           </div>

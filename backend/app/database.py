@@ -167,6 +167,16 @@ class Event(Base):
     # já foi sincronizado (antes disso o flag `synced` era sempre falso e
     # re-sincronizar duplicava o evento na agenda do usuário).
     google_event_id: Mapped[Optional[str]] = mapped_column(String)
+    # Data que este evento tinha antes de o professor mexer, e quando a troca
+    # foi percebida. Só existe porque a agenda trocava a data em silêncio: quem
+    # já tinha se programado para a data velha não tinha como saber. A
+    # comparação é possível porque `stable_key` sobrevive à mudança de data —
+    # vem do id do evento no Moodle, não do conteúdo.
+    previous_date: Mapped[Optional[str]] = mapped_column(String)   # AAAA-MM-DD
+    date_changed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    # Quanto a avaliação vale, quando o PDF da disciplina diz ("Peso: 4"). Só o
+    # garimpo de PDF preenche: o calendário do Moodle não carrega peso.
+    weight: Mapped[Optional[float]] = mapped_column(Float)
     last_seen_at: Mapped[datetime] = mapped_column(
         DateTime, default=utc_now, onupdate=utc_now
     )
@@ -180,6 +190,34 @@ class DoneEvent(Base):
     user_id: Mapped[str] = mapped_column(String, primary_key=True)
     stable_key: Mapped[str] = mapped_column(String, primary_key=True)
     completed_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+
+
+class CourseItem(Base):
+    """
+    Item publicado na sala da disciplina (arquivo, fórum, tarefa), por aluno.
+
+    Existe para responder "o que apareceu desde a última vez que olhei". No
+    curso presencial esse é o *único* sinal que a sala emite: 58 arquivos e
+    nenhum evento de calendário — sem isto a agenda não tem o que mostrar e o
+    aluno volta a abrir o Moodle disciplina por disciplina.
+
+    `baseline` marca o que já estava lá quando o aluno chegou. Sem essa
+    distinção o primeiro scrape anunciaria o semestre inteiro como novidade, e
+    a tela nasceria pedindo para ser ignorada.
+    """
+
+    __tablename__ = "course_items"
+
+    user_id: Mapped[str] = mapped_column(String, primary_key=True)
+    # `cmid` é o id do módulo no Moodle: único dentro da instância e estável
+    # enquanto o professor não apagar o item.
+    cmid: Mapped[str] = mapped_column(String, primary_key=True)
+    subject: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    modname: Mapped[Optional[str]] = mapped_column(String)  # resource | forum | ...
+    url: Mapped[Optional[str]] = mapped_column(String)
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    baseline: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
 class Meta(Base):
@@ -235,7 +273,9 @@ def init_db() -> None:
 
 
 # Tabelas de cache que passaram a ter `user_id` na chave primária.
-_TENANT_TABLES = ("subjects", "events", "done_events", "meta")
+_TENANT_TABLES = (
+    "subjects", "events", "done_events", "meta", "course_items",
+)
 
 
 def _drop_pre_multitenant_tables() -> None:

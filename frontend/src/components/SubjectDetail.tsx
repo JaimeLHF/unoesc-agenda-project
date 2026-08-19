@@ -4,6 +4,7 @@ import Icon from './Icon';
 import GradesPanel from './GradesPanel';
 import type { IconName } from './Icon';
 import { useDoneEvents } from '../contexts/DoneEventsContext';
+import { formatarPeso, mudancaDePrazo } from '../lib/avisos';
 
 interface SubjectDetailProps {
   subject: Subject;
@@ -27,6 +28,16 @@ const SECTIONS: { type: EventType; label: string; icon: IconName }[] = [
   { type: 'exam', label: 'Provas', icon: 'prova' },
   { type: 'other', label: 'Outros', icon: 'pin' },
 ];
+
+/**
+ * O Moodle devolve o link do item ora absoluto, ora relativo ("/mod/..."). O
+ * relativo apontaria para o próprio app, que não tem essa rota.
+ */
+const MOODLE_BASE = 'https://on.unoesc.edu.br';
+
+function moodleUrl(url: string): string {
+  return url.startsWith('http') ? url : `${MOODLE_BASE}${url}`;
+}
 
 const BADGE_CLASS: Record<EventType, string> = {
   webconference: 'badge--webconference',
@@ -111,6 +122,7 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
 
   const allSynced = events.length > 0 && events.every((e) => e.synced);
   const upcomingCount = events.filter((e) => !isPast(e)).length;
+  const novidades = subject.new_materials ?? [];
 
   return (
     <section className="subject-detail">
@@ -186,6 +198,39 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
           fim do semestre está atrás da nota, não do calendário. */}
       <GradesPanel subjectName={subject.name} />
 
+      {/*
+        O que o professor publicou desde a última visita. Fica acima dos
+        eventos porque em curso presencial não existe evento nenhum — este é o
+        único conteúdo que a sala produz, e era o motivo de o aluno abrir o
+        Moodle disciplina por disciplina.
+      */}
+      {novidades.length > 0 && (
+        <section className="novidades">
+          <h3 className="novidades__titulo">
+            <Icon name="pin" size={0.95} />
+            Publicado recentemente na sala
+          </h3>
+          <ul className="novidades__lista">
+            {novidades.map((item, i) => (
+              <li key={`${item.name}-${i}`} className="novidades__item">
+                {item.url ? (
+                  <a
+                    className="novidades__link"
+                    href={moodleUrl(item.url)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    {item.name}
+                  </a>
+                ) : (
+                  <span>{item.name}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
+
       {events.length === 0 ? (
         <div className="empty-state">Nenhum evento identificado nesta disciplina.</div>
       ) : (
@@ -210,6 +255,8 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
                     const done = isDone(event);
                     const { day, month } = dateBadge(event.date);
                     const rel = relativeLabel(event.date, event.time);
+                    const mudanca = mudancaDePrazo(event);
+                    const peso = formatarPeso(event.weight);
                     const cardClass = [
                       'event-card',
                       'event-card--clickable',
@@ -267,6 +314,24 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
                               {event.synced && (
                                 <span className="status-pill status-pill--synced" title="Sincronizado">
                                   <Icon name="calendario" size={0.9} />
+                                </span>
+                              )}
+                              {/*
+                                A data mudou depois que o aluno já tinha visto
+                                a antiga. Sem este selo, quem se programou para
+                                a data velha não teria como perceber a troca.
+                              */}
+                              {mudanca && (
+                                <span className="status-pill status-pill--mudou">
+                                  {mudanca.rotulo} · era {mudanca.de}
+                                </span>
+                              )}
+                              {peso && (
+                                <span
+                                  className="status-pill status-pill--peso"
+                                  title="Peso informado no PDF da disciplina"
+                                >
+                                  {peso}
                                 </span>
                               )}
                             </div>

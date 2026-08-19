@@ -73,7 +73,10 @@ _LIXO_BORDA = " \t -–—•▪·*>»"
 # "Confecção de bulário 28/07 á 25/11" corta na primeira data e sobra o "á".
 _CONECTOR_FINAL = re.compile(r"\s*\b(?:a|á|as|às|ate|até|e|de|entre|em|no|na)\b\s*$", re.I)
 
-_PESO = re.compile(r"\s*[-–—]?\s*peso:?\s*[\d.,]+\s*$", re.I)
+# O peso fecha a linha do quadro de avaliações ("– Peso: 4", "Peso 0,2"). Sai
+# do título — que fica só com o nome da avaliação — e vira campo próprio: é o
+# que diz ao aluno qual das quatro provas realmente decide a nota.
+_PESO = re.compile(r"\s*[-–—]?\s*peso:?\s*([\d.,]+)\s*$", re.I)
 
 
 def _normalizar(s: str) -> str:
@@ -123,6 +126,28 @@ def _tipo(titulo: str) -> str:
 def _slug(texto: str) -> str:
     """Pedaço estável do título, para a chave do evento não depender da data."""
     return re.sub(r"[^a-z0-9]+", "-", _normalizar(texto))[:48].strip("-")
+
+
+def _peso_da_linha(linha: str) -> Optional[float]:
+    """
+    Quanto a avaliação vale, quando a linha termina em "Peso: 4".
+
+    Vírgula é decimal ("Peso 0,2") e ponto também aparece — o professor digita
+    dos dois jeitos no mesmo arquivo. Peso zero ou absurdo é descartado: seria
+    erro de leitura, e mostrar "vale 0" numa prova é pior que não mostrar nada.
+    """
+    m = _PESO.search(linha)
+    if not m:
+        return None
+
+    texto = m.group(1).replace(",", ".")
+    if texto.count(".") > 1:      # "1.2.3" é lixo de extração, não número
+        return None
+    try:
+        peso = float(texto)
+    except ValueError:
+        return None
+    return peso if 0 < peso <= 100 else None
 
 
 def _titulo_da_linha(linha: str, inicio_data: int, fim_ultima_data: int) -> str:
@@ -191,6 +216,8 @@ def extract_schedule(
         if not titulo:
             continue
 
+        peso = _peso_da_linha(linha)
+
         prazo = max(datas)                      # intervalo: vale a data final
         chave = f"pdf-{course_id}-{_slug(titulo)}"
         if chave in vistos:                     # mesma linha em dois arquivos
@@ -208,6 +235,9 @@ def extract_schedule(
                             if origem else linha),
             "subject": subject,
             "type": _tipo(titulo),
+            # Peso da avaliação, quando o quadro informa. O calendário do
+            # Moodle não tem equivalente — é dado que só existe no PDF.
+            "weight": peso,
             "synced": False,
             "source": "pdf_curso",
             "url": course_url,

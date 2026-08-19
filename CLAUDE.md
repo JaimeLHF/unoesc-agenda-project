@@ -95,6 +95,27 @@ cursa EAD custa zero requisição. Data lida assim chega ao frontend com
 regex não vale o mesmo que data cadastrada pelo professor, e o aluno precisa
 saber a diferença. Sem OCR: lâmina escaneada não tem texto e fica de fora.
 
+**A agenda avisa quando o professor muda a data.** Antes ela trocava o dia em
+silêncio, e quem já tinha se programado para a data velha não tinha como
+perceber. O banco guarda `previous_date` no evento; o selo diz "Adiado" ou
+"Antecipado" e expira em `DIAS_AVISO_MUDANCA` (14 dias) — ficar até a entrega
+faria o aviso virar paisagem. Isso só funciona porque `stable_key` sobrevive à
+troca de data: vem do id do Moodle, não do conteúdo.
+
+**"Novidades na sala" é o único sinal que o curso presencial emite.** Lá não há
+evento de calendário nenhum, só arquivo — então o app registra o inventário da
+sala (`course_items`) e marca o que apareceu desde a última visita. O que já
+estava lá no primeiro acesso entra como `baseline` e nunca é anunciado, senão a
+tela nasceria pedindo para ser ignorada. Custa uma chamada AJAX por disciplina
+no `run()`, reaproveitada pelo garimpo de PDF. Some sozinho em
+`DIAS_MATERIAL_NOVO` (7 dias) — sem botão de "marcar como visto", que seria
+mais uma tabela e mais um endpoint.
+
+**O peso da avaliação sai do PDF, não do Moodle.** O quadro do curso presencial
+traz "– Peso: 4" no fim da linha; isso já era apagado do título e agora vira
+campo (`weight`). O calendário do Moodle não tem equivalente, então prazo
+cadastrado pelo professor não mostra peso — e isso é correto, não falta de dado.
+
 **O `.ics` é buscado pelo servidor do Google, não pelo aluno.** Por isso
 `/calendario/{token}.ics` fica fora de `/api` e sem sessão: a chave da URL é a
 credencial inteira, só de leitura e trocável num clique. Ele serve o cache —

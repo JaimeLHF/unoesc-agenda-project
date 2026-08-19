@@ -6,11 +6,25 @@ export interface LoginCredentials {
   password: string;
 }
 
+/** Item publicado na sala da disciplina depois que o aluno já usava o app. */
+export interface NewMaterial {
+  name: string;
+  url?: string | null;
+  modname?: string | null;
+  /** ISO 8601, UTC — quando o app viu esse item pela primeira vez. */
+  first_seen_at?: string | null;
+}
+
 /** Representa uma disciplina com seu conteúdo extraído */
 export interface Subject {
   id: string;
   name: string;
   content?: string;
+  /**
+   * O que o professor publicou nos últimos dias. Em curso presencial é o único
+   * sinal que a sala emite — lá não existe evento de calendário nenhum.
+   */
+  new_materials?: NewMaterial[];
   /**
    * Início e fim do componente no Moodle, epoch em segundos. A matrícula
    * continua ativa depois do fim do semestre, então é `end_date` que diz se a
@@ -50,6 +64,14 @@ export interface AcademicEvent {
    * marca — data interpretada por regex não vale o mesmo que data recebida.
    */
   source?: 'moodle_calendar' | 'moodle_course_text' | 'pdf_curso' | string;
+  /**
+   * A data que este evento tinha antes de o professor mexer. Só vem enquanto a
+   * mudança é recente; é o que permite a tela dizer "adiado" em vez de trocar
+   * o dia em silêncio. Ver `lib/avisos.ts`.
+   */
+  previous_date?: string | null;
+  /** Peso da avaliação, quando o PDF da disciplina informa. */
+  weight?: number | null;
 }
 
 /** Resposta do endpoint /api/scrape */

@@ -1744,6 +1744,21 @@ body {
   font-weight: 700;
 }
 
+/* A data mudou depois que o aluno já tinha visto a antiga. Amarelo de aviso,
+   não vermelho de erro: adiar prazo não é problema, é informação. */
+.status-pill--mudou {
+  background: var(--color-warn-bg);
+  color: var(--color-warn-ink);
+  font-weight: 700;
+}
+
+/* Peso da avaliação, lido do PDF. Discreto de propósito: informa qual prova
+   pesa mais sem competir com a data, que é o que a tela existe para mostrar. */
+.status-pill--peso {
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+}
+
 /* ---- Toggle de "concluído" no card ---- */
 .event-done-toggle {
   display: flex;
@@ -3619,6 +3634,21 @@ body {
   color: var(--color-text-muted);
 }
 
+/* Em curso presencial este é o único conteúdo que o cartão tem para mostrar —
+   por isso ele abre a linha, antes da nota e do progresso. */
+.subject-card-large__novo {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-alert-orange-ink);
+  background: var(--color-alert-orange-bg);
+  border: 1px solid var(--color-alert-orange-border);
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  align-self: flex-start;
+}
+
 /* ---- Assinatura de calendário (.ics), na tela de perfil ---- */
 .feed {
   display: flex;
@@ -4048,6 +4078,29 @@ body {
   cursor: help;
 }
 
+.semana__mudou {
+  flex-shrink: 0;
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.25rem;
+  background: var(--color-warn-bg);
+  color: var(--color-warn-ink);
+  font-size: 0.625rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  cursor: help;
+}
+
+.semana__peso {
+  flex-shrink: 0;
+  padding: 0.05rem 0.3rem;
+  border-radius: 0.25rem;
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  font-size: 0.625rem;
+  font-weight: 600;
+  cursor: help;
+}
+
 .semana__disciplina {
   margin-left: auto;
   padding-left: 0.75rem;
@@ -4183,4 +4236,46 @@ body {
     transition: none;
     transform: none;
   }
+}
+
+/* ---- Publicado recentemente na sala ---- */
+/*
+  A lista existe para o curso presencial, onde não há evento nenhum: sem ela a
+  tela da disciplina abria vazia e o aluno voltava para o Moodle.
+*/
+.novidades {
+  margin: 1rem 0 1.5rem;
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--color-alert-orange-border);
+  background: var(--color-alert-orange-bg);
+  border-radius: 0.75rem;
+}
+
+.novidades__titulo {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  margin: 0 0 0.5rem;
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--color-alert-orange-ink);
+}
+
+.novidades__lista {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.novidades__item {
+  font-size: 0.875rem;
+  color: var(--color-text);
+}
+
+.novidades__link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
 }

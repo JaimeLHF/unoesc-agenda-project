@@ -46,11 +46,22 @@ class LoginResponse(BaseModel):
     token: str
 
 
+class NewMaterial(BaseModel):
+    """Item publicado na sala depois que o aluno já estava usando o app."""
+    name: str
+    url: Optional[str] = None
+    modname: Optional[str] = None
+    first_seen_at: Optional[str] = None  # ISO 8601, UTC
+
+
 class SubjectModel(BaseModel):
     """Representa uma disciplina com seu conteúdo extraído."""
     id: str
     name: str
     content: Optional[str] = None
+    # O que o professor publicou nos últimos dias. Em curso presencial é o
+    # único sinal que a sala emite — lá não há evento de calendário nenhum.
+    new_materials: list[NewMaterial] = []
     # Epoch em segundos. O frontend usa `end_date` para separar o semestre
     # corrente das disciplinas já encerradas.
     start_date: Optional[int] = None
@@ -81,6 +92,12 @@ class AcademicEvent(BaseModel):
     # (lido do PDF da disciplina). A tela avisa quando não é o calendário: o
     # aluno precisa saber quando a data foi interpretada, não recebida.
     source: Optional[str] = None
+    # Data que este evento tinha antes de o professor mexer. Preenchida só
+    # enquanto a mudança é recente; a tela compara com `date` para dizer se foi
+    # adiado ou antecipado.
+    previous_date: Optional[str] = None
+    # Peso da avaliação, quando o PDF da disciplina informa.
+    weight: Optional[float] = None
 
 
 class ScrapeResponse(BaseModel):
@@ -542,12 +559,22 @@ async def scrape_portal(session: app_session.PortalSession = Depends(require_ses
         with repo.get_session() as db:
             repo.upsert_subjects(db, session.user_id, result["subjects"])
             if events:
-                # Preenche `stable_key` em cada evento — o frontend usa esse
-                # valor para marcar concluído.
+                # Preenche `stable_key` e `previous_date` em cada evento — o
+                # frontend usa o primeiro para marcar concluído e o segundo
+                # para avisar que o prazo mudou de data.
                 repo.upsert_events(db, session.user_id, events)
+            for sub in result["subjects"]:
+                repo.registrar_materiais(
+                    db, session.user_id, sub["name"], sub.get("activities") or []
+                )
             repo.set_meta(db, session.user_id, "last_scraped_at", utc_now().isoformat())
             synced_keys = set(repo.list_synced_keys(db, session.user_id))
             db.commit()
+            # Depois do commit: as novidades deste scrape já contam.
+            novidades = repo.novidades_por_disciplina(db, session.user_id)
+
+        for sub in result["subjects"]:
+            sub["new_materials"] = novidades.get(sub["name"], [])
 
         for ev in events:
             ev["synced"] = ev.get("stable_key") in synced_keys
@@ -569,6 +596,7 @@ async def get_cache(session: app_session.PortalSession = Depends(require_session
     **do aluno logado**, junto com a lista de eventos marcados como concluídos.
     """
     with repo.get_session() as db:
+        novidades = repo.novidades_por_disciplina(db, session.user_id)
         subjects = [
             SubjectModel(
                 id=s.name,
@@ -577,6 +605,7 @@ async def get_cache(session: app_session.PortalSession = Depends(require_session
                 start_date=s.start_date,
                 end_date=s.end_date,
                 final_grade=s.final_grade,
+                new_materials=novidades.get(s.name, []),
             )
             for s in repo.list_subjects(db, session.user_id)
         ]
@@ -593,6 +622,8 @@ async def get_cache(session: app_session.PortalSession = Depends(require_session
                 synced=e.google_event_id is not None,
                 url=e.url,
                 source=e.source,
+                previous_date=repo.aviso_de_mudanca(e),
+                weight=e.weight,
             )
             for e in repo.list_events(db, session.user_id)
         ]

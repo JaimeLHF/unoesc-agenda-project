@@ -10,6 +10,7 @@ aparecer uma, ela vaza a agenda de um aluno para outro.
 """
 
 import secrets
+from datetime import timedelta
 from typing import Optional
 
 from sqlalchemy import delete, select, update
@@ -18,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.database import (
     AppSession,
+    CourseItem,
     DoneEvent,
     Event,
     Meta,
@@ -30,6 +32,17 @@ from app.database import (
 )
 
 
+# Por quantos dias a tela continua avisando que um prazo mudou de data. Não é
+# até o evento chegar: um trabalho adiado em março ainda apareceria como
+# "adiado" na véspera da entrega, e o aviso perderia o sentido de novidade.
+DIAS_AVISO_MUDANCA = 14
+
+# Por quantos dias um item recém-publicado na sala conta como novidade. Uma
+# semana é o intervalo com que o aluno abre a agenda; passou disso, ou ele já
+# viu, ou o aviso virou paisagem.
+DIAS_MATERIAL_NOVO = 7
+
+
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
@@ -37,6 +50,27 @@ from app.database import (
 def get_session() -> Session:
     """Sessão única para um request. Quem chama é responsável pelo close()."""
     return SessionLocal()
+
+
+def _aviso_valido(quando, dias: int = DIAS_AVISO_MUDANCA) -> bool:
+    """O aviso ainda está dentro da janela em que vale a pena mostrar?"""
+    if quando is None:
+        return False
+    # O SQLite devolve datetime ingênuo; comparar com um aware levanta
+    # TypeError. Normaliza para o mesmo formato de `utc_now()`.
+    if quando.tzinfo is None:
+        quando = quando.replace(tzinfo=utc_now().tzinfo)
+    return (utc_now() - quando) <= timedelta(days=dias)
+
+
+def aviso_de_mudanca(event: Event) -> Optional[str]:
+    """
+    A data anterior deste evento, se a troca for recente. Nulo faz a tela não
+    desenhar o selo — é assim que o aviso expira sem job de limpeza.
+    """
+    if not event.previous_date or event.previous_date == event.date:
+        return None
+    return event.previous_date if _aviso_valido(event.date_changed_at) else None
 
 
 # ---------------------------------------------------------------------------
@@ -77,6 +111,7 @@ def delete_user(session: Session, user_id: str) -> None:
     session.execute(delete(Event).where(Event.user_id == user_id))
     session.execute(delete(Subject).where(Subject.user_id == user_id))
     session.execute(delete(DoneEvent).where(DoneEvent.user_id == user_id))
+    session.execute(delete(CourseItem).where(CourseItem.user_id == user_id))
     session.execute(delete(Meta).where(Meta.user_id == user_id))
     session.execute(delete(AppSession).where(AppSession.user_id == user_id))
     session.execute(delete(User).where(User.id == user_id))
@@ -158,10 +193,40 @@ def upsert_events(session: Session, user_id: str, events: list[dict]) -> None:
     Insere ou atualiza cada evento usando (user_id, stable_key) como identidade.
     Eventos antigos (que não vieram no scrape mais recente) NÃO são removidos
     — preserva histórico.
+
+    Quando a data de um evento que já existia muda, a data velha é guardada em
+    `previous_date`: é o que permite a tela dizer "adiado" em vez de trocar o
+    dia sem avisar. O aviso é reaproveitado nos scrapes seguintes (a data não
+    muda toda hora) e expira sozinho por `date_changed_at` — ver
+    `DIAS_AVISO_MUDANCA`.
     """
+    # Uma consulta para todos: o laço faria uma por evento, e um semestre
+    # inteiro passa de cem.
+    anteriores = {
+        row.stable_key: row
+        for row in session.execute(
+            select(
+                Event.stable_key, Event.date, Event.previous_date, Event.date_changed_at
+            ).where(Event.user_id == user_id)
+        )
+    }
+
     for e in events:
         key = event_key(e)
         e["stable_key"] = key  # devolvido ao frontend, que não recalcula mais
+
+        antes = anteriores.get(key)
+        if antes is not None and antes.date != e["date"]:
+            previous_date, date_changed_at = antes.date, utc_now()
+        elif antes is not None:
+            # Mesma data: preserva o aviso que já estava lá em vez de apagá-lo
+            # no scrape seguinte, que é quando o aluno costuma vê-lo.
+            previous_date, date_changed_at = antes.previous_date, antes.date_changed_at
+        else:
+            previous_date, date_changed_at = None, None
+
+        e["previous_date"] = previous_date if _aviso_valido(date_changed_at) else None
+
         stmt = sqlite_insert(Event).values(
             user_id=user_id,
             stable_key=key,
@@ -173,6 +238,9 @@ def upsert_events(session: Session, user_id: str, events: list[dict]) -> None:
             type=e["type"],
             source=e.get("source"),
             url=e.get("url"),
+            previous_date=previous_date,
+            date_changed_at=date_changed_at,
+            weight=e.get("weight"),
             last_seen_at=utc_now(),
         )
         stmt = stmt.on_conflict_do_update(
@@ -185,10 +253,92 @@ def upsert_events(session: Session, user_id: str, events: list[dict]) -> None:
                 "type": stmt.excluded.type,
                 "source": stmt.excluded.source,
                 "url": stmt.excluded.url,
+                "previous_date": stmt.excluded.previous_date,
+                "date_changed_at": stmt.excluded.date_changed_at,
+                "weight": stmt.excluded.weight,
                 "last_seen_at": utc_now(),
             },
         )
         session.execute(stmt)
+
+
+# ---------------------------------------------------------------------------
+# Material publicado na sala (o "apareceu coisa nova")
+# ---------------------------------------------------------------------------
+
+def registrar_materiais(
+    session: Session, user_id: str, subject: str, itens: list[dict]
+) -> None:
+    """
+    Registra o que a sala da disciplina tem hoje, marcando o que é novo.
+
+    Na primeira vez que uma disciplina passa por aqui, tudo entra como
+    `baseline`: quem se cadastra no meio do semestre não quer receber os 58
+    arquivos de trás como novidade. A partir daí, cmid que não estava na tabela
+    é item que o professor publicou depois.
+
+    Item removido da sala não é apagado daqui — o registro é do que o aluno já
+    viu, e apagar faria o item ressurgir como novidade se o professor
+    republicasse.
+    """
+    if not itens:
+        return
+
+    ja_vistos = {
+        row.cmid
+        for row in session.execute(
+            select(CourseItem.cmid).where(
+                CourseItem.user_id == user_id, CourseItem.subject == subject
+            )
+        )
+    }
+    primeira_vez = not ja_vistos
+    agora = utc_now()
+
+    for item in itens:
+        cmid = str(item.get("cmid") or "").strip()
+        if not cmid or cmid in ja_vistos:
+            continue
+        ja_vistos.add(cmid)  # o mesmo cmid repetido na lista violaria a PK
+        session.add(CourseItem(
+            user_id=user_id,
+            cmid=cmid,
+            subject=subject,
+            name=item.get("name") or "(sem nome)",
+            modname=item.get("modname"),
+            url=item.get("url"),
+            first_seen_at=agora,
+            baseline=1 if primeira_vez else 0,
+        ))
+
+
+def novidades_por_disciplina(
+    session: Session, user_id: str, dias: int = DIAS_MATERIAL_NOVO
+) -> dict[str, list[dict]]:
+    """O que apareceu em cada sala nos últimos `dias`, ignorando o baseline."""
+    corte = utc_now() - timedelta(days=dias)
+    # Comparação com datetime ingênuo, que é o que o SQLite guarda.
+    corte = corte.replace(tzinfo=None)
+
+    linhas = session.execute(
+        select(CourseItem)
+        .where(
+            CourseItem.user_id == user_id,
+            CourseItem.baseline == 0,
+            CourseItem.first_seen_at >= corte,
+        )
+        .order_by(CourseItem.first_seen_at.desc())
+    ).scalars().all()
+
+    novidades: dict[str, list[dict]] = {}
+    for item in linhas:
+        novidades.setdefault(item.subject, []).append({
+            "name": item.name,
+            "url": item.url,
+            "modname": item.modname,
+            "first_seen_at": item.first_seen_at.isoformat() if item.first_seen_at else None,
+        })
+    return novidades
 
 
 def set_google_event_id(
@@ -309,4 +459,5 @@ def clear_cache(session: Session, user_id: str) -> None:
     """
     session.execute(delete(Event).where(Event.user_id == user_id))
     session.execute(delete(Subject).where(Subject.user_id == user_id))
+    session.execute(delete(CourseItem).where(CourseItem.user_id == user_id))
     session.execute(delete(Meta).where(Meta.user_id == user_id))

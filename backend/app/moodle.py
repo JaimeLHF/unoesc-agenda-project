@@ -900,7 +900,8 @@ class MoodleClient:
         return conteudo
 
     def course_schedule_events(self, course_id: int, subject: str,
-                               course_url: str) -> list[dict]:
+                               course_url: str,
+                               atividades: Optional[list[dict]] = None) -> list[dict]:
         """
         Prazos garimpados dos PDFs da disciplina — o plano B de `schedule_pdf`.
 
@@ -908,12 +909,16 @@ class MoodleClient:
         `MAX_PDFS_POR_DISCIPLINA`. Quando nenhum nome casa, tenta o primeiro
         arquivo da sala: nos cursos medidos, é a apresentação da disciplina, e
         é ela que traz o quadro de avaliações.
+
+        `atividades` pode vir pronta de quem já listou a sala — o `run()` faz
+        isso para não pedir a mesma coisa duas vezes ao Moodle.
         """
-        try:
-            atividades = self.course_activities(course_id)
-        except Exception as exc:
-            logger.warning("%s: sem lista de atividades (%s)", subject, exc)
-            return []
+        if atividades is None:
+            try:
+                atividades = self.course_activities(course_id)
+            except Exception as exc:
+                logger.warning("%s: sem lista de atividades (%s)", subject, exc)
+                return []
 
         arquivos = [a for a in atividades if a["modname"] == "resource"]
         candidatos = [a for a in arquivos if schedule_pdf.looks_like_schedule(a["name"])]
@@ -1381,14 +1386,24 @@ class MoodleClient:
                     "[%d/%d] %s: sem texto (%s)", i, len(cursos), c["name"], exc
                 )
 
+            # O inventário da sala custa uma chamada AJAX por disciplina e
+            # serve a dois propósitos: dizer o que o professor publicou desde a
+            # última visita, e escolher quais PDFs abrir no plano B. Buscar
+            # aqui, uma vez, evita pedir a mesma lista duas vezes.
+            try:
+                atividades = self.course_activities(c["course_id"])
+            except Exception as exc:  # acessório: não derruba a agenda
+                logger.warning("%s: sem lista de atividades (%s)", c["name"], exc)
+                atividades = []
+
             # Plano B: disciplina sem nenhum evento de calendário. Acontece no
             # curso presencial, onde o professor publica só arquivo e anuncia
             # as datas dentro do PDF de apresentação — ver `schedule_pdf`.
-            if c["course_id"] not in com_evento:
+            if c["course_id"] not in com_evento and atividades:
                 try:
-                    prazos_pdf.extend(
-                        self.course_schedule_events(c["course_id"], c["name"], c["url"])
-                    )
+                    prazos_pdf.extend(self.course_schedule_events(
+                        c["course_id"], c["name"], c["url"], atividades=atividades
+                    ))
                 except Exception as exc:  # acessório: não derruba a agenda
                     logger.warning("%s: garimpo de PDF falhou (%s)", c["name"], exc)
 
@@ -1401,6 +1416,9 @@ class MoodleClient:
                 "course_url": c["url"],
                 "start_date": c.get("start_date"),
                 "end_date": c.get("end_date"),
+                # Inventário da sala. Não vai para o frontend: o backend usa
+                # para descobrir o que é novo desde o último scrape.
+                "activities": atividades,
             })
 
         # Uma requisição para todas as disciplinas — feita depois do laço para

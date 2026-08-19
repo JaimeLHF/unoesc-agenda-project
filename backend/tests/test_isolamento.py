@@ -42,9 +42,11 @@ AGENDAS = {
         "subjects": [{
             "id": "1", "name": "Cálculo I", "content": "",
             "dof": "CAL1", "course_id": 101, "course_url": "https://on.unoesc.edu.br/course/view.php?id=101",
+            "activities": [{"cmid": "111", "name": "Plano de ensino",
+                            "modname": "resource", "url": "/mod/resource/view.php?id=111"}],
         }],
         "calendar_events": [{
-            "moodle_event_id": 9001, "title": "Prova 1", "date": "2099-05-10",
+            "id": "ev-a", "moodle_event_id": 9001, "title": "Prova 1", "date": "2099-05-10",
             "time": "19:00", "description": "", "subject": "Cálculo I",
             "type": "exam", "source": "moodle_calendar", "url": None,
         }],
@@ -53,9 +55,11 @@ AGENDAS = {
         "subjects": [{
             "id": "2", "name": "Redes de Computadores", "content": "",
             "dof": "RED1", "course_id": 202, "course_url": "https://on.unoesc.edu.br/course/view.php?id=202",
+            "activities": [{"cmid": "222", "name": "Regras do trabalho",
+                            "modname": "resource", "url": "/mod/resource/view.php?id=222"}],
         }],
         "calendar_events": [{
-            "moodle_event_id": 9002, "title": "Trabalho de Redes", "date": "2099-06-20",
+            "id": "ev-b", "moodle_event_id": 9002, "title": "Trabalho de Redes", "date": "2099-06-20",
             "time": None, "description": "", "subject": "Redes de Computadores",
             "type": "deadline", "source": "moodle_calendar", "url": None,
         }],
@@ -77,6 +81,15 @@ PERFIS = {
         "first_access": None, "last_access": None, "avatar": None,
     },
 }
+
+
+# Liga a segunda visita ao Moodle: o professor de A adiou a prova e publicou um
+# arquivo. É o que faz nascer "prazo alterado" e "material novo" — os dois
+# avisos são dado do aluno e precisam ficar dentro da conta dele.
+SEGUNDA_RODADA = {"ativa": False}
+
+PROVA_ADIADA_PARA = "2099-05-17"
+MATERIAL_NOVO_DE_A = "Slides da aula 9"
 
 
 class MoodleFalso:
@@ -101,10 +114,17 @@ class MoodleFalso:
         self.login(username, password)
         # Cópia profunda rasa: `upsert_events` escreve `stable_key` no dict.
         agenda = AGENDAS[username]
-        return {
-            "subjects": [dict(s) for s in agenda["subjects"]],
-            "calendar_events": [dict(e) for e in agenda["calendar_events"]],
-        }
+        subjects = [dict(s) for s in agenda["subjects"]]
+        eventos = [dict(e) for e in agenda["calendar_events"]]
+
+        if SEGUNDA_RODADA["ativa"] and username == "aluno.a@unoesc.edu.br":
+            eventos[0]["date"] = PROVA_ADIADA_PARA
+            subjects[0]["activities"] = subjects[0]["activities"] + [{
+                "cmid": "555", "name": MATERIAL_NOVO_DE_A,
+                "modname": "resource", "url": "/mod/resource/view.php?id=555",
+            }]
+
+        return {"subjects": subjects, "calendar_events": eventos}
 
 
 main.MoodleClient = MoodleFalso
@@ -139,8 +159,14 @@ def main_teste() -> int:
         token_b = entrar(client, "aluno.b@unoesc.edu.br")
         verificar(token_a != token_b, "tokens diferentes para alunos diferentes")
 
-        client.post("/api/scrape", headers=auth(token_a))
-        client.post("/api/scrape", headers=auth(token_b))
+        scrape_a = client.post("/api/scrape", headers=auth(token_a))
+        scrape_b = client.post("/api/scrape", headers=auth(token_b))
+        # Sem isto o teste só olhava o /api/cache, e um erro ao montar a
+        # resposta do scrape passava calado — os dados já tinham sido gravados.
+        verificar(
+            scrape_a.status_code == 200 and scrape_b.status_code == 200,
+            f"o scrape responde 200 para os dois ({scrape_a.status_code}/{scrape_b.status_code})",
+        )
 
         cache_a = client.get("/api/cache", headers=auth(token_a)).json()
         cache_b = client.get("/api/cache", headers=auth(token_b)).json()
@@ -165,6 +191,33 @@ def main_teste() -> int:
         done_b = client.get("/api/done-events", headers=auth(token_b)).json()["done_keys"]
         verificar(done_a == [chave_a], "A vê o que marcou")
         verificar(done_b == [], "B não vê a marcação de A")
+
+        print("\n[2.1] Prazo alterado e material novo ficam na conta de quem viu")
+        SEGUNDA_RODADA["ativa"] = True
+        client.post("/api/scrape", headers=auth(token_a))
+        client.post("/api/scrape", headers=auth(token_b))
+        SEGUNDA_RODADA["ativa"] = False
+
+        cache_a = client.get("/api/cache", headers=auth(token_a)).json()
+        cache_b = client.get("/api/cache", headers=auth(token_b)).json()
+        evento_a = cache_a["events"][0]
+        evento_b = cache_b["events"][0]
+
+        verificar(
+            evento_a["date"] == PROVA_ADIADA_PARA
+            and evento_a["previous_date"] == "2099-05-10",
+            "A vê a data anterior da própria prova",
+        )
+        verificar(evento_b["previous_date"] is None, "B não herda o aviso de mudança de A")
+
+        novos_a = {m["name"] for m in cache_a["subjects"][0]["new_materials"]}
+        novos_b = {m["name"] for m in cache_b["subjects"][0]["new_materials"]}
+        verificar(novos_a == {MATERIAL_NOVO_DE_A}, f"A vê só o material novo dele ({novos_a})")
+        verificar(
+            "Plano de ensino" not in novos_a,
+            "o que já estava na sala no primeiro acesso não conta como novidade",
+        )
+        verificar(novos_b == set(), f"B não vê o material que apareceu na sala de A ({novos_b})")
 
         print("\n[3] Nenhum endpoint de dados responde sem sessão")
         sem_sessao = [
