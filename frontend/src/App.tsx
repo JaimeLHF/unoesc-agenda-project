@@ -415,6 +415,7 @@ const App: React.FC = () => {
         {step === 'assistant' && account && (
           <Assistant
             onBack={() => setStep('results')}
+            username={account.username}
             used={account.assistantUsed}
             limit={account.assistantLimit}
             onQuotaChange={(used, limit) =>

@@ -38,7 +38,10 @@ export type IconName =
   | 'perfil'
   | 'sol'
   | 'lua'
-  | 'sem-conexao';
+  | 'sem-conexao'
+  | 'ia'
+  | 'conversa'
+  | 'mais';
 
 /**
  * Só o miolo de cada ícone. O `<svg>` em volta é montado uma vez no componente,
@@ -193,6 +196,23 @@ const PATHS: Record<IconName, React.ReactNode> = {
       <path d="M12 20h.01" />
     </>
   ),
+  /*
+    IA: o brilho de quatro pontas, que virou o símbolo de "gerado por modelo"
+    em toda parte. Duas estrelas, uma grande e uma pequena — sozinha, a de
+    quatro pontas lê como asterisco.
+  */
+  ia: (
+    <>
+      <path d="M13 3.5c.8 3.4 2.1 4.7 5.5 5.5-3.4.8-4.7 2.1-5.5 5.5-.8-3.4-2.1-4.7-5.5-5.5 3.4-.8 4.7-2.1 5.5-5.5Z" />
+      <path d="M7 14.5c.45 1.9 1.15 2.6 3 3-1.85.45-2.55 1.15-3 3-.45-1.9-1.15-2.6-3-3 1.85-.45 2.55-1.15 3-3Z" />
+    </>
+  ),
+  conversa: (
+    <>
+      <path d="M20.5 12.5a7.5 7.5 0 0 1-10.8 6.7L4 20.5l1.4-5.4A7.5 7.5 0 1 1 20.5 12.5Z" />
+    </>
+  ),
+  mais: <path d="M12 5v14M5 12h14" />,
 };
 
 interface IconProps {

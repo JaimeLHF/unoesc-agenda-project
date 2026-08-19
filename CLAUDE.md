@@ -54,6 +54,13 @@ direito (`frontend/src/components/AssistantFab.tsx`), em toda tela menos a
 dele. O prompt tem teto de 5 linhas por resposta: o aluno lê isso no celular,
 entre uma aula e outra.
 
+**As conversas com a Lumi ficam no `localStorage`, não no servidor.** Guardar
+no banco custaria tabela, endpoint e mais uma entrada no teste de isolamento
+para um dado que só interessa a quem escreveu. A chave inclui a matrícula
+(`lumi:conversas:<username>`) porque a máquina pode ser compartilhada — no
+laboratório o próximo aluno abre o mesmo Chrome. Ver
+`frontend/src/lib/lumiConversas.ts`.
+
 **O enunciado da atividade é lido, mas só para a tela.** `activity_content()` já
 foi apagado uma vez, porque alimentava um assistente que respondia provas.
 Voltou em 14/08/2026 com destino único: a página da atividade. `assistant.py`
