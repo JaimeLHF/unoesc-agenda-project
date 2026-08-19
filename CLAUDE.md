@@ -209,6 +209,12 @@ UNOESC já avisa dos prazos por e-mail, e mais um aviso no mesmo canal é ruído
   do commit. É como as telas foram revisadas em 18/08/2026.
 - **Sem dependência nova no frontend** sem um bom motivo: o público abre isso no
   4G, e o roteador foi escrito à mão por causa disso.
+- **Texto de notificação entra em `backend/tests/test_funcoes_puras.py`.** Foi
+  ali que apareceu o "Hoje: 1 entrega(s)" para uma webconferência — frase de
+  push quebra calada, porque ninguém a vê até chegar no celular de alguém.
+- **Estado do push mora no `usePush`** (`frontend/src/lib/usePush.ts`), usado
+  pelo convite e pelo perfil. Duplicado, ligar num lugar deixava o outro
+  dizendo "desligado" até o reload.
 
 ## Como o Jaime trabalha
 
@@ -217,4 +223,8 @@ UNOESC já avisa dos prazos por e-mail, e mais um aviso no mesmo canal é ruído
 - Não refaça a interface inteira de uma vez. Mude uma tela, mostre rodando,
   espere a reação. Um redesign completo já foi construído e revertido.
 - Ele testa em produção com a própria conta do Moodle; é o único ambiente onde
-  dá para ver a agenda com dados reais.
+  dá para ver a agenda com dados reais. Usa iPhone — o app instalado pelo
+  Safari, e a inscrição de push aponta para `web.push.apple.com`.
+- Quando ele pede volume ("bastante notificação"), o objetivo é hábito. Diga o
+  custo uma vez, proponha a forma que cria rotina sem queimar o canal, e siga a
+  decisão dele.
