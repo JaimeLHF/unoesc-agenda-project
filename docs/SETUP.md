@@ -116,7 +116,7 @@ CLAUDE_MODEL=claude-haiku-4-5-20251001
 Como o contexto é só metadados (algumas centenas de tokens), cada pergunta custa fração de centavo em qualquer um dos dois. O que controla o gasto quando há vários alunos é a cota mensal:
 
 ```env
-FREE_AI_QUOTA=5
+FREE_AI_QUOTA=20
 PRO_AI_QUOTA=200
 ```
 

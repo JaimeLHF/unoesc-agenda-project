@@ -114,7 +114,7 @@ fly secrets set AI_PROVIDER=gemini GEMINI_API_KEY=AIzaSy... -a unoesc-agenda
 
 ### Cota
 
-Como quem hospeda paga a conta, cada aluno tem um limite mensal — `FREE_AI_QUOTA` (padrão 5) e `PRO_AI_QUOTA` (padrão 200), com o plano gravado na coluna `plan` da tabela `users`. Só metadados vão no contexto, então cada pergunta custa fração de centavo.
+Como quem hospeda paga a conta, cada aluno tem um limite mensal — `FREE_AI_QUOTA` (padrão 20) e `PRO_AI_QUOTA` (padrão 200), com o plano gravado na coluna `plan` da tabela `users`. Só metadados vão no contexto, então cada pergunta custa fração de centavo.
 
 > A cobrança em si (gateway de pagamento, nota fiscal) ainda não existe — ver `docs/PLANO_PUBLICO.md`, fase 7.
 
@@ -185,7 +185,7 @@ O que já está no código:
 | `AI_PROVIDER` | Não | `gemini` (padrão) ou `claude`. |
 | `GEMINI_API_KEY` | Não | Só para o assistente de organização. |
 | `ANTHROPIC_API_KEY` | Se `AI_PROVIDER=claude` | Idem. |
-| `FREE_AI_QUOTA` / `PRO_AI_QUOTA` | Não | Perguntas por mês em cada plano. Padrão: 5 e 200. |
+| `FREE_AI_QUOTA` / `PRO_AI_QUOTA` | Não | Perguntas por mês em cada plano. Padrão: 20 e 200. |
 | `LOGIN_MAX_ATTEMPTS` / `LOGIN_WINDOW_MINUTES` | Não | Rate limit do login. Padrão: 5 tentativas / 15 min. |
 
 ### `frontend/.env`

@@ -19,8 +19,10 @@ from sqlalchemy.orm import Session
 from app import repository as repo
 from app.database import User, utc_now
 
-# Quantas perguntas cada plano permite por mês.
-FREE_MONTHLY_QUOTA = int(os.getenv("FREE_AI_QUOTA", "5"))
+# Quantas perguntas cada plano permite por mês. O padrão do gratuito subiu
+# de 5 para 20 em 19/08/2026: com 5 o aluno gastava a cota na primeira
+# semana de prova, que é justamente quando a Lumi serve para alguma coisa.
+FREE_MONTHLY_QUOTA = int(os.getenv("FREE_AI_QUOTA", "20"))
 PRO_MONTHLY_QUOTA = int(os.getenv("PRO_AI_QUOTA", "200"))
 
 # Quantos eventos futuros entram no contexto. O suficiente para um bimestre
