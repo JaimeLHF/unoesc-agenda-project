@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import Icon from './Icon';
 import CalendarFeed from './CalendarFeed';
 import InstalarNoCelular from './InstalarNoCelular';
+import NotificacoesPush from './NotificacoesPush';
 import { fetchProfile } from '../services/api';
 import type { Profile } from '../services/api';
 import { iniciais } from '../lib/nome';
@@ -200,6 +201,10 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onBack }) => {
 
       <h3 className="profile__section-title">Assinar no seu calendário</h3>
       <CalendarFeed />
+
+      {/* Antes do "instalar": no iPhone o aviso só funciona com o app na tela
+          inicial, e o bloco de baixo é exatamente onde ele aprende a fazer isso. */}
+      <NotificacoesPush />
 
       <InstalarNoCelular />
 

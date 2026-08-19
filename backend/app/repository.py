@@ -21,6 +21,7 @@ from app.database import (
     AppSession,
     CourseItem,
     DoneEvent,
+    PushSubscription,
     Event,
     Meta,
     SessionLocal,
@@ -112,6 +113,7 @@ def delete_user(session: Session, user_id: str) -> None:
     session.execute(delete(Subject).where(Subject.user_id == user_id))
     session.execute(delete(DoneEvent).where(DoneEvent.user_id == user_id))
     session.execute(delete(CourseItem).where(CourseItem.user_id == user_id))
+    session.execute(delete(PushSubscription).where(PushSubscription.user_id == user_id))
     session.execute(delete(Meta).where(Meta.user_id == user_id))
     session.execute(delete(AppSession).where(AppSession.user_id == user_id))
     session.execute(delete(User).where(User.id == user_id))
@@ -151,6 +153,116 @@ def get_user_by_ics_token(session: Session, token: str) -> Optional[User]:
     return session.execute(
         select(User).where(User.ics_token == token)
     ).scalar_one_or_none()
+
+
+# ---------------------------------------------------------------------------
+# Notificação push
+# ---------------------------------------------------------------------------
+
+def salvar_inscricao(
+    session: Session,
+    user_id: str,
+    endpoint: str,
+    p256dh: str,
+    auth: str,
+    password_enc: Optional[str],
+) -> None:
+    """
+    Registra (ou atualiza) a inscrição de um aparelho.
+
+    A PK é o `endpoint` porque é ele que o navegador troca quando reinstala o
+    app — o mesmo aluno no mesmo celular pode gerar endpoint novo, e aí é uma
+    inscrição nova mesmo.
+    """
+    stmt = sqlite_insert(PushSubscription).values(
+        endpoint=endpoint,
+        user_id=user_id,
+        p256dh=p256dh,
+        auth=auth,
+        password_enc=password_enc,
+        created_at=utc_now(),
+        falhas=0,
+    )
+    stmt = stmt.on_conflict_do_update(
+        index_elements=[PushSubscription.endpoint],
+        set_={
+            # Um endpoint que reaparece pertence a quem acabou de autorizar.
+            # Sem isto, um celular emprestado continuaria mandando os avisos de
+            # um aluno para a conta do outro.
+            "user_id": stmt.excluded.user_id,
+            "p256dh": stmt.excluded.p256dh,
+            "auth": stmt.excluded.auth,
+            "password_enc": stmt.excluded.password_enc,
+            "falhas": 0,
+        },
+    )
+    session.execute(stmt)
+
+
+def remover_inscricao(session: Session, user_id: str, endpoint: str) -> None:
+    """Desliga um aparelho. A senha guardada vai junto — é o combinado."""
+    session.execute(
+        delete(PushSubscription).where(
+            PushSubscription.user_id == user_id, PushSubscription.endpoint == endpoint
+        )
+    )
+
+
+def remover_inscricoes(session: Session, user_id: str) -> None:
+    """Desliga todos os aparelhos do aluno."""
+    session.execute(delete(PushSubscription).where(PushSubscription.user_id == user_id))
+
+
+def listar_inscricoes(session: Session, user_id: str) -> list[PushSubscription]:
+    return list(
+        session.execute(
+            select(PushSubscription).where(PushSubscription.user_id == user_id)
+        ).scalars()
+    )
+
+
+def usuarios_com_push(session: Session) -> list[str]:
+    """
+    Os `user_id` que têm ao menos um aparelho inscrito.
+
+    **A única consulta global do módulo**, e ela existe porque o disparo das
+    notificações não nasce de um request de aluno nenhum: nasce do relógio. Ela
+    devolve só identificadores — quem lê agenda continua sendo as funções por
+    `user_id`, uma conta de cada vez. Ver `scheduler.py`.
+    """
+    return [
+        linha[0]
+        for linha in session.execute(select(PushSubscription.user_id).distinct())
+    ]
+
+
+def registrar_falha_push(session: Session, endpoint: str, morta: bool = False) -> None:
+    """
+    Uma entrega falhou. `morta` descarta na hora (404/410 do serviço de push);
+    o resto conta até o teto e some — falha isolada é rede, falha sempre é
+    aparelho que não existe mais.
+    """
+    from app import push
+
+    if morta:
+        session.execute(
+            delete(PushSubscription).where(PushSubscription.endpoint == endpoint)
+        )
+        return
+
+    inscricao = session.get(PushSubscription, endpoint)
+    if inscricao is None:
+        return
+    inscricao.falhas += 1
+    if inscricao.falhas >= push.MAX_FALHAS:
+        session.delete(inscricao)
+
+
+def marcar_envio(session: Session, endpoint: str) -> None:
+    inscricao = session.get(PushSubscription, endpoint)
+    if inscricao is not None:
+        inscricao.falhas = 0
+        inscricao.last_sent_at = utc_now()
 
 
 # ---------------------------------------------------------------------------

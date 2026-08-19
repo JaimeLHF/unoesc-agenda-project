@@ -24,6 +24,11 @@ python-dotenv==1.2.2
 # Python puro: não acrescenta binário à imagem do Fly.
 pypdf==6.16.1
 
+# Notificação push (opcional — sem par VAPID, o recurso não aparece).
+# Traz `py-vapid` e `http-ece`, que assinam e cifram a mensagem. Python puro
+# em cima do `cryptography`, que já estava aqui: nada novo na imagem do Fly.
+pywebpush==2.1.0
+
 # Assistente de organização (opcional — sem chave, o recurso não aparece)
 anthropic==0.120.2
 google-genai==2.16.0

@@ -9,6 +9,20 @@ deploy, um domínio, sem CORS entre front e back.
 import asyncio
 import mimetypes
 import os
+from pathlib import Path as _Path
+
+# O `.env` do backend, carregado antes de qualquer módulo do app ler variável.
+# Faltava: `python-dotenv` estava declarado nas dependências mas ninguém
+# chamava, então em desenvolvimento o arquivo era decorativo — a chave de IA e
+# as de notificação só valiam se exportadas na mão. Em produção quem manda são
+# os secrets do Fly, e `override=False` garante que o arquivo nunca os
+# sobrescreva.
+try:
+    from dotenv import load_dotenv as _load_dotenv
+
+    _load_dotenv(_Path(__file__).resolve().parent.parent / ".env", override=False)
+except ImportError:  # pragma: no cover - dependência declarada
+    pass
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
@@ -22,7 +36,10 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel
 
 from app import assistant
+from app import crypto
 from app import observability
+from app import push
+from app import scheduler
 from app import ratelimit
 from app import repository as repo
 from app import session as app_session
@@ -237,6 +254,29 @@ class SubmissionResult(BaseModel):
     moodle_url: str
 
 
+class PushKeys(BaseModel):
+    p256dh: str
+    auth: str
+
+
+class PushSubscriptionRequest(BaseModel):
+    """A inscrição como o navegador a entrega (`PushSubscription.toJSON()`)."""
+    endpoint: str
+    keys: PushKeys
+
+
+class PushUnsubscribeRequest(BaseModel):
+    """Endpoint a desligar. Ausente, desliga todos os aparelhos da conta."""
+    endpoint: Optional[str] = None
+
+
+class PushConfigResponse(BaseModel):
+    """O que a tela precisa saber para desenhar (ou esconder) o botão."""
+    enabled: bool                    # o servidor tem chave VAPID?
+    public_key: Optional[str] = None
+    devices: int = 0                 # aparelhos já inscritos nesta conta
+
+
 class AssistantMessage(BaseModel):
     role: str  # "user" | "assistant"
     content: str
@@ -269,7 +309,14 @@ async def lifespan(_app: FastAPI):
     if removidas:
         observability.logger.info("%d sessão(ões) expirada(s) removida(s).", removidas)
     observability.logger.info("API pronta (APP_ENV=%s).", os.getenv("APP_ENV", "development"))
-    yield
+
+    # O relógio das notificações vive dentro deste processo — ver `scheduler`.
+    # Sem VAPID configurado a corrotina devolve na hora e nada sobe.
+    tarefa = asyncio.create_task(scheduler.laco())
+    try:
+        yield
+    finally:
+        tarefa.cancel()
 
 
 app = FastAPI(
@@ -502,6 +549,8 @@ async def health_check():
         # calendário do Moodle, sem LLM. Ela só serve ao assistente de
         # organização, que é opcional.
         "ai_key_optional": assistant.is_configured(),
+        # Também opcional: sem par VAPID o app funciona igual, só não notifica.
+        "push_optional": push.configurado(),
         "moodle": False,
         "database": False,
     }
@@ -1191,6 +1240,122 @@ async def submit_assignment(
         status=[StatusLinha(**linha) for linha in status],
         moodle_url=url,
     )
+
+
+# ---------------------------------------------------------------------------
+# Notificação push
+# ---------------------------------------------------------------------------
+
+@app.get("/api/push/config", response_model=PushConfigResponse)
+async def push_config(session: app_session.PortalSession = Depends(require_session)):
+    """Chave pública e quantos aparelhos esta conta já tem inscritos."""
+    with repo.get_session() as db:
+        devices = len(repo.listar_inscricoes(db, session.user_id))
+
+    return PushConfigResponse(
+        enabled=push.configurado(),
+        public_key=push.chave_publica() or None,
+        devices=devices,
+    )
+
+
+@app.post("/api/push/subscribe", response_model=PushConfigResponse)
+async def push_subscribe(
+    inscricao: PushSubscriptionRequest,
+    session: app_session.PortalSession = Depends(require_session),
+):
+    """
+    Registra o aparelho e **guarda a senha cifrada junto**.
+
+    Essa é a parte que o aluno precisa ter lido antes de chegar aqui: para
+    avisar "saiu nota" com o app fechado, o servidor consulta o Moodle sozinho,
+    e a senha da sessão morre em 8h de inatividade — às 7h da manhã ela nunca
+    está lá. A tela de opt-in diz isso com todas as letras, e o
+    `DELETE /api/push/subscribe` apaga a senha junto com a inscrição.
+    """
+    if not push.configurado():
+        raise HTTPException(status_code=503, detail="Notificações não estão configuradas.")
+
+    with repo.get_session() as db:
+        repo.salvar_inscricao(
+            db,
+            session.user_id,
+            inscricao.endpoint,
+            inscricao.keys.p256dh,
+            inscricao.keys.auth,
+            crypto.encrypt(session.password),
+        )
+        db.commit()
+        devices = len(repo.listar_inscricoes(db, session.user_id))
+
+    return PushConfigResponse(
+        enabled=True, public_key=push.chave_publica(), devices=devices
+    )
+
+
+@app.delete("/api/push/subscribe", response_model=PushConfigResponse)
+async def push_unsubscribe(
+    pedido: PushUnsubscribeRequest,
+    session: app_session.PortalSession = Depends(require_session),
+):
+    """Desliga um aparelho (ou todos). A senha guardada some junto."""
+    with repo.get_session() as db:
+        if pedido.endpoint:
+            repo.remover_inscricao(db, session.user_id, pedido.endpoint)
+        else:
+            repo.remover_inscricoes(db, session.user_id)
+        db.commit()
+        devices = len(repo.listar_inscricoes(db, session.user_id))
+
+    return PushConfigResponse(
+        enabled=push.configurado(),
+        public_key=push.chave_publica() or None,
+        devices=devices,
+    )
+
+
+@app.post("/api/push/test")
+async def push_test(session: app_session.PortalSession = Depends(require_session)):
+    """
+    Manda uma notificação de teste para os aparelhos desta conta.
+
+    Existe porque autorizar notificação e não ver nada acontecer é o caminho
+    mais curto para o aluno concluir que está quebrado e desligar.
+    """
+    if not push.configurado():
+        raise HTTPException(status_code=503, detail="Notificações não estão configuradas.")
+
+    enviados = await asyncio.to_thread(
+        scheduler.entregar, session.user_id, push.payload_de_teste(), "teste"
+    )
+    if enviados == 0:
+        raise HTTPException(
+            status_code=502,
+            detail="Não consegui entregar. Autorize as notificações e tente de novo.",
+        )
+    return {"status": "ok", "enviados": enviados}
+
+
+@app.post("/api/push/run")
+async def push_run(
+    slot: str = "manha",
+    x_cron_token: Optional[str] = Header(default=None),
+):
+    """
+    Dispara um horário de fora. Para quem prefere deixar a máquina do Fly
+    dormindo e acordá-la com um cron externo.
+
+    Sem `PUSH_CRON_TOKEN` configurado o endereço não existe — 404 em vez de
+    401, para não confirmar a presença de um endpoint que manda notificação
+    para todo mundo.
+    """
+    esperado = scheduler.token_do_cron()
+    if not esperado or x_cron_token != esperado:
+        raise HTTPException(status_code=404, detail="Not Found")
+    if slot not in scheduler.HORARIOS.values():
+        raise HTTPException(status_code=400, detail="Horário desconhecido.")
+
+    return await asyncio.to_thread(scheduler.rodar, slot)
 
 
 @app.post("/api/sync-calendar", response_model=SyncCalendarResponse)

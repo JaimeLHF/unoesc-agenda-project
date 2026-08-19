@@ -475,3 +475,39 @@ export async function fetchGrades(subjectName: string): Promise<Grades> {
   const { data } = await api.post<Grades>('/grades', { subject_name: subjectName });
   return data;
 }
+
+/* -------------------------------------------------------------------------
+ * Notificação push
+ *
+ * O aviso na tela bloqueada. No iPhone só existe com o app instalado na tela
+ * inicial — ver `InstalarNoCelular`.
+ * ----------------------------------------------------------------------- */
+
+export interface PushConfig {
+  /** O servidor tem chave VAPID? Sem isso o recurso não aparece. */
+  enabled: boolean;
+  public_key: string | null;
+  /** Aparelhos já inscritos nesta conta. */
+  devices: number;
+}
+
+export async function fetchPushConfig(): Promise<PushConfig> {
+  const { data } = await api.get<PushConfig>('/push/config');
+  return data;
+}
+
+export async function subscribePush(inscricao: PushSubscriptionJSON): Promise<PushConfig> {
+  const { data } = await api.post<PushConfig>('/push/subscribe', inscricao);
+  return data;
+}
+
+export async function unsubscribePush(endpoint?: string): Promise<PushConfig> {
+  const { data } = await api.delete<PushConfig>('/push/subscribe', {
+    data: { endpoint: endpoint ?? null },
+  });
+  return data;
+}
+
+export async function testPush(): Promise<void> {
+  await api.post('/push/test');
+}

@@ -29,14 +29,19 @@ primary_region = "gru"
 [http_service]
   internal_port = 8080
   force_https = true
-  # Escala a zero: sem ninguém acessando, a máquina suspende e para de custar.
-  # A primeira requisição depois de ocioso acorda ela em ~1s, porque `suspend`
-  # preserva a memória em vez de desligar. Enquanto não se sabe se alguém vai
-  # usar o app, esse é o ajuste que mantém a conta perto de zero — sobra só o
-  # volume, que é cobrado por existir.
-  auto_stop_machines = "suspend"
+  # Uma máquina sempre de pé. Antes eram zero: a máquina suspendia quando
+  # ninguém acessava e acordava em ~1s na primeira visita, o que mantinha a
+  # conta perto de zero. O que mudou foi a notificação — o disparo das 7h nasce
+  # do relógio, não de uma visita, e processo suspenso não olha relógio. Sem
+  # isto, "Prova hoje" simplesmente não sai.
+  #
+  # Para voltar a escalar a zero: ponha `min_machines_running = 0`, configure o
+  # secret `PUSH_CRON_TOKEN` e aponte um cron externo (cron-job.org, GitHub
+  # Actions) para `POST /api/push/run?slot=manha|meio|noite` — a chamada acorda
+  # a máquina e dispara. Fica mais barato e mais frágil, nessa ordem.
+  auto_stop_machines = "off"
   auto_start_machines = true
-  min_machines_running = 0
+  min_machines_running = 1
 
   [http_service.concurrency]
     type = "requests"
@@ -47,8 +52,8 @@ primary_region = "gru"
   # cada 30s contra `/api/health` faria uma requisição ao Moodle da UNOESC 2880
   # vezes por dia sem ninguém estar usando o app. Se o processo travar, o Fly
   # reinicia a máquina sozinho — hoje ele nem saberia que travou.
-  # Com a máquina suspensa (min_machines_running = 0) o check não roda, e é
-  # exatamente o desejado: ninguém usando, nada para checar.
+  # Com a máquina de pé o check roda o dia inteiro — é o preço de manter o
+  # relógio das notificações acordado, e ele não sai do nosso servidor.
   [[http_service.checks]]
     grace_period = "10s"
     interval = "30s"

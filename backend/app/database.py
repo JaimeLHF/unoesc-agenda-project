@@ -227,6 +227,41 @@ class CourseItem(Base):
     baseline: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
+class PushSubscription(Base):
+    """
+    Inscrição de notificação push de um aluno — uma por navegador/aparelho.
+
+    O `endpoint` é a URL que o navegador dá ao autorizar; é ela que o servidor
+    chama para entregar a mensagem, e é única por aparelho, então serve de
+    chave primária. `p256dh` e `auth` são as chaves com que o navegador decifra
+    a mensagem: o conteúdo trafega cifrado ponta a ponta, e nem o Google (que
+    roteia o push no Android) consegue ler.
+
+    `password_enc` é a parte que não é óbvia. Para avisar "saiu nota" com o app
+    fechado, o servidor precisa consultar o Moodle sozinho — e a senha da
+    sessão morre em 8h de inatividade, ou seja, nunca está lá às 7h da manhã.
+    Guardar aqui estende a retenção da senha de "enquanto a sessão dura" para
+    "enquanto o aluno quiser receber notificação". É por isso que o aviso está
+    escrito na tela de opt-in e a linha é apagada assim que ele desliga. Cifrada
+    com a mesma chave da sessão — ver `crypto.py`.
+
+    `falhas` conta rejeições seguidas do serviço de push. Inscrição de aparelho
+    formatado responde 404/410 para sempre; sem esse contador o servidor
+    tentaria entregar todo dia, para sempre.
+    """
+
+    __tablename__ = "push_subscriptions"
+
+    endpoint: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    p256dh: Mapped[str] = mapped_column(String, nullable=False)
+    auth: Mapped[str] = mapped_column(String, nullable=False)
+    password_enc: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    last_sent_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    falhas: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
 class Meta(Base):
     """Pares chave/valor por aluno (último scrape, versão, etc.)."""
 
@@ -282,6 +317,7 @@ def init_db() -> None:
 # Tabelas de cache que passaram a ter `user_id` na chave primária.
 _TENANT_TABLES = (
     "subjects", "events", "done_events", "meta", "course_items",
+    "push_subscriptions",
 )
 
 

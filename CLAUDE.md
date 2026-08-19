@@ -147,6 +147,31 @@ ver o próximo passo em `docs/PLANO_PUBLICO.md`.
 credencial inteira, só de leitura e trocável num clique. Ele serve o cache —
 buscar no Moodle exigiria a senha e demoraria mais do que o cliente espera.
 
+**A notificação no celular guarda a senha por mais tempo que a sessão.** Este é
+o custo do recurso, e está escrito na tela de opt-in: para avisar "saiu nota"
+com o app fechado, o servidor entra no Moodle sozinho às 7h, 13h e 19h — e a
+senha da sessão morre em 8h de inatividade, ou seja, nunca está lá de manhã.
+Quem liga os avisos guarda a senha cifrada junto da inscrição
+(`push_subscriptions.password_enc`), e desligar apaga na hora. Três horários e
+não um por hora: cada rodada é um login no Moodle da UNOESC por aluno inscrito.
+Os textos vivem em `push.py`, o relógio em `scheduler.py`.
+
+**O `fly.toml` deixou de escalar a zero por causa disso.** Disparo das 7h nasce
+do relógio, não de uma visita, e máquina suspensa não olha relógio. Quem quiser
+a conta de volta perto de zero: `min_machines_running = 0` mais o secret
+`PUSH_CRON_TOKEN` e um cron externo batendo em `/api/push/run`. Está anotado no
+próprio `fly.toml`.
+
+**Notificação demais queima o canal.** No Android, bloqueio de notificação não
+se recupera — o navegador não pergunta de novo. Por isso são no máximo três por
+dia, com conteúdo diferente em cada uma, e o `tag` faz o aviso novo substituir o
+anterior do mesmo tipo em vez de empilhar.
+
+**O `.env` do backend não era lido.** `python-dotenv` estava nas dependências
+mas ninguém chamava: em desenvolvimento o arquivo era decorativo e as chaves só
+valiam exportadas na mão. O `main.py` agora carrega com `override=False`, para
+que os secrets do Fly continuem mandando em produção.
+
 **Duas coisas já foram construídas e removidas a pedido do Jaime**, e não devem
 voltar sem ele pedir: o painel de gráficos "Panorama" (commits `f747f84`,
 `36f8309`, `afc6fce`) e o lembrete por e-mail antes do prazo (`f62cc9d`) — a

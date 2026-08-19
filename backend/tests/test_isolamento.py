@@ -23,6 +23,13 @@ os.environ["SESSION_SECRET"] = "segredo-de-teste-nao-usar-em-producao"
 os.environ["APP_ENV"] = "development"
 os.environ.pop("GEMINI_API_KEY", None)
 os.environ.pop("ANTHROPIC_API_KEY", None)
+# Par VAPID de teste: liga os endpoints de notificação sem que nada saia daqui
+# — o teste nunca chama o serviço de push, só grava e lê inscrições.
+os.environ["VAPID_PUBLIC_KEY"] = (
+    "BFk0P8FBPpy78uNynZeSv6xWEIZka_sDTW6cr4ZUMB8b4tm-KABtzKGa_JhDMUwGjlS6W_iGdPaDpGOEomGfi-Q"
+)
+os.environ["VAPID_PRIVATE_KEY"] = "i7gmNRsB8Ivs-sp9tkaT68z14PUchSP9nAZRQzjWZBU"
+os.environ.pop("PUSH_CRON_TOKEN", None)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -264,6 +271,11 @@ def main_teste() -> int:
             ("get", "/api/calendar-feed", None),
             ("post", "/api/calendar-feed/reset", None),
             ("post", "/api/grades", {"subject_name": "Cálculo I"}),
+            ("get", "/api/push/config", None),
+            ("post", "/api/push/subscribe", {
+                "endpoint": "https://push.exemplo/x", "keys": {"p256dh": "p", "auth": "a"},
+            }),
+            ("post", "/api/push/test", None),
         ]
         for metodo, rota, corpo in sem_sessao:
             resp = getattr(client, metodo)(rota, json=corpo) if corpo else getattr(client, metodo)(rota)
@@ -371,6 +383,54 @@ def main_teste() -> int:
             "próximo evento do perfil é o da agenda do próprio aluno",
         )
 
+        print("\n[4.1] Notificação: cada aparelho pertence a uma conta só")
+        # A senha do Moodle fica cifrada junto da inscrição — é o que permite
+        # avisar "saiu nota" com o app fechado. Um endpoint alcançável pela
+        # conta errada entregaria os avisos de um aluno no celular do outro.
+        inscricao_a = {
+            "endpoint": "https://push.exemplo/aluno-a",
+            "keys": {"p256dh": "chave-publica-a", "auth": "auth-a"},
+        }
+        inscricao_b = {
+            "endpoint": "https://push.exemplo/aluno-b",
+            "keys": {"p256dh": "chave-publica-b", "auth": "auth-b"},
+        }
+        resp_a = client.post("/api/push/subscribe", json=inscricao_a, headers=auth(token_a))
+        resp_b = client.post("/api/push/subscribe", json=inscricao_b, headers=auth(token_b))
+        verificar(
+            resp_a.status_code == 200 and resp_a.json()["devices"] == 1,
+            "A inscreve o aparelho dele",
+        )
+        verificar(
+            resp_b.status_code == 200 and resp_b.json()["devices"] == 1,
+            "B inscreve o aparelho dele",
+        )
+
+        # Desinscrever pelo endpoint do vizinho não pode desligar o vizinho.
+        client.request(
+            "DELETE", "/api/push/subscribe",
+            json={"endpoint": inscricao_b["endpoint"]}, headers=auth(token_a),
+        )
+        verificar(
+            client.get("/api/push/config", headers=auth(token_b)).json()["devices"] == 1,
+            "A não desliga a notificação de B",
+        )
+
+        from app.database import PushSubscription, SessionLocal as _SL
+        with _SL() as _db:
+            senhas = [i.password_enc for i in _db.query(PushSubscription).all()]
+        verificar(
+            all(s_ and "senha-" not in s_ for s_ in senhas),
+            "a senha guardada na inscrição está cifrada, não em claro",
+        )
+
+        # Sem PUSH_CRON_TOKEN o disparo externo não existe. 404 e não 401: um
+        # 401 confirmaria que há ali um botão de "notifique todo mundo agora".
+        verificar(
+            client.post("/api/push/run", headers={"X-Cron-Token": "chute"}).status_code == 404,
+            "POST /api/push/run → 404 sem token de cron configurado",
+        )
+
         print("\n[5] Limpar cache não atinge o vizinho")
         client.delete("/api/cache", headers=auth(token_a))
         cache_b_depois = client.get("/api/cache", headers=auth(token_b)).json()
@@ -412,6 +472,10 @@ def main_teste() -> int:
         cache_b2 = client.get("/api/cache", headers=auth(token_b2)).json()
         verificar(cache_b2["events"] == [], "conta recriada volta vazia")
         verificar(cache_b2["done_keys"] == [], "marcações antigas não voltam")
+        verificar(
+            client.get("/api/push/config", headers=auth(token_b2)).json()["devices"] == 0,
+            "excluir a conta apaga a inscrição de notificação e a senha nela",
+        )
 
     print()
     if falhas:

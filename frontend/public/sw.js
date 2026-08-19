@@ -15,7 +15,7 @@
 
 // Muda a cada deploy que precise descartar a casca antiga. Os arquivos do Vite
 // já vêm com hash no nome, então na prática só o index.html depende disto.
-const VERSAO = 'agenda-v1';
+const VERSAO = 'agenda-v2';
 
 // Só o que existe em disco desde o primeiro carregamento. O resto entra sozinho
 // conforme o app pede — os bundles têm hash no nome e mudam a cada build.
@@ -90,6 +90,55 @@ self.addEventListener('fetch', (evento) => {
         }
         return resp;
       });
+    }),
+  );
+});
+
+/*
+ * Notificação push.
+ *
+ * O conteúdo chega cifrado do servidor e é decifrado aqui pelo navegador —
+ * quem roteia (Google no Android, Apple no iPhone) encaminha sem conseguir
+ * ler. O `tag` faz o aviso novo substituir o anterior do mesmo tipo em vez de
+ * empilhar: o resumo de hoje ocupa o lugar do de ontem, que ninguém vai ler.
+ */
+self.addEventListener('push', (evento) => {
+  let dados = {};
+  try {
+    dados = evento.data ? evento.data.json() : {};
+  } catch {
+    /* payload estranho: mostra o genérico em vez de engolir o aviso */
+  }
+
+  const titulo = dados.titulo || 'Agenda UNOESC';
+  evento.waitUntil(
+    self.registration.showNotification(titulo, {
+      body: dados.corpo || '',
+      icon: '/icone-192.png',
+      badge: '/icone-192.png',
+      tag: dados.tag || 'agenda',
+      data: { url: dados.url || '/' },
+    }),
+  );
+});
+
+/*
+ * Toque na notificação: traz para a frente a aba que já está aberta, em vez de
+ * abrir mais uma. Quem toca no aviso quer olhar a agenda, não colecionar abas.
+ */
+self.addEventListener('notificationclick', (evento) => {
+  evento.notification.close();
+  const destino = (evento.notification.data && evento.notification.data.url) || '/';
+
+  evento.waitUntil(
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((abas) => {
+      for (const aba of abas) {
+        if (new URL(aba.url).origin === self.location.origin && 'focus' in aba) {
+          aba.navigate(destino);
+          return aba.focus();
+        }
+      }
+      return self.clients.openWindow(destino);
     }),
   );
 });
