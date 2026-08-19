@@ -140,32 +140,21 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, loading, error }) => {
                   "Entrar e ver minha agenda"
                 )}
               </button>
+
+              {/*
+                A única frase que o rodapé da página não diz, e a que importa
+                exatamente aqui: o que acontece com a senha que ele acabou de
+                digitar. Autoria e "Privacidade e termos" ficam só no rodapé —
+                estavam repetidos nesta mesma tela.
+              */}
+              <p className="auth__nota">
+                Sua senha fica cifrada no servidor só para manter a conexão com o
+                Moodle, e nunca é salva no navegador.
+              </p>
             </form>
           </div>
         </div>
 
-        {/*
-          Recado de quem fez, junto com o que acontece com a senha. Curto de
-          propósito: o "não é serviço oficial" já está no rodapé logo abaixo, e
-          repetir a mesma frase duas vezes na mesma tela só ocupa espaço.
-        */}
-        <p className="auth__signature">
-          Feito por{" "}
-          <a
-            href="https://github.com/JaimeLHF"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Jaime Luiz Hansen Filho
-          </a>
-          , de Análise e Desenvolvimento de Sistemas na UNOESC São Miguel do
-          Oeste. Sua senha fica cifrada no servidor só para manter a conexão com
-          o Moodle e nunca é salva no navegador.{" "}
-          <a href="/privacidade.html" target="_blank" rel="noreferrer">
-            Privacidade e termos
-          </a>
-          .
-        </p>
       </div>
     </div>
   );

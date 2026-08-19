@@ -694,8 +694,19 @@ body {
   min-height: 2.85rem;
 }
 
-/* A assinatura de quem fez. Fica no fim da coluna, no tom de recado, não de
-   rodapé institucional. */
+/*
+  O destino da senha, logo abaixo do botão. Era um parágrafo de rodapé que
+  também trazia autoria e o link de privacidade — os dois já estavam no rodapé
+  da página, na mesma tela, e apareciam duas vezes.
+*/
+.auth__nota {
+  margin: 0;
+  font-size: 0.75rem;
+  line-height: 1.55;
+  color: var(--color-text-muted);
+}
+
+/* Mantido para a página de privacidade, que reaproveita a marcação. */
 .auth__signature {
   margin-top: 1.5rem;
   padding-top: 1.15rem;
@@ -4355,14 +4366,18 @@ body {
   que serve para quem já está no telefone.
 */
 .instalar {
-  display: flex;
-  gap: 1.1rem;
-  align-items: flex-start;
   margin: 1.25rem 0;
   padding: 1rem 1.1rem;
   border: 1px solid var(--color-border);
   border-radius: 0.75rem;
   background: var(--color-surface);
+}
+
+/* O título fica fora desta linha, encabeçando as duas colunas. */
+.instalar__corpo {
+  display: flex;
+  gap: 1.1rem;
+  align-items: flex-start;
 }
 
 .instalar__qr {
@@ -4423,11 +4438,11 @@ body {
 }
 
 /*
-  Na tela de login a coluna tem pouco mais de 300px: lado a lado, o texto ficava
-  espremido num filete de 150px e cada passo virava seis linhas. Aqui o código
-  vai em cima e o texto embaixo, usando a largura inteira.
+  Na coluna estreita da tela de login, lado a lado o texto ficava espremido num
+  filete de 150px e cada passo virava seis linhas. Empilhado, o código fica em
+  cima e o texto embaixo, usando a largura inteira.
 */
-.instalar--compacto {
+.instalar--compacto .instalar__corpo {
   flex-direction: column;
   align-items: center;
 }
