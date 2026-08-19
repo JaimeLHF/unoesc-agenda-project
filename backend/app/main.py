@@ -7,6 +7,7 @@ deploy, um domínio, sem CORS entre front e back.
 """
 
 import asyncio
+import mimetypes
 import os
 from contextlib import asynccontextmanager
 from datetime import datetime
@@ -1232,6 +1233,12 @@ async def sync_calendar(
 # Registrado por último de propósito: o mount em "/" captura qualquer caminho,
 # e as rotas acima precisam ser resolvidas primeiro.
 # ---------------------------------------------------------------------------
+
+# O `mimetypes` do Python não conhece `.webmanifest`, e o Starlette pergunta a
+# ele. Sem isto o arquivo sai como `application/octet-stream` e o Chrome ignora
+# o manifest — o app deixa de ser instalável, sem erro nenhum na tela.
+mimetypes.add_type("application/manifest+json", ".webmanifest")
+
 
 class SPAStaticFiles(StaticFiles):
     """

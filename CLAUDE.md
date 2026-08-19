@@ -116,6 +116,18 @@ traz "– Peso: 4" no fim da linha; isso já era apagado do título e agora vira
 campo (`weight`). O calendário do Moodle não tem equivalente, então prazo
 cadastrado pelo professor não mostra peso — e isso é correto, não falta de dado.
 
+**O app é instalável na tela inicial, e o service worker nunca toca em
+`/api`.** O manifest e o `frontend/public/sw.js` foram escritos à mão, sem
+plugin de PWA: o que uma biblioteca traria de útil é justamente o que este app
+não pode usar. Guardar resposta de API desfaria em silêncio a regra de que a
+agenda espera o Moodle — o cache só entra quando o backend decide, e a tela
+avisa. O service worker guarda só a casca (HTML, bundle, CSS, ícone) e é
+registrado apenas em `import.meta.env.PROD`, senão ele serviria por cima do hot
+reload do Vite e toda alteração pareceria não ter efeito. O `.webmanifest`
+precisa do `mimetypes.add_type` em `main.py`: sem ele o Chrome ignora o
+manifest sem erro nenhum na tela. Loja de aplicativo não entra nessa conta —
+ver o próximo passo em `docs/PLANO_PUBLICO.md`.
+
 **O `.ics` é buscado pelo servidor do Google, não pelo aluno.** Por isso
 `/calendario/{token}.ics` fica fora de `/api` e sem sessão: a chave da URL é a
 credencial inteira, só de leitura e trocável num clique. Ele serve o cache —

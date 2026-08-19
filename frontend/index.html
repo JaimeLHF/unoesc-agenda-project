@@ -7,6 +7,23 @@
     <!-- O mesmo símbolo da marca que aparece na barra superior do app. -->
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="theme-color" content="#ffffff" />
+
+    <!--
+      Instalável na tela inicial do celular. O público abre isto entre uma aula
+      e outra, no 4G: virar ícone poupa digitar o endereço e o app abre em tela
+      cheia, sem a barra do navegador comendo a lista de prazos.
+    -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <!-- O iOS ignora o manifest para o ícone e exige PNG neste tamanho. -->
+    <link rel="apple-touch-icon" href="/icone-apple-180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="Agenda" />
+    <!--
+      `default` deixa a barra de status do iPhone legível nos dois temas.
+      `black-translucent` empurraria o conteúdo para baixo do relógio.
+    -->
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <title>Agenda UNOESC</title>
     <!--
       Roda antes do React montar. O padrão é o claro; sem isso, quem escolheu
