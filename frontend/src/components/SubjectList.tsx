@@ -2,6 +2,7 @@ import React from 'react';
 import type { Subject, AcademicEvent, EventType } from '../types';
 import EventAlerts from './EventAlerts';
 import NextDeadline from './NextDeadline';
+import SemanaCheia from './SemanaCheia';
 import WeekView from './WeekView';
 import Icon from './Icon';
 import { useDoneEvents } from '../contexts/DoneEventsContext';
@@ -384,6 +385,10 @@ const SubjectList: React.FC<SubjectListProps> = ({
       </div>
 
       <NextDeadline events={events} onOpenEvent={onOpenEvent} />
+
+      {/* Entre o próximo prazo e a lista de alertas: primeiro o que vence
+          agora, depois o peso da semana, depois cada item. */}
+      <SemanaCheia events={events} />
 
       <EventAlerts events={events} onOpenEvent={onOpenEvent} />
 

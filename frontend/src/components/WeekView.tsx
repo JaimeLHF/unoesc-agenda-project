@@ -3,6 +3,7 @@ import type { AcademicEvent, EventType } from '../types';
 import { useDoneEvents } from '../contexts/DoneEventsContext';
 import Icon from './Icon';
 import { formatarPeso, mudancaDePrazo } from '../lib/avisos';
+import { cargaDaSemana, descreverCarga } from '../lib/semana';
 
 interface WeekViewProps {
   events: AcademicEvent[];
@@ -75,6 +76,10 @@ const WeekView: React.FC<WeekViewProps> = ({ events, onOpenEvent }) => {
 
   const vazia = dias.every((d) => d.eventos.length === 0);
 
+  // A carga é da semana que está na tela, e não dos próximos 7 dias: aqui o
+  // aluno está navegando entre semanas, e o número precisa ser o daquela.
+  const carga = cargaDaSemana(events, primeira, 7, isDone);
+
   return (
     <section className="semana">
       <div className="semana__topo">
@@ -83,6 +88,12 @@ const WeekView: React.FC<WeekViewProps> = ({ events, onOpenEvent }) => {
             {offset === 0 ? 'Esta semana' : offset === 1 ? 'Semana que vem' : intervalo(primeira)}
           </h3>
           <p className="semana__intervalo">{intervalo(primeira)}</p>
+          {carga.cheia && (
+            <p className="semana__carga">
+              <Icon name="alerta" size={0.85} />
+              Semana cheia — {descreverCarga(carga)}
+            </p>
+          )}
         </div>
         <div className="semana__nav">
           <button

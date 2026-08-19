@@ -4594,3 +4594,57 @@ body {
   font-size: 0.78rem;
   color: var(--color-text-muted);
 }
+
+/* ---- Aviso de semana cheia ---- */
+/*
+  Laranja e não vermelho: a semana estar cheia não é erro nem urgência, é peso.
+  O vermelho já é do prazo vencendo hoje, e dois vermelhos na mesma tela fazem
+  os dois valerem menos.
+*/
+.semana-cheia {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  margin-bottom: 1.25rem;
+  padding: 0.85rem 1.05rem;
+  border: 1px solid var(--color-alert-orange-border);
+  background: var(--color-alert-orange-bg);
+  border-radius: 0.75rem;
+}
+
+.semana-cheia__icone {
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.55rem;
+  color: var(--color-alert-orange-ink);
+  background: var(--color-surface);
+}
+
+.semana-cheia__titulo {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--color-alert-orange-ink);
+}
+
+.semana-cheia__detalhe {
+  margin: 0.15rem 0 0;
+  font-size: 0.8rem;
+  line-height: 1.5;
+  color: var(--color-text-muted);
+}
+
+/* Na visão por semana o aviso é uma linha do cabeçalho, não um cartão: ali ele
+   qualifica a semana que está sendo olhada, não interrompe a leitura. */
+.semana__carga {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  margin: 0.3rem 0 0;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--color-alert-orange-ink);
+}

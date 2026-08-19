@@ -102,6 +102,16 @@ perceber. O banco guarda `previous_date` no evento; o selo diz "Adiado" ou
 faria o aviso virar paisagem. Isso só funciona porque `stable_key` sobrevive à
 troca de data: vem do id do Moodle, não do conteúdo.
 
+**O aviso de semana cheia é uma frase, não um gráfico.** O painel "Panorama"
+já foi construído e descartado neste projeto, então a carga da semana aparece
+como uma linha no topo da agenda e um selo no cabeçalho da visão por semana.
+Dois recortes diferentes de propósito: o topo conta os **próximos 7 dias** (na
+quinta-feira o que importa é o que vem, não o que sobra até domingo) e o selo
+conta a **semana do calendário** que está na tela, porque ali o aluno navega
+entre semanas. O corte é 3 compromissos ou 2 provas (`LIMITE_SEMANA_CHEIA` em
+`frontend/src/lib/semana.ts`) — abaixo disso apareceria quase toda semana e
+viraria paisagem. Concluído não pesa.
+
 **A agenda avisa que saiu nota.** Mesma máquina do prazo alterado: a nota
 anterior fica em `previous_grade` e o selo expira em `DIAS_AVISO_MUDANCA`. Duas
 regras que não são óbvias — disciplina vista pela primeira vez nunca vira aviso
