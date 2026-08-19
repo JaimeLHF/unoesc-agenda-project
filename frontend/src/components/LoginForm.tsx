@@ -1,10 +1,15 @@
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import Icon from "./Icon";
 import InstalarNoCelular from "./InstalarNoCelular";
 import type { LoginCredentials } from "../types";
 
 interface LoginFormProps {
-  onSubmit: (credentials: LoginCredentials) => void;
+  /**
+   * Devolve `true` quando entrou. É esse retorno que decide se a senha
+   * digitada é apagada — um `error` novo não serve, porque errar a senha duas
+   * vezes seguidas produz a mesma mensagem e o efeito não dispararia.
+   */
+  onSubmit: (credentials: LoginCredentials) => Promise<boolean>;
   loading: boolean;
   error: string | null;
 }
@@ -21,10 +26,25 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, loading, error }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const senhaRef = useRef<HTMLInputElement>(null);
+
+  /*
+    Login recusado apaga a senha e devolve o cursor para ela — o usuário fica
+    escrito. Antes o formulário inteiro era desmontado durante a tentativa, e
+    voltava vazio: quem errava a senha redigitava o e-mail junto, sem ter
+    errado nada nele.
+  */
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) return;
-    onSubmit({ username: username.trim(), password });
+
+    const entrou = await onSubmit({ username: username.trim(), password });
+    if (!entrou) {
+      setPassword('');
+      // Depois do commit do React: enquanto `loading` era verdadeiro o campo
+      // estava desabilitado, e `focus()` em campo desabilitado não faz nada.
+      setTimeout(() => senhaRef.current?.focus(), 0);
+    }
   };
 
   return (
@@ -110,6 +130,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, loading, error }) => {
                 <label htmlFor="password">Senha</label>
                 <input
                   id="password"
+                  ref={senhaRef}
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}

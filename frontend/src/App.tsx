@@ -108,21 +108,42 @@ const App: React.FC = () => {
   };
 
   /** Login inicial — autentica e só abre a agenda depois de atualizá-la. */
+  // Conferir a senha e carregar a agenda são duas esperas diferentes, e antes
+  // as duas ligavam o mesmo sinalizador. O efeito era o aluno digitar a senha
+  // errada e mesmo assim ver o esqueleto da agenda com "isso leva cerca de um
+  // minuto", para só então voltar ao login — parecia que tinha entrado e sido
+  // expulso. Agora o formulário fica na tela, com o botão girando, até o
+  // backend aceitar a senha.
   const [loginLoading, setLoginLoading] = useState(false);
+  const [abrindoAgenda, setAbrindoAgenda] = useState(false);
 
-  const handleLogin = async (creds: LoginCredentials) => {
+  /** `true` quando entrou; `false` deixa o formulário limpar a senha. */
+  const handleLogin = async (creds: LoginCredentials): Promise<boolean> => {
     setLoginError(null);
     setLoginLoading(true);
-    setLoadingMessage('Entrando…');
 
     try {
       await login(creds);
-      await abrirSessao();
-      setLoginLoading(false);
-      setStep('results');
     } catch (err: unknown) {
       setLoginLoading(false);
       setLoginError(mensagemDeErro(err));
+      return false;
+    }
+
+    // Senha aceita: daqui para frente a espera é longa e tem o que mostrar.
+    setLoginLoading(false);
+    setAbrindoAgenda(true);
+    setLoadingMessage('Buscando seus dados no Moodle…');
+
+    try {
+      await abrirSessao();
+      setStep('results');
+      return true;
+    } catch (err: unknown) {
+      setLoginError(mensagemDeErro(err));
+      return false;
+    } finally {
+      setAbrindoAgenda(false);
     }
   };
 
@@ -172,12 +193,12 @@ const App: React.FC = () => {
   */
   useEffect(() => {
     if (!isAuthenticated()) return;
-    setLoginLoading(true);
+    setAbrindoAgenda(true);
     setLoadingMessage('Retomando sua sessão…');
     void abrirSessao()
       .then(() => setStep('results'))
       .catch((err) => setLoginError(mensagemDeErro(err)))
-      .finally(() => setLoginLoading(false));
+      .finally(() => setAbrindoAgenda(false));
     // Só no mount: é a retomada, não uma reação a mudança de estado.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -301,7 +322,7 @@ const App: React.FC = () => {
 
   // A tela de entrada já mostra a marca no meio dela; repetir a barra em cima
   // só empilharia dois logotipos e daria ar de chrome de sistema.
-  const naTelaDeEntrada = step === 'login' && !loginLoading;
+  const naTelaDeEntrada = step === 'login' && !abrindoAgenda;
 
   return (
     <div className="app">
@@ -309,7 +330,7 @@ const App: React.FC = () => {
         <AppHeader
           /* Durante o carregamento a barra fica só com a marca: Atualizar e o
              menu da conta agiriam sobre uma agenda que ainda não existe. */
-          authenticated={authenticated && !loginLoading}
+          authenticated={authenticated && !abrindoAgenda}
           username={account?.username}
           fullName={profile?.moodle?.fullname}
           avatar={profile?.moodle?.avatar}
@@ -346,7 +367,7 @@ const App: React.FC = () => {
         do formulário, e a margem de 1100px do resto do app cortaria as duas.
       */}
       <main className={naTelaDeEntrada ? 'app-main app-main--auth' : 'app-main'}>
-        {step === 'login' && !loginLoading && (
+        {step === 'login' && !abrindoAgenda && (
           <>
             {/* A tela de entrada não tem barra — o botão do tema vem solto no
                 canto, para quem abre o app à noite não precisar entrar antes
@@ -356,7 +377,7 @@ const App: React.FC = () => {
           </>
         )}
 
-        {step === 'login' && loginLoading && (
+        {step === 'login' && abrindoAgenda && (
           <LoadingSkeleton
             status={loadingMessage}
             message="Na primeira vez isso leva cerca de um minuto, porque estamos lendo todas as suas disciplinas."
@@ -434,7 +455,7 @@ const App: React.FC = () => {
         para lugar nenhum.
       */}
       {authenticated &&
-        !loginLoading &&
+        !abrindoAgenda &&
         step !== 'assistant' &&
         account?.assistantAvailable && (
           <AssistantFab
