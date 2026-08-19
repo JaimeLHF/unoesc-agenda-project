@@ -524,11 +524,56 @@ body {
   max-width: 21.5rem;
 }
 
-/* Todo o bloco de explicação fica centralizado; os campos, abaixo, seguem
-   alinhados à esquerda — rótulo centralizado em cima de campo é mais difícil
-   de varrer do que alinhado. */
-.auth__head {
+/*
+  Em tela larga a coluna única virava um filete de 344px no meio de um monitor
+  de 27 polegadas, com o QR e as instruções empurrando a assinatura para fora
+  da dobra. Duas colunas usam a largura que já existia: à esquerda o que se lê
+  uma vez, à direita o que se usa toda vez.
+*/
+@media (min-width: 62rem) {
+  .auth__inner {
+    max-width: 48rem;
+  }
+}
+
+/* A marca abre a tela e vale para as duas colunas. */
+.auth__brand {
   text-align: center;
+}
+
+.auth__colunas {
+  display: grid;
+  gap: 1.5rem;
+}
+
+@media (min-width: 62rem) {
+  .auth__colunas {
+    grid-template-columns: 1fr 1fr;
+    gap: 2.5rem;
+    align-items: start;
+    margin-top: 1.75rem;
+  }
+}
+
+/*
+  Empilhado, o formulário vem primeiro: quem abre no celular veio entrar, e o
+  QR nem é desenhado nesse tamanho. A ordem só volta ao natural quando as duas
+  colunas existem de verdade.
+*/
+.auth__principal {
+  order: -1;
+}
+
+@media (min-width: 62rem) {
+  .auth__principal {
+    order: 0;
+  }
+
+  /* Sem margem de topo: a coluna da esquerda começa na mesma linha da dica de
+     usuário, e não colada no título. */
+  .auth__lado .instalar {
+    margin-top: 0;
+  }
 }
 
 .auth__mark {
@@ -583,8 +628,8 @@ body {
   color: var(--color-text-muted);
 }
 
-/* `inline-block` centraliza o resumo no bloco e some com o triângulo do
-   navegador, que não centraliza junto com o texto. */
+/* `inline-block` some com o triângulo do navegador, que não acompanha o
+   alinhamento do texto. */
 .auth__help summary {
   display: inline-block;
   cursor: pointer;
