@@ -54,6 +54,14 @@ direito (`frontend/src/components/AssistantFab.tsx`), em toda tela menos a
 dele. O prompt tem teto de 5 linhas por resposta: o aluno lê isso no celular,
 entre uma aula e outra.
 
+**O modelo do Gemini é um alvo móvel.** Em 18/08/2026 a primeira pergunta em
+produção voltou 404: o Google aposentou o `gemini-2.0-flash` e a própria
+resposta mandou usar `gemini-3.6-flash`. O nome vive no secret `GEMINI_MODEL`
+do Fly (e no `backend/.env` local), com o padrão do código em `assistant.py` —
+os três precisam andar juntos. A chave está configurada em produção desde
+18/08/2026; sem ela o `/api/health` acusa `ai_key_optional: false` e o botão da
+Lumi não é desenhado.
+
 **As conversas com a Lumi ficam no `localStorage`, não no servidor.** Guardar
 no banco custaria tabela, endpoint e mais uma entrada no teste de isolamento
 para um dado que só interessa a quem escreveu. A chave inclui a matrícula
