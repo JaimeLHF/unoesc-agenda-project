@@ -138,6 +138,13 @@ class Subject(Base):
     # Nota final do relatório de notas do Moodle, na escala 0–100 que ele usa.
     # Nulo enquanto o professor não lança nada — ausência não é zero.
     final_grade: Mapped[Optional[float]] = mapped_column(Float)
+    # A nota anterior e quando a mudança foi percebida. Mesma ideia do
+    # `previous_date` do evento: o aluno abre o Moodle várias vezes por semana
+    # só para ver se saiu nota, e é a agenda que pode responder isso por ele.
+    # `previous_grade` nulo com `grade_changed_at` preenchido é o caso mais
+    # comum — a primeira nota da disciplina, que não tinha valor anterior.
+    previous_grade: Mapped[Optional[float]] = mapped_column(Float)
+    grade_changed_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=utc_now, onupdate=utc_now
     )

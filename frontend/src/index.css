@@ -3627,6 +3627,10 @@ body {
   display: flex;
   align-items: baseline;
   gap: 0.5rem;
+  /* Com dois selos na mesma linha ("novidade" + "nota"), sem isto o texto
+     quebrava dentro da pílula em vez de a pílula ir para a linha de baixo. */
+  flex-wrap: wrap;
+  row-gap: 0.35rem;
 }
 
 .subject-card-large__grade {
@@ -3634,11 +3638,30 @@ body {
   color: var(--color-text-muted);
 }
 
+/*
+  Azul da marca, não verde: nota nova nem sempre é boa notícia, e pintar de
+  verde uma média que caiu seria a tela comemorando sozinha.
+*/
+.subject-card-large__nota-nova {
+  display: inline-flex;
+  align-items: center;
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: var(--color-primary-ink);
+  background: var(--color-primary-soft);
+  border: 1px solid var(--color-primary-border);
+  padding: 0.15rem 0.5rem;
+  border-radius: 9999px;
+  align-self: flex-start;
+  white-space: nowrap;
+}
+
 /* Em curso presencial este é o único conteúdo que o cartão tem para mostrar —
    por isso ele abre a linha, antes da nota e do progresso. */
 .subject-card-large__novo {
   display: inline-flex;
   align-items: center;
+  white-space: nowrap;
   font-size: 0.75rem;
   font-weight: 700;
   color: var(--color-alert-orange-ink);

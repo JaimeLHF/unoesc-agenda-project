@@ -34,6 +34,12 @@ export interface Subject {
   end_date?: number | null;
   /** Nota final na escala 0–100 do Moodle; ausente enquanto nada foi lançado. */
   final_grade?: number | null;
+  /**
+   * Saiu nota nesta disciplina há pouco. `previous_grade` é a nota que havia
+   * antes — ausente quando esta é a primeira, que é o caso mais comum.
+   */
+  grade_changed?: boolean;
+  previous_grade?: number | null;
 }
 
 /** Tipos possíveis de evento acadêmico */

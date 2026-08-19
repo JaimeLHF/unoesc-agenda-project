@@ -158,8 +158,45 @@ def get_user_by_ics_token(session: Session, token: str) -> Optional[User]:
 # ---------------------------------------------------------------------------
 
 def upsert_subjects(session: Session, user_id: str, subjects: list[dict]) -> None:
-    """Insere ou atualiza cada disciplina. A PK é (user_id, name)."""
+    """
+    Insere ou atualiza cada disciplina. A PK é (user_id, name).
+
+    Quando a nota final muda — inclusive de "nenhuma" para a primeira —, a nota
+    velha vai para `previous_grade` e a hora fica em `grade_changed_at`. É o
+    aviso de "saiu nota", o motivo pelo qual o aluno abre o Moodle no celular
+    várias vezes por semana.
+
+    Disciplina que aparece pela primeira vez nunca vira aviso: quem se cadastra
+    no meio do semestre não quer receber as notas antigas como novidade. Mesma
+    regra do `baseline` dos materiais.
+    """
+    anteriores = {
+        row.name: row
+        for row in session.execute(
+            select(
+                Subject.name, Subject.final_grade, Subject.previous_grade,
+                Subject.grade_changed_at,
+            ).where(Subject.user_id == user_id)
+        )
+    }
+
     for s in subjects:
+        nota = s.get("final_grade")
+        antes = anteriores.get(s["name"])
+
+        if antes is None:
+            # Primeiro encontro com esta disciplina: registra sem anunciar.
+            previous_grade, grade_changed_at = None, None
+        elif nota is not None and nota != antes.final_grade:
+            previous_grade, grade_changed_at = antes.final_grade, utc_now()
+        else:
+            # Nota igual (ou o Moodle não respondeu): mantém o aviso que já
+            # estava lá, que ainda pode não ter sido visto.
+            previous_grade, grade_changed_at = antes.previous_grade, antes.grade_changed_at
+
+        s["grade_changed"] = _aviso_valido(grade_changed_at)
+        s["previous_grade"] = previous_grade if s["grade_changed"] else None
+
         stmt = sqlite_insert(Subject).values(
             user_id=user_id,
             name=s["name"],
@@ -169,7 +206,9 @@ def upsert_subjects(session: Session, user_id: str, subjects: list[dict]) -> Non
             course_url=s.get("course_url"),
             start_date=s.get("start_date"),
             end_date=s.get("end_date"),
-            final_grade=s.get("final_grade"),
+            final_grade=nota,
+            previous_grade=previous_grade,
+            grade_changed_at=grade_changed_at,
             updated_at=utc_now(),
         )
         stmt = stmt.on_conflict_do_update(
@@ -181,11 +220,29 @@ def upsert_subjects(session: Session, user_id: str, subjects: list[dict]) -> Non
                 "course_url": stmt.excluded.course_url,
                 "start_date": stmt.excluded.start_date,
                 "end_date": stmt.excluded.end_date,
-                "final_grade": stmt.excluded.final_grade,
+                # O Moodle às vezes não responde o relatório de notas; nesse
+                # caso `nota` vem nula e sobrescrever apagaria a nota guardada.
+                "final_grade": (
+                    stmt.excluded.final_grade if nota is not None else Subject.final_grade
+                ),
+                "previous_grade": stmt.excluded.previous_grade,
+                "grade_changed_at": stmt.excluded.grade_changed_at,
                 "updated_at": utc_now(),
             },
         )
         session.execute(stmt)
+
+
+def aviso_de_nota(subject: Subject) -> tuple[bool, Optional[float]]:
+    """
+    (saiu nota?, nota anterior) — o par que a tela usa para desenhar o selo.
+
+    A nota anterior é nula quando esta é a primeira da disciplina, que é o caso
+    mais comum: "Nota lançada" em vez de "8,0 → 8,5".
+    """
+    if not _aviso_valido(subject.grade_changed_at):
+        return False, None
+    return True, subject.previous_grade
 
 
 def upsert_events(session: Session, user_id: str, events: list[dict]) -> None:

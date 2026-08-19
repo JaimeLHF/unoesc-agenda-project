@@ -290,6 +290,20 @@ const SubjectList: React.FC<SubjectListProps> = ({
               {novidades} {novidades === 1 ? 'novidade' : 'novidades'} na sala
             </span>
           )}
+          {/*
+            "Saiu nota?" é a pergunta que faz o aluno abrir o Moodle no celular
+            várias vezes por semana. Aqui ela é respondida sem abrir nada — e
+            some sozinha depois de duas semanas, senão vira paisagem.
+          */}
+          {subject.grade_changed && typeof subject.final_grade === 'number' && (
+            <span className="subject-card-large__nota-nova">
+              {typeof subject.previous_grade === 'number'
+                ? `Nota mudou · ${formatGrade(subject.previous_grade)} → ${formatGrade(
+                    subject.final_grade,
+                  )}`
+                : `Nota lançada · ${formatGrade(subject.final_grade)}`}
+            </span>
+          )}
           {ended && typeof subject.final_grade === 'number' ? (
             <>
               <span

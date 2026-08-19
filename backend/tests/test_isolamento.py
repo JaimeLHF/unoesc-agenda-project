@@ -90,6 +90,7 @@ SEGUNDA_RODADA = {"ativa": False}
 
 PROVA_ADIADA_PARA = "2099-05-17"
 MATERIAL_NOVO_DE_A = "Slides da aula 9"
+NOTA_LANCADA_PARA_A = 87.5
 
 
 class MoodleFalso:
@@ -123,6 +124,7 @@ class MoodleFalso:
                 "cmid": "555", "name": MATERIAL_NOVO_DE_A,
                 "modname": "resource", "url": "/mod/resource/view.php?id=555",
             }]
+            subjects[0]["final_grade"] = NOTA_LANCADA_PARA_A
 
         return {"subjects": subjects, "calendar_events": eventos}
 
@@ -218,6 +220,32 @@ def main_teste() -> int:
             "o que já estava na sala no primeiro acesso não conta como novidade",
         )
         verificar(novos_b == set(), f"B não vê o material que apareceu na sala de A ({novos_b})")
+
+        disciplina_a = cache_a["subjects"][0]
+        disciplina_b = cache_b["subjects"][0]
+        verificar(
+            disciplina_a["grade_changed"] is True
+            and disciplina_a["final_grade"] == NOTA_LANCADA_PARA_A,
+            "A vê que saiu nota na disciplina dele",
+        )
+        verificar(
+            disciplina_a["previous_grade"] is None,
+            "a primeira nota da disciplina não inventa uma nota anterior",
+        )
+        verificar(
+            disciplina_b["grade_changed"] is False,
+            "B não recebe o aviso de nota de A",
+        )
+
+        # O relatório de notas do Moodle já respondeu `servicenotavailable`
+        # nesta instância. Quando ele falha, a nota chega nula — e sobrescrever
+        # apagaria em silêncio a nota que o aluno já tinha visto.
+        client.post("/api/scrape", headers=auth(token_a))
+        depois = client.get("/api/cache", headers=auth(token_a)).json()["subjects"][0]
+        verificar(
+            depois["final_grade"] == NOTA_LANCADA_PARA_A,
+            f"scrape sem nota não apaga a nota guardada ({depois['final_grade']})",
+        )
 
         print("\n[3] Nenhum endpoint de dados responde sem sessão")
         sem_sessao = [

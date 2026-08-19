@@ -69,6 +69,10 @@ class SubjectModel(BaseModel):
     end_date: Optional[int] = None
     # Nota final na escala 0–100 do Moodle; nula enquanto nada foi lançado.
     final_grade: Optional[float] = None
+    # Saiu nota nova nesta disciplina há pouco? `previous_grade` é a nota que
+    # havia antes — nula quando esta é a primeira, que é o caso mais comum.
+    grade_changed: bool = False
+    previous_grade: Optional[float] = None
 
 
 class AcademicEvent(BaseModel):
@@ -598,8 +602,10 @@ async def get_cache(session: app_session.PortalSession = Depends(require_session
     """
     with repo.get_session() as db:
         novidades = repo.novidades_por_disciplina(db, session.user_id)
-        subjects = [
-            SubjectModel(
+        subjects = []
+        for s in repo.list_subjects(db, session.user_id):
+            saiu_nota, nota_anterior = repo.aviso_de_nota(s)
+            subjects.append(SubjectModel(
                 id=s.name,
                 name=s.name,
                 content=s.content,
@@ -607,9 +613,9 @@ async def get_cache(session: app_session.PortalSession = Depends(require_session
                 end_date=s.end_date,
                 final_grade=s.final_grade,
                 new_materials=novidades.get(s.name, []),
-            )
-            for s in repo.list_subjects(db, session.user_id)
-        ]
+                grade_changed=saiu_nota,
+                previous_grade=nota_anterior,
+            ))
         events = [
             AcademicEvent(
                 id=e.stable_key,

@@ -102,6 +102,15 @@ perceber. O banco guarda `previous_date` no evento; o selo diz "Adiado" ou
 faria o aviso virar paisagem. Isso só funciona porque `stable_key` sobrevive à
 troca de data: vem do id do Moodle, não do conteúdo.
 
+**A agenda avisa que saiu nota.** Mesma máquina do prazo alterado: a nota
+anterior fica em `previous_grade` e o selo expira em `DIAS_AVISO_MUDANCA`. Duas
+regras que não são óbvias — disciplina vista pela primeira vez nunca vira aviso
+(quem se cadastra no meio do semestre não quer as notas velhas como novidade),
+e **scrape que volta sem nota não sobrescreve a nota guardada**: o relatório do
+Moodle já respondeu `servicenotavailable` nesta instância, e apagar seria
+silencioso. O `upsert_subjects` trata os dois casos, e o teste de isolamento
+cobre o segundo.
+
 **"Novidades na sala" é o único sinal que o curso presencial emite.** Lá não há
 evento de calendário nenhum, só arquivo — então o app registra o inventário da
 sala (`course_items`) e marca o que apareceu desde a última visita. O que já
