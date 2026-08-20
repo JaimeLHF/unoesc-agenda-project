@@ -535,6 +535,11 @@ async def profile(session: app_session.PortalSession = Depends(require_session))
             await asyncio.to_thread(moodle.login, session.username, session.password)
             dados = await asyncio.to_thread(moodle.profile)
             resposta.moodle = MoodleProfile(**dados)
+            # O nome só existe aqui: o login é a matrícula e o banco não
+            # tinha como dizer quem é quem no painel do dono.
+            with repo.get_session() as db:
+                repo.set_full_name(db, session.user_id, dados.get("fullname", ""))
+                db.commit()
     except PermissionError as exc:
         resposta.moodle_error = str(exc)
     except Exception as exc:

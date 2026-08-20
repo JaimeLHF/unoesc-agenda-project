@@ -225,6 +225,8 @@ export async function fetchAccount(): Promise<Account> {
 
 export interface AdminConta {
   username: string;
+  /** Nome no Moodle. Vazio até o aluno abrir o app pela primeira vez. */
+  nome: string;
   criado_em: string;
   ultimo_acesso: string;
   plano: string;

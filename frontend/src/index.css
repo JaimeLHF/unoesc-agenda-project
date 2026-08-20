@@ -4799,6 +4799,18 @@ body {
   font-size: 0.8rem;
 }
 
+/* Nome em cima, matrícula embaixo: o dono reconhece a pessoa pelo nome, mas
+   é a matrícula que ele usa para procurar no Moodle. As duas na mesma célula
+   evitam uma coluna a mais numa tabela que já rola de lado no celular. */
+.admin-nome {
+  display: block;
+}
+
+.admin-matricula {
+  display: block;
+  color: var(--color-text-muted);
+}
+
 /* Quem está com sessão aberta agora. Um ponto, não uma coluna: a informação
    é "está online", e ela cabe ao lado do nome. */
 .admin-online {

@@ -180,9 +180,16 @@ def ler_banco() -> dict:
     q = lambda sql, *p: con.execute(sql, p).fetchall()
     um = lambda sql, *p: con.execute(sql, p).fetchone()[0]
 
+    # O nome só existe em banco baixado depois de 20/08/2026; uma cópia mais
+    # antiga ainda abre, sem a coluna.
+    tem_nome = any(
+        c[1] == "full_name" for c in con.execute("pragma table_info(users)")
+    )
+    campo_nome = "u.full_name" if tem_nome else "'' as full_name"
+
     alunos = q(
-        """
-        select u.moodle_username, u.created_at, u.last_login_at, u.plan,
+        f"""
+        select u.moodle_username, {campo_nome}, u.created_at, u.last_login_at, u.plan,
                u.ai_calls_used, u.ics_token is not null as tem_ics,
                (select count(*) from subjects s where s.user_id = u.id) as disciplinas,
                (select count(*) from events e where e.user_id = u.id) as eventos,
@@ -262,7 +269,8 @@ def render(dados: dict, health: dict, logs: dict, status_fly: str) -> str:
 
     linhas = "".join(
         "<tr>"
-        f"<td class=mono>{e(a['moodle_username'])}</td>"
+        f"<td><div>{e(a['full_name'] or 'sem nome ainda')}</div>"
+        f"<div class=mono style='opacity:.65'>{e(a['moodle_username'])}</div></td>"
         f"<td>{e(quando(a['last_login_at']))}</td>"
         f"<td>{e(quando(a['created_at']))}</td>"
         f"<td class=num>{e(a['disciplinas'])}</td>"
@@ -370,7 +378,7 @@ def render(dados: dict, health: dict, logs: dict, status_fly: str) -> str:
 
 <h2>Contas</h2>
 <div class="painel"><table>
-<tr><th>matrícula</th><th>último acesso</th><th>entrou</th><th class=num>disc.</th>
+<tr><th>aluno</th><th>último acesso</th><th>entrou</th><th class=num>disc.</th>
 <th class=num>eventos</th><th class=num>feitos</th><th>push</th><th>.ics</th><th class=num>Lumi</th></tr>
 {linhas}
 </table></div>

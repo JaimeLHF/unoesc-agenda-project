@@ -155,7 +155,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
         <table className="admin-tabela">
           <thead>
             <tr>
-              <th>matrícula</th>
+              <th>aluno</th>
               <th>último acesso</th>
               <th>entrou</th>
               <th className="num">disc.</th>
@@ -169,9 +169,12 @@ const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
           <tbody>
             {contas.map((c) => (
               <tr key={c.username}>
-                <td className="mono">
-                  {c.username}
-                  {c.sessoes > 0 && <span className="admin-online" title="sessão aberta" />}
+                <td>
+                  <span className="admin-nome">
+                    {c.nome || 'sem nome ainda'}
+                    {c.sessoes > 0 && <span className="admin-online" title="sessão aberta" />}
+                  </span>
+                  <span className="mono admin-matricula">{c.username}</span>
                 </td>
                 <td>{quando(c.ultimo_acesso)}</td>
                 <td>{quando(c.criado_em)}</td>
@@ -272,7 +275,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
       </div>
 
       <p className="admin-rodape">
-        Esta tela mostra a matrícula de quem usa o app. Ela existe para manter o
+        Esta tela mostra o nome e a matrícula de quem usa o app. Ela existe para manter o
         serviço no ar — não para acompanhar aluno. O conteúdo da agenda de cada
         um continua fora daqui.
       </p>

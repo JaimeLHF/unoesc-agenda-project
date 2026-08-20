@@ -547,6 +547,21 @@ def main_teste() -> int:
                 "o dono é anunciado como admin para o frontend desenhar o link",
             )
 
+            # O nome não vem do login (que é matrícula) nem do banco: ele chega
+            # quando o aluno abre o app, e é o /api/profile que o guarda.
+            sem_nome = {c["username"]: c["nome"] for c in painel["contas"]}
+            verificar(
+                sem_nome.get("aluno.b@unoesc.edu.br") == "",
+                "quem ainda não abriu o perfil aparece sem nome, e não com lixo",
+            )
+            client.get("/api/profile", headers=auth(token_b3))
+            depois = client.get("/api/admin/panorama", headers=auth(token_a2)).json()
+            nomes = {c["username"]: c["nome"] for c in depois["contas"]}
+            verificar(
+                nomes.get("aluno.b@unoesc.edu.br") == "Aluno B",
+                "o nome do Moodle chega ao painel depois da primeira visita",
+            )
+
             # A matrícula do secret veio sem domínio e o login tem domínio: se
             # a comparação fosse literal, o dono ficaria de fora do próprio
             # painel dependendo de como digitou o login.

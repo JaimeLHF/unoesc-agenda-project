@@ -203,6 +203,14 @@ mesma senha. As contas antigas são migradas no `init_db`; quando as duas
 formas já existem, nenhuma é alterada, porque juntar duas agendas exigiria
 decidir de quem é cada "concluído".
 
+**O nome do aluno é guardado só para o painel.** O login é matrícula, e uma
+lista de números não diz quem entrou. O `full_name` chega pelo `/api/profile`
+— a mesma visita que já busca o cadastro no Moodle para a barra do app — e é
+gravado só quando muda; nome vazio nunca apaga o que já está lá, porque o
+Moodle já respondeu sem cadastro em falha temporária. Ele não autentica nada e
+não aparece para outro aluno: quem ainda não abriu o app aparece como "sem
+nome ainda" no painel.
+
 **O painel do dono é a única tela que olha todos os alunos.** Existe porque
 "alguém está usando isso, e está funcionando?" não tinha resposta sem abrir um
 terminal. Fica em `/admin`, lê ao vivo e se atualiza sozinho a cada minuto —

@@ -80,6 +80,11 @@ class User(Base):
     id: Mapped[str] = mapped_column(String, primary_key=True, default=new_id)
     moodle_username: Mapped[str] = mapped_column(String, unique=True, nullable=False, index=True)
     plan: Mapped[str] = mapped_column(String, nullable=False, default="free")  # free | pro
+    # Nome como o Moodle o guarda. Não é usado para autenticar nem aparece
+    # para outro aluno: existe para o painel do dono conseguir dizer quem
+    # entrou sem que ele tenha que decorar matrícula. Chega quando o aluno
+    # abre o app (é o `/api/profile` que preenche) e fica nulo até lá.
+    full_name: Mapped[Optional[str]] = mapped_column(String)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     last_login_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 

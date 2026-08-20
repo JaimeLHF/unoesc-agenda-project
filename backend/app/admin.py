@@ -64,6 +64,7 @@ def panorama(db: Session) -> dict:
     contas = [
         {
             "username": r.moodle_username,
+            "nome": r.full_name or "",
             "criado_em": str(r.created_at),
             "ultimo_acesso": str(r.last_login_at),
             "plano": r.plan,
@@ -76,7 +77,7 @@ def panorama(db: Session) -> dict:
             "lumi": r.ai_calls_used,
         }
         for r in db.execute(text("""
-            select u.moodle_username, u.created_at, u.last_login_at, u.plan,
+            select u.moodle_username, u.full_name, u.created_at, u.last_login_at, u.plan,
                    u.ai_calls_used, u.ics_token is not null as tem_ics,
                    (select count(*) from subjects s where s.user_id = u.id) as disciplinas,
                    (select count(*) from events e where e.user_id = u.id) as eventos,
