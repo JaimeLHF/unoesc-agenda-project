@@ -1,6 +1,6 @@
 # Agenda UNOESC — atalhos de desenvolvimento
 
-.PHONY: dev setup test clean docker backup deploy
+.PHONY: dev setup test clean docker backup deploy admin
 
 ## Sobe backend + frontend em paralelo
 dev:
@@ -30,6 +30,12 @@ backup:
 ## Backup + testes + deploy no Fly.io, nessa ordem
 deploy: backup test
 	fly deploy
+
+## Painel local com os dados de produção: quem entrou, o que o servidor fez.
+## Roda só na sua máquina — nada disso vira endpoint. `make admin ARGS=--local`
+## reaproveita a cópia já baixada, sem tocar no Fly.
+admin:
+	./scripts/admin.py $(ARGS)
 
 ## Apaga o banco local (agenda.db) para começar do zero
 clean:

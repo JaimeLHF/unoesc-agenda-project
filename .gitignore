@@ -66,3 +66,6 @@ moodle_token.txt
 
 # Backups locais do banco de produção (scripts/backup-db.sh)
 backups/
+
+# Cópia do banco de produção + painel do dono (matrícula de aluno dentro)
+.admin/
