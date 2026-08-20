@@ -49,8 +49,11 @@ TIMEOUT_FLY = 90
 # Coleta
 # ---------------------------------------------------------------------------
 
+ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+
 def fly(*args: str, timeout: int = TIMEOUT_FLY) -> str:
-    """Roda o flyctl e devolve a saída; string vazia se falhar."""
+    """Roda o flyctl e devolve a saída limpa; string vazia se falhar."""
     caminho = shutil.which("fly") or shutil.which("flyctl")
     if not caminho:
         return ""
@@ -59,7 +62,7 @@ def fly(*args: str, timeout: int = TIMEOUT_FLY) -> str:
             [caminho, *args, "-a", APP],
             capture_output=True, text=True, timeout=timeout,
         )
-        return r.stdout if r.returncode == 0 else (r.stdout + r.stderr)
+        return ANSI.sub("", r.stdout if r.returncode == 0 else r.stdout + r.stderr)
     except subprocess.TimeoutExpired:
         return ""
 
@@ -78,14 +81,38 @@ def acordar() -> None:
 
 
 def baixar_banco() -> None:
+    """
+    Baixa para um arquivo ao lado e só então substitui. A primeira versão
+    escrevia direto no destino e só reclamava se o arquivo não existisse — como
+    a cópia anterior continuava lá, um download falho passava batido e o painel
+    mostrava o banco de ontem com o carimbo de hoje. Silêncio é o único
+    resultado inaceitável aqui.
+    """
     PASTA.mkdir(exist_ok=True)
     print("acordando o servidor…")
     acordar()
     print("baixando /data/agenda.db…")
-    saida = fly("ssh", "sftp", "get", "/data/agenda.db", str(BANCO))
-    if not BANCO.exists():
-        print(saida or "falhou o download do banco", file=sys.stderr)
+    temp = BANCO.with_suffix(".novo")
+    temp.unlink(missing_ok=True)
+    saida = fly("ssh", "sftp", "get", "/data/agenda.db", str(temp))
+
+    # O flyctl às vezes sai com 0 sem escrever nada (agente wireguard
+    # reiniciando, máquina suspensa). O cabeçalho é a prova de que veio banco.
+    ok = temp.exists() and temp.stat().st_size > 0
+    if ok:
+        with temp.open("rb") as f:
+            ok = f.read(16).startswith(b"SQLite format 3")
+    if not ok:
+        temp.unlink(missing_ok=True)
+        print(saida.strip() or "o flyctl não trouxe o banco", file=sys.stderr)
+        print(
+            "download falhou — o painel NÃO foi gerado, para não mostrar dado "
+            "velho como se fosse de agora. Tente de novo, ou use --local de "
+            "propósito.",
+            file=sys.stderr,
+        )
         sys.exit(1)
+    temp.replace(BANCO)
 
 
 def saude() -> dict:
@@ -231,7 +258,7 @@ def cartao(rotulo: str, valor, nota: str = "") -> str:
 
 
 def render(dados: dict, health: dict, logs: dict, status_fly: str) -> str:
-    agora = datetime.now().strftime("%d/%m/%Y às %H:%M")
+    agora = datetime.fromtimestamp(BANCO.stat().st_mtime).strftime("%d/%m/%Y às %H:%M")
 
     linhas = "".join(
         "<tr>"
@@ -329,7 +356,7 @@ def render(dados: dict, health: dict, logs: dict, status_fly: str) -> str:
 </style></head><body><main>
 
 <h1>Agenda UNOESC — painel do dono</h1>
-<p class="discreto">Cópia do banco de produção lida em {e(agora)} · {dados['tamanho'] / 1024:.0f} KB
+<p class="discreto">Banco de produção copiado em {e(agora)} · {dados['tamanho'] / 1024:.0f} KB
 · arquivo local, não publique</p>
 
 <h2>Quem está usando</h2>
