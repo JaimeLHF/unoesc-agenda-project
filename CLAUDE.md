@@ -191,6 +191,18 @@ mas ninguém chamava: em desenvolvimento o arquivo era decorativo e as chaves s�
 valiam exportadas na mão. O `main.py` agora carrega com `override=False`, para
 que os secrets do Fly continuem mandando em produção.
 
+**Matrícula sozinha e e-mail inteiro são a mesma conta.** O Moodle aceita as
+duas formas, e o app guardava exatamente o que o aluno digitou — então a mesma
+pessoa podia ter duas contas, com duas agendas e duas inscrições de
+notificação, sem nenhum sinal na tela. Aconteceu em produção (`395763` ao lado
+de contas com domínio). `normalizar_login` em `moodle.py` completa
+`@unoesc.edu.br` **só quando o login é todo numérico**: existe login no formato
+`nome.sobrenome`, e inventar domínio para ele quebraria quem entra hoje. Vale
+antes do rate limit também — as duas formas são a mesma pessoa tentando a
+mesma senha. As contas antigas são migradas no `init_db`; quando as duas
+formas já existem, nenhuma é alterada, porque juntar duas agendas exigiria
+decidir de quem é cada "concluído".
+
 **O painel do dono é a única tela que olha todos os alunos.** Existe porque
 "alguém está usando isso, e está funcionando?" não tinha resposta sem abrir um
 terminal. Fica em `/admin`, lê ao vivo e se atualiza sozinho a cada minuto —

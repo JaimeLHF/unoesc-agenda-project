@@ -47,7 +47,7 @@ from app import session as app_session
 from app.calendar_sync import CalendarSyncService
 from app.icalendar import build_calendar
 from app.database import init_db, utc_now
-from app.moodle import TZ_BR, MoodleClient, clear_session_cache
+from app.moodle import TZ_BR, MoodleClient, clear_session_cache, normalizar_login
 from app.observability import mensagem_amigavel, registrar_falha
 
 # ---------------------------------------------------------------------------
@@ -418,9 +418,12 @@ async def login(credentials: LoginCredentials):
     É o único endpoint que recebe a senha. A partir daqui o frontend usa o
     token, e a senha não volta a trafegar nem fica guardada no navegador.
     """
-    chave = credentials.username.strip().lower()
+    # Quem digita só a matrícula entra na mesma conta de quem digita o e-mail
+    # inteiro — ver `normalizar_login`. Vale para o rate limit também: as duas
+    # formas são a mesma pessoa tentando a mesma senha.
+    usuario = normalizar_login(credentials.username)
 
-    espera = ratelimit.seconds_until_allowed(chave)
+    espera = ratelimit.seconds_until_allowed(usuario)
     if espera:
         raise HTTPException(
             status_code=429,
@@ -431,12 +434,12 @@ async def login(credentials: LoginCredentials):
     try:
         with MoodleClient() as moodle:
             await asyncio.to_thread(
-                moodle.login, credentials.username, credentials.password
+                moodle.login, usuario, credentials.password
             )
     except PermissionError as exc:
         # Credencial recusada: a mensagem vem do nosso próprio código e é
         # escrita para o aluno ("usuário ou senha incorretos").
-        ratelimit.register_failure(chave)
+        ratelimit.register_failure(usuario)
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     except Exception as exc:
         codigo = registrar_falha("login no Moodle", exc)
@@ -444,8 +447,8 @@ async def login(credentials: LoginCredentials):
             status_code=502, detail=mensagem_amigavel(codigo, "entrar no Moodle")
         ) from exc
 
-    ratelimit.reset(chave)
-    return LoginResponse(token=app_session.create(credentials.username, credentials.password))
+    ratelimit.reset(usuario)
+    return LoginResponse(token=app_session.create(usuario, credentials.password))
 
 
 @app.post("/api/logout", status_code=200)

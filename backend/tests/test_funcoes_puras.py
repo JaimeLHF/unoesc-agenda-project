@@ -168,6 +168,20 @@ def main_teste() -> int:
     igual(push.notas_novas([{"name": "90112 - Farmacologia", "final_grade": 85}])[1],
           "Farmacologia — 8,5", "a nota aparece na escala que o aluno lê")
 
+    print("\n[10] Login: matrícula sozinha vale pelo e-mail inteiro")
+    from app.moodle import normalizar_login
+
+    igual(normalizar_login("294833"), "294833@unoesc.edu.br",
+          "só o número vira o login completo")
+    igual(normalizar_login(" 294833 "), "294833@unoesc.edu.br",
+          "espaço colado não muda a conta")
+    igual(normalizar_login("294833@UNOESC.edu.br"), "294833@unoesc.edu.br",
+          "maiúscula não cria uma segunda conta")
+    igual(normalizar_login("nome.sobrenome"), "nome.sobrenome",
+          "login que não é número fica intacto — inventar domínio quebraria quem já entra")
+    igual(normalizar_login("professor@unoesc.edu.br"), "professor@unoesc.edu.br",
+          "quem já digitou o domínio passa direto")
+
     print()
     if falhas:
         print(f"❌ {len(falhas)} verificação(ões) falharam:")

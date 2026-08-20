@@ -44,6 +44,32 @@ logger = logging.getLogger("agenda.moodle")
 
 MOODLE_BASE = "https://on.unoesc.edu.br"
 
+# Domínio institucional do login. O Moodle aceita a matrícula sozinha para
+# alguns alunos, mas o e-mail completo funciona para todos — e é a forma que
+# o próprio Moodle mostra no perfil.
+DOMINIO_LOGIN = "unoesc.edu.br"
+
+
+def normalizar_login(bruto: str) -> str:
+    """
+    A forma canônica do login: `294833` e `294833@unoesc.edu.br` são a mesma
+    pessoa, e precisam virar a mesma conta.
+
+    Não é só conveniência de digitação. Sem isto, quem entrou uma vez de cada
+    jeito ganha **duas contas** no app — duas agendas, duas inscrições de
+    notificação, dois cadastros de nota — e nenhum sinal de que isso
+    aconteceu. Já aconteceu em produção.
+
+    Completa o domínio apenas quando o que veio é só a matrícula (dígitos).
+    Login que não é numérico fica como está: existe servidor com usuário no
+    formato `nome.sobrenome`, e inventar domínio para ele quebraria o login
+    de quem funciona hoje.
+    """
+    limpo = bruto.strip().lower()
+    if limpo.isdigit():
+        return f"{limpo}@{DOMINIO_LOGIN}"
+    return limpo
+
 TIMEOUT = httpx.Timeout(30.0, connect=15.0)
 USER_AGENT = (
     "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 "
@@ -447,8 +473,8 @@ class MoodleClient:
             motivo = self._login_error_message(resp.text)
             raise PermissionError(
                 (f"{motivo} " if motivo else "")
-                + "Login recusado pelo Moodle. Use a matrícula no formato "
-                "294833@unoesc.edu.br com a senha do portal."
+                + "Login recusado pelo Moodle. Confira a matrícula e use a "
+                "mesma senha do portal."
             )
 
         self.sesskey = self._extract_sesskey(resp.text)

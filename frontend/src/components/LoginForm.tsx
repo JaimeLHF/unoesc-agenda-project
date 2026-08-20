@@ -76,20 +76,24 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, loading, error }) => {
 
           <div className="auth__principal">
             {/*
-            A dúvida mais comum de quem entra pela primeira vez é o formato do
-            usuário — só o código não funciona, o domínio faz parte do login.
+            O formato do usuário era a dúvida mais comum de quem entra pela
+            primeira vez, e a tela respondia mandando digitar o domínio. Agora
+            o backend completa `@unoesc.edu.br` quando vem só o número (ver
+            `normalizar_login`), então o que a tela precisa dizer é bem menos.
+            Quem tem login que não é numérico continua digitando o dele inteiro.
           */}
             <p className="auth__hint">
-              Seu usuário é o código de aluno com o domínio:{" "}
-              <code>&lt;codigo_aluno&gt;@unoesc.edu.br</code>
+              Entre com o número da sua matrícula — o{" "}
+              <code>@unoesc.edu.br</code> nós completamos.
             </p>
 
             <details className="auth__help">
-              <summary>Como encontrar meu código de aluno?</summary>
+              <summary>Como encontrar minha matrícula?</summary>
               <p>
-                É o número da sua matrícula na UNOESC. Ele aparece no seu perfil
-                dentro do Moodle e no portal acadêmico — abra um dos dois, copie
-                o número e volte para cá.
+                É o número que a UNOESC usa para te identificar. Ele aparece no
+                seu perfil dentro do Moodle e no portal acadêmico — abra um dos
+                dois, copie o número e volte para cá. Se o seu login do Moodle
+                não for um número, digite ele inteiro no campo acima.
               </p>
               <div className="auth__help-links">
                 <a
@@ -113,13 +117,13 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, loading, error }) => {
 
             <form onSubmit={handleSubmit} className="login-form">
               <div className="form-group">
-                <label htmlFor="username">Usuário do Moodle</label>
+                <label htmlFor="username">Matrícula</label>
                 <input
                   id="username"
                   type="text"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  placeholder="codigo_do_aluno@unoesc.edu.br"
+                  placeholder="294833"
                   disabled={loading}
                   required
                   autoComplete="username"

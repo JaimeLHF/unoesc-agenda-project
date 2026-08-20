@@ -44,6 +44,9 @@ from app import ratelimit  # noqa: E402
 CONTAS = {
     "aluno.a@unoesc.edu.br": "senha-a",
     "aluno.b@unoesc.edu.br": "senha-b",
+    # Matrícula numérica: o caso em que o aluno digita só o número e o backend
+    # completa o domínio antes de falar com o Moodle.
+    "123456@unoesc.edu.br": "senha-c",
 }
 
 AGENDAS = {
@@ -155,6 +158,13 @@ def entrar(client: TestClient, username: str) -> str:
     resp = client.post(
         "/api/login", json={"username": username, "password": CONTAS[username]}
     )
+    assert resp.status_code == 200, resp.text
+    return resp.json()["token"]
+
+
+def entrar_com(client: TestClient, username: str, password: str) -> str:
+    """Login com o texto exatamente como o aluno digitou."""
+    resp = client.post("/api/login", json={"username": username, "password": password})
     assert resp.status_code == 200, resp.text
     return resp.json()["token"]
 
@@ -479,7 +489,35 @@ def main_teste() -> int:
             "excluir a conta apaga a inscrição de notificação e a senha nela",
         )
 
-        print("\n[9] Painel do dono")
+        print("\n[9] Matrícula sozinha é a mesma conta do e-mail completo")
+        # Antes de `normalizar_login`, quem entrasse das duas formas ganhava
+        # duas contas — duas agendas e duas inscrições de notificação, sem
+        # nenhum sinal na tela. Aconteceu em produção.
+        token_curto = entrar_com(client, "123456", "senha-c")
+        me_curto = client.get("/api/me", headers=auth(token_curto)).json()
+        verificar(
+            me_curto["username"] == "123456@unoesc.edu.br",
+            "entrar com a matrícula sozinha grava o login completo",
+        )
+        token_longo = entrar_com(client, "123456@unoesc.edu.br", "senha-c")
+        me_longo = client.get("/api/me", headers=auth(token_longo)).json()
+        verificar(
+            me_longo["username"] == me_curto["username"],
+            "as duas formas de digitar caem na mesma conta",
+        )
+        verificar(
+            entrar_com(client, "  123456  ", "senha-c") is not None,
+            "espaço em volta da matrícula não impede o login",
+        )
+
+        from app.database import SessionLocal as _Sessao, User as _User
+        with _Sessao() as db:
+            contas_123 = db.query(_User).filter(
+                _User.moodle_username.like("123456%")
+            ).count()
+        verificar(contas_123 == 1, "não nasceu uma segunda conta para a mesma matrícula")
+
+        print("\n[10] Painel do dono")
         token_a2 = entrar(client, "aluno.a@unoesc.edu.br")
         token_b3 = entrar(client, "aluno.b@unoesc.edu.br")
 

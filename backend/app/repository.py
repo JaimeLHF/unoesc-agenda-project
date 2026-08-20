@@ -17,6 +17,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
+from app.moodle import normalizar_login
 from app.database import (
     AppSession,
     CourseItem,
@@ -85,7 +86,10 @@ def get_or_create_user(session: Session, moodle_username: str) -> User:
     Não há cadastro no app: quem valida a senha é o Moodle, e só chegamos aqui
     depois de um login bem-sucedido.
     """
-    normalized = moodle_username.strip().lower()
+    # `294833` e `294833@unoesc.edu.br` são a mesma pessoa — ver
+    # `normalizar_login`. A conta é criada por esta função, então é aqui que a
+    # regra precisa valer, e não só no endpoint de login.
+    normalized = normalizar_login(moodle_username)
     user = session.execute(
         select(User).where(User.moodle_username == normalized)
     ).scalar_one_or_none()

@@ -312,6 +312,48 @@ def init_db() -> None:
     _drop_pre_multitenant_tables()
     Base.metadata.create_all(bind=engine)
     _run_lightweight_migrations()
+    _normalizar_logins()
+
+
+def _normalizar_logins() -> None:
+    """
+    Completa o domínio nos logins que ficaram só com a matrícula.
+
+    O Moodle aceita as duas formas, e antes o app guardava exatamente o que o
+    aluno digitou: `395763` e `395763@unoesc.edu.br` viravam duas contas, com
+    duas agendas e duas inscrições de notificação, sem nenhum sinal na tela.
+    Aconteceu em produção antes de `normalizar_login` existir.
+
+    Se as duas formas já existirem no banco, a linha antiga fica onde está:
+    juntar duas contas exigiria decidir de quem é cada evento marcado como
+    concluído, e essa decisão não cabe a uma migração silenciosa. O login novo
+    passa a cair sempre na forma completa.
+    """
+    from sqlalchemy import text
+
+    with engine.begin() as conn:
+        curtos = conn.execute(text(
+            "select id, moodle_username from users where moodle_username not like '%@%'"
+        )).fetchall()
+        for user_id, username in curtos:
+            if not username.isdigit():
+                continue
+            completo = f"{username}@unoesc.edu.br"
+            ja_existe = conn.execute(
+                text("select 1 from users where moodle_username = :u"),
+                {"u": completo},
+            ).first()
+            if ja_existe:
+                logger.warning(
+                    "Login %s e %s são a mesma pessoa em duas contas — "
+                    "nenhuma foi alterada.", username, completo,
+                )
+                continue
+            conn.execute(
+                text("update users set moodle_username = :novo where id = :id"),
+                {"novo": completo, "id": user_id},
+            )
+            logger.info("Migração: login %s → %s", username, completo)
 
 
 # Tabelas de cache que passaram a ter `user_id` na chave primária.
