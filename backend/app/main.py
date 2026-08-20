@@ -35,6 +35,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from pydantic import BaseModel
 
+from app import admin
 from app import assistant
 from app import crypto
 from app import observability
@@ -168,6 +169,10 @@ class MeResponse(BaseModel):
     assistant_available: bool
     assistant_used: int
     assistant_limit: int
+    # Só o dono do serviço. Vem daqui porque o frontend não tem como saber:
+    # a lista de matrículas é secret de servidor, e o link para o painel não
+    # pode ser desenhado para quem receberia 404 ao clicar.
+    is_admin: bool = False
 
 
 class MoodleProfile(BaseModel):
@@ -375,6 +380,35 @@ def require_session(
     return session
 
 
+def require_admin(
+    session: app_session.PortalSession = Depends(require_session),
+) -> app_session.PortalSession:
+    """
+    Sessão do dono do serviço.
+
+    Responde **404** nos dois casos em que nega — painel não configurado e
+    aluno comum — porque um 403 confirmaria que a rota existe e que há um
+    painel atrás dela. Para quem não é dono, `/api/admin/*` é uma rota que não
+    existe, igual a qualquer endereço inventado.
+    """
+    if not admin.configurado() or not admin.e_admin(session.username):
+        raise HTTPException(status_code=404, detail="Not Found")
+    return session
+
+
+@app.get("/api/admin/panorama")
+async def admin_panorama(_: app_session.PortalSession = Depends(require_admin)):
+    """
+    Quem entrou, quanto usaram, e como o servidor está se comportando.
+
+    Lido ao vivo do banco a cada carregamento — o painel não guarda cópia.
+    A parte de servidor vem da memória do processo e zera a cada deploy; a
+    tela mostra desde quando está contando.
+    """
+    with repo.get_session() as db:
+        return admin.panorama(db)
+
+
 @app.post("/api/login", response_model=LoginResponse)
 async def login(credentials: LoginCredentials):
     """
@@ -433,6 +467,7 @@ async def me(session: app_session.PortalSession = Depends(require_session)):
         return MeResponse(
             username=user.moodle_username,
             plan=user.plan,
+            is_admin=admin.configurado() and admin.e_admin(user.moodle_username),
             assistant_available=assistant.is_configured(),
             assistant_used=quota.used,
             assistant_limit=quota.limit,

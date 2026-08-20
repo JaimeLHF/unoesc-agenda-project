@@ -21,11 +21,83 @@ import logging
 import os
 import secrets
 import time
+from collections import Counter, deque
+from datetime import datetime, timezone
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
 
 logger = logging.getLogger("agenda")
+
+
+# ---------------------------------------------------------------------------
+# Métricas em memória
+# ---------------------------------------------------------------------------
+#
+# O painel do dono precisa responder "como o servidor está se comportando"
+# sem que ninguém abra um terminal. O log do Fly responde isso, mas só para
+# quem tem o flyctl na mão e só enquanto o buffer dura algumas horas.
+#
+# Isto aqui é o mínimo que responde a pergunta de dentro do processo: quantas
+# requisições, por rota, quanto demoraram, e o que deu errado. Fica em
+# memória de propósito — gravar métrica em banco custaria uma tabela e uma
+# escrita por requisição, para um dado que não é do aluno e que ninguém vai
+# consultar sobre o mês passado. O preço é que **todo deploy zera**, e o
+# painel diz desde quando está contando para essa leitura não enganar.
+
+INICIO = datetime.now(timezone.utc)
+
+# Duração de cada requisição, em ms. Limitado porque memória de máquina
+# pequena é o recurso escasso aqui — 2000 amostras dão p50/p95 honestos e
+# ocupam alguns KB.
+_duracoes: deque[float] = deque(maxlen=2000)
+_por_rota: Counter[str] = Counter()
+_por_status: Counter[int] = Counter()
+_lentas: deque[tuple[str, float, str]] = deque(maxlen=10)
+_falhas: deque[dict] = deque(maxlen=25)
+
+
+def _registrar_metrica(metodo: str, rota: str, status: int, ms: float) -> None:
+    """
+    Uma amostra. `rota` já vem sem identificador variável — ver `_rotulo`.
+    """
+    _duracoes.append(ms)
+    _por_rota[f"{metodo} {rota}"] += 1
+    _por_status[status] += 1
+    # Só o que passou de 1s: abaixo disso a lista viraria ruído e esconderia
+    # justamente a requisição que travou a tela de alguém.
+    if ms >= 1000:
+        _lentas.appendleft((f"{metodo} {rota}", ms, agora_iso()))
+
+
+def agora_iso() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _percentil(valores: list[float], p: float) -> float | None:
+    if not valores:
+        return None
+    return valores[min(int(len(valores) * p), len(valores) - 1)]
+
+
+def metricas() -> dict:
+    """Resumo do que o processo viu desde que subiu. Consumido pelo painel."""
+    ordenadas = sorted(_duracoes)
+    return {
+        "desde": INICIO.isoformat(timespec="seconds"),
+        "uptime_s": int((datetime.now(timezone.utc) - INICIO).total_seconds()),
+        "requisicoes": sum(_por_rota.values()),
+        "amostras": len(ordenadas),
+        "p50_ms": _percentil(ordenadas, 0.50),
+        "p95_ms": _percentil(ordenadas, 0.95),
+        "max_ms": ordenadas[-1] if ordenadas else None,
+        "por_rota": _por_rota.most_common(12),
+        "por_status": sorted(_por_status.items()),
+        "lentas": [
+            {"rota": r, "ms": round(ms), "quando": q} for r, ms, q in _lentas
+        ],
+        "falhas": list(_falhas),
+    }
 
 
 def setup_logging() -> None:
@@ -67,6 +139,14 @@ def registrar_falha(contexto: str, exc: BaseException) -> str:
     """
     codigo = novo_codigo()
     logger.error("[%s] %s: %s", codigo, contexto, exc, exc_info=exc)
+    _falhas.appendleft(
+        {
+            "codigo": codigo,
+            "contexto": contexto,
+            "erro": f"{type(exc).__name__}: {exc}"[:300],
+            "quando": agora_iso(),
+        }
+    )
     return codigo
 
 
@@ -79,6 +159,22 @@ def mensagem_amigavel(codigo: str, acao: str) -> str:
         f"Não foi possível {acao} agora. Tente de novo em alguns minutos — "
         f"se continuar, informe o código {codigo}."
     )
+
+
+def _rotulo(path: str) -> str:
+    """
+    Caminho sem a parte variável: `/calendario/<chave>.ics` conta como uma
+    rota só. Sem isso o painel listaria uma linha por token e o ranking de
+    rotas mais chamadas não diria nada — e o token do .ics, que é credencial,
+    ficaria guardado na memória do processo.
+    """
+    partes = []
+    for parte in path.split("/"):
+        if len(parte) > 24 or (parte.endswith(".ics") and len(parte) > 8):
+            partes.append("<id>")
+        else:
+            partes.append(parte)
+    return "/".join(partes)[:120]
 
 
 async def log_requests(request: Request, call_next):
@@ -97,6 +193,7 @@ async def log_requests(request: Request, call_next):
         # uvicorn devolveria um 500 com o traceback no corpo da resposta.
         duracao = (time.perf_counter() - inicio) * 1000
         codigo = registrar_falha(f"{request.method} {request.url.path}", exc)
+        _registrar_metrica(request.method, _rotulo(request.url.path), 500, duracao)
         logger.info(
             "%s %s → 500 em %.0fms", request.method, request.url.path, duracao
         )
@@ -106,6 +203,9 @@ async def log_requests(request: Request, call_next):
         )
 
     duracao = (time.perf_counter() - inicio) * 1000
+    _registrar_metrica(
+        request.method, _rotulo(request.url.path), response.status_code, duracao
+    )
     # Erro do servidor sobe para WARNING: é o que se procura ao investigar.
     nivel = logging.WARNING if response.status_code >= 500 else logging.INFO
     logger.log(

@@ -10,6 +10,7 @@ import SubjectDetail from './components/SubjectDetail';
 import Assistant from './components/Assistant';
 import AssistantFab from './components/AssistantFab';
 import ProfilePage from './components/ProfilePage';
+import AdminPage from './components/AdminPage';
 import ThemeToggle from './components/ThemeToggle';
 import {
   login,
@@ -27,7 +28,7 @@ import {
 import type { Account, Profile } from './services/api';
 import { requestGoogleAccessToken } from './services/googleAuth';
 import { useDoneEvents, eventKey } from './contexts/DoneEventsContext';
-import { activityPath, navigate, useActivityRoute } from './lib/router';
+import { ROTA_ADMIN, activityPath, navigate, useActivityRoute, useAdminRoute } from './lib/router';
 import type { Subject, AcademicEvent, LoginCredentials } from './types';
 import './index.css';
 
@@ -69,6 +70,9 @@ const App: React.FC = () => {
   // A atividade aberta mora no endereço, não no estado: assim o botão voltar
   // do navegador funciona e o link pode ser compartilhado com um colega.
   const activityKey = useActivityRoute();
+  // O painel do dono também mora no endereço: ele precisa poder ser aberto
+  // direto, sem passar pela agenda, e o backend responde 404 para quem não é.
+  const naRotaAdmin = useAdminRoute();
   const abrirAtividade = (event: AcademicEvent) => navigate(activityPath(eventKey(event)));
 
   // Banner de "servidor fora do ar": axios interceptor dispatcha eventos
@@ -385,7 +389,11 @@ const App: React.FC = () => {
           />
         )}
 
-        {step === 'results' && activityKey && (
+        {step === 'results' && naRotaAdmin && (
+          <AdminPage onBack={() => navigate('/')} />
+        )}
+
+        {step === 'results' && !naRotaAdmin && activityKey && (
           <ActivityPage
             stableKey={activityKey}
             onBack={() => navigate('/')}
@@ -398,7 +406,7 @@ const App: React.FC = () => {
           baixo: a agenda não pode misturar o que já chegou com o que ainda é
           da busca anterior — o aluno não teria como saber qual metade é velha.
         */}
-        {step === 'results' && !activityKey && !selectedSubject && refreshing && (
+        {step === 'results' && !naRotaAdmin && !activityKey && !selectedSubject && refreshing && (
           <LoadingSkeleton
             status={loadingMessage || 'Buscando seus dados no Moodle…'}
             cards={Math.max(subjects.length, 3)}
@@ -411,11 +419,11 @@ const App: React.FC = () => {
           assunto tem o "Não mostre isso novamente" ali mesmo, sem precisar
           caçar configuração.
         */}
-        {step === 'results' && !activityKey && !selectedSubject && !refreshing && (
+        {step === 'results' && !naRotaAdmin && !activityKey && !selectedSubject && !refreshing && (
           <ConviteNotificacoes username={account?.username} />
         )}
 
-        {step === 'results' && !activityKey && !selectedSubject && !refreshing && (
+        {step === 'results' && !naRotaAdmin && !activityKey && !selectedSubject && !refreshing && (
           <SubjectList
             subjects={subjects}
             events={events}
@@ -425,7 +433,7 @@ const App: React.FC = () => {
           />
         )}
 
-        {step === 'results' && !activityKey && selectedSubject && (
+        {step === 'results' && !naRotaAdmin && !activityKey && selectedSubject && (
           <SubjectDetail
             subject={selectedSubject}
             events={eventsForSelected}
@@ -442,7 +450,19 @@ const App: React.FC = () => {
           />
         )}
 
-        {step === 'profile' && <ProfilePage onBack={() => setStep('results')} />}
+        {step === 'profile' && (
+          <ProfilePage
+            onBack={() => setStep('results')}
+            onAbrirPainel={
+              account?.isAdmin
+                ? () => {
+                    setStep('results');
+                    navigate(ROTA_ADMIN);
+                  }
+                : undefined
+            }
+          />
+        )}
 
         {step === 'assistant' && account && (
           <Assistant

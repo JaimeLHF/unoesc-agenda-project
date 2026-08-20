@@ -195,6 +195,8 @@ export interface Account {
   assistantAvailable: boolean;
   assistantUsed: number;
   assistantLimit: number;
+  /** Dono do serviço. Só o backend sabe — a lista é secret de servidor. */
+  isAdmin: boolean;
 }
 
 /** Dados da conta logada: plano e saldo do assistente. */
@@ -205,6 +207,7 @@ export async function fetchAccount(): Promise<Account> {
     assistant_available: boolean;
     assistant_used: number;
     assistant_limit: number;
+    is_admin?: boolean;
   }>('/me');
   return {
     username: data.username,
@@ -212,7 +215,56 @@ export async function fetchAccount(): Promise<Account> {
     assistantAvailable: data.assistant_available,
     assistantUsed: data.assistant_used,
     assistantLimit: data.assistant_limit,
+    isAdmin: data.is_admin === true,
   };
+}
+
+/* -------------------------------------------------------------------------
+ * Painel do dono
+ * ----------------------------------------------------------------------- */
+
+export interface AdminConta {
+  username: string;
+  criado_em: string;
+  ultimo_acesso: string;
+  plano: string;
+  disciplinas: number;
+  eventos: number;
+  concluidos: number;
+  aparelhos: number;
+  sessoes: number;
+  assinou_ics: boolean;
+  lumi: number;
+}
+
+export interface AdminServidor {
+  desde: string;
+  uptime_s: number;
+  requisicoes: number;
+  amostras: number;
+  p50_ms: number | null;
+  p95_ms: number | null;
+  max_ms: number | null;
+  por_rota: [string, number][];
+  por_status: [number, number][];
+  lentas: { rota: string; ms: number; quando: string }[];
+  falhas: { codigo: string; contexto: string; erro: string; quando: string }[];
+}
+
+export interface AdminPanorama {
+  contas: AdminConta[];
+  resumo: Record<string, number>;
+  por_dia: { dia: string; contas: number }[];
+  servidor: AdminServidor;
+}
+
+/**
+ * Estado do serviço, lido ao vivo. Responde 404 para quem não é dono — o
+ * frontend nunca deve tratar isso como erro a mostrar na tela do aluno.
+ */
+export async function fetchPanorama(): Promise<AdminPanorama> {
+  const { data } = await api.get<AdminPanorama>('/admin/panorama');
+  return data;
 }
 
 /** O cadastro do aluno como o Moodle o guarda. */

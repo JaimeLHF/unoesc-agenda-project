@@ -191,6 +191,22 @@ mas ninguém chamava: em desenvolvimento o arquivo era decorativo e as chaves s�
 valiam exportadas na mão. O `main.py` agora carrega com `override=False`, para
 que os secrets do Fly continuem mandando em produção.
 
+**O painel do dono é a única tela que olha todos os alunos.** Existe porque
+"alguém está usando isso, e está funcionando?" não tinha resposta sem abrir um
+terminal. Fica em `/admin`, lê ao vivo e se atualiza sozinho a cada minuto —
+painel que mostra número velho sem avisar é pior que não ter painel. Três
+decisões que não são óbvias: o acesso é por **matrícula** no secret
+`ADMIN_USERNAMES` (sem ele a rota não existe), quem não é dono recebe **404 e
+não 403** — um 403 confirmaria que há um painel ali — e o endpoint **não
+devolve credencial nenhuma** (senha cifrada, token, chave do .ics, endpoint de
+push), o que o `test_isolamento.py` verifica lendo o JSON inteiro. As métricas
+de servidor (p50/p95, rotas, falhas) vivem na memória do processo em
+`observability.py`: zeram a cada deploy, e a tela diz desde quando conta.
+Guardar isso em banco custaria uma escrita por requisição para um dado que
+ninguém consulta sobre o mês passado. Existe também o `make admin`, que baixa
+o banco e monta o mesmo panorama num HTML local — é o caminho de quando o
+próprio servidor está fora do ar.
+
 **Duas coisas já foram construídas e removidas a pedido do Jaime**, e não devem
 voltar sem ele pedir: o painel de gráficos "Panorama" (commits `f747f84`,
 `36f8309`, `afc6fce`) e o lembrete por e-mail antes do prazo (`f62cc9d`) — a

@@ -4648,3 +4648,201 @@ body {
   font-weight: 600;
   color: var(--color-alert-orange-ink);
 }
+
+/* ---------------------------------------------------------------------------
+   Painel do serviço (/admin)
+
+   Tela de uma pessoa só, o dono — por isso ela não repete o vocabulário
+   visual da agenda (cartões grandes, cores de prazo). Aqui o que importa é
+   densidade: números pequenos, muitos, lado a lado, do jeito que se lê um
+   painel e não uma agenda.
+   --------------------------------------------------------------------------- */
+
+.admin {
+  max-width: 68rem;
+  margin: 0 auto;
+  padding: 0 0 3rem;
+}
+
+.admin-topo {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem;
+  flex-wrap: wrap;
+  margin: 1rem 0 1.25rem;
+}
+
+.admin-topo h2 {
+  margin: 0;
+  font-size: 1.35rem;
+}
+
+.admin-legenda {
+  margin: 0.25rem 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.admin-atualizar {
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.45rem 0.9rem;
+  font: inherit;
+  font-size: 0.85rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  cursor: pointer;
+}
+
+.admin-atualizar:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.admin-cartoes {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(9.5rem, 1fr));
+}
+
+.admin-cartao {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.85rem 1rem;
+}
+
+.admin-valor {
+  font-size: 1.75rem;
+  font-weight: 650;
+  line-height: 1.1;
+}
+
+.admin-rotulo {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+}
+
+.admin-nota {
+  font-size: 0.72rem;
+  color: var(--color-text-muted);
+  margin-top: 0.35rem;
+}
+
+.admin-secao {
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--color-text-muted);
+  margin: 1.75rem 0 0.6rem;
+}
+
+.admin-quadro {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 0.85rem 1rem;
+}
+
+/* Tabela larga em tela estreita rola dentro do próprio quadro — a página
+   inteira nunca rola de lado. */
+.admin-rolagem {
+  overflow-x: auto;
+}
+
+.admin-duas {
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: 1fr 1fr;
+}
+
+@media (max-width: 46rem) {
+  .admin-duas {
+    grid-template-columns: 1fr;
+  }
+}
+
+.admin-tabela {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.85rem;
+}
+
+.admin-tabela th {
+  text-align: left;
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+  font-weight: 600;
+  padding: 0 0.5rem 0.5rem;
+  white-space: nowrap;
+}
+
+.admin-tabela td {
+  padding: 0.5rem;
+  border-top: 1px solid var(--color-border);
+  white-space: nowrap;
+}
+
+.admin-tabela .num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.8rem;
+}
+
+/* Quem está com sessão aberta agora. Um ponto, não uma coluna: a informação
+   é "está online", e ela cabe ao lado do nome. */
+.admin-online {
+  display: inline-block;
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 50%;
+  background: var(--color-success);
+  margin-left: 0.4rem;
+  vertical-align: middle;
+}
+
+.admin-numeros {
+  margin: 0.35rem 0;
+  font-size: 0.9rem;
+}
+
+.admin-lista {
+  margin: 0.35rem 0 0;
+  padding-left: 1.1rem;
+  font-size: 0.85rem;
+}
+
+.admin-lista li {
+  margin-bottom: 0.35rem;
+}
+
+.admin-erro {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.75rem;
+  color: var(--color-error-ink);
+  word-break: break-word;
+}
+
+.admin-vazio {
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+  margin: 0;
+}
+
+.admin-rodape {
+  margin-top: 2rem;
+  padding-top: 0.9rem;
+  border-top: 1px solid var(--color-border);
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}

@@ -9,6 +9,12 @@ import { iniciais } from '../lib/nome';
 
 interface ProfilePageProps {
   onBack: () => void;
+  /**
+   * Abre o painel do serviço. Só chega preenchido para o dono — quem decide
+   * é o backend, e para todo o resto a rota do painel responde 404. Sem esta
+   * porta, o painel existiria mas ninguém saberia o endereço.
+   */
+  onAbrirPainel?: () => void;
 }
 
 /** Data por extenso; sem hora quando o dado é só o dia. */
@@ -36,7 +42,7 @@ function formatarData(iso: string | null | undefined, comHora = false): string |
  * mudança chega ao Moodle, e não chega: cadastro de aluno se altera na
  * secretaria. O rodapé diz isso em voz alta para ninguém tentar.
  */
-const ProfilePage: React.FC<ProfilePageProps> = ({ onBack }) => {
+const ProfilePage: React.FC<ProfilePageProps> = ({ onBack, onAbrirPainel }) => {
   const [perfil, setPerfil] = useState<Profile | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -207,6 +213,16 @@ const ProfilePage: React.FC<ProfilePageProps> = ({ onBack }) => {
       <NotificacoesPush username={m?.username || perfil.account_username} />
 
       <InstalarNoCelular />
+
+      {onAbrirPainel && (
+        <>
+          <h3 className="profile__section-title">Manutenção</h3>
+          <button type="button" className="btn-secondary" onClick={onAbrirPainel}>
+            <Icon name="organizar" />
+            Painel do serviço
+          </button>
+        </>
+      )}
 
       <p className="profile__note">
         Estes dados são lidos do Moodle a cada visita e não podem ser alterados aqui —

@@ -30,6 +30,8 @@ os.environ["VAPID_PUBLIC_KEY"] = (
 )
 os.environ["VAPID_PRIVATE_KEY"] = "i7gmNRsB8Ivs-sp9tkaT68z14PUchSP9nAZRQzjWZBU"
 os.environ.pop("PUSH_CRON_TOKEN", None)
+# O painel do dono só existe quando este secret existe — ver app/admin.py.
+os.environ.pop("ADMIN_USERNAMES", None)
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -476,6 +478,73 @@ def main_teste() -> int:
             client.get("/api/push/config", headers=auth(token_b2)).json()["devices"] == 0,
             "excluir a conta apaga a inscrição de notificação e a senha nela",
         )
+
+        print("\n[9] Painel do dono")
+        token_a2 = entrar(client, "aluno.a@unoesc.edu.br")
+        token_b3 = entrar(client, "aluno.b@unoesc.edu.br")
+
+        # Sem o secret, a rota não existe para ninguém — nem para quem seria
+        # o dono. É o estado de qualquer instalação que não pediu painel.
+        verificar(
+            client.get("/api/admin/panorama", headers=auth(token_a2)).status_code == 404,
+            "sem ADMIN_USERNAMES o painel responde 404 até para o dono",
+        )
+        verificar(
+            client.get("/api/me", headers=auth(token_a2)).json()["is_admin"] is False,
+            "sem o secret ninguém é anunciado como admin",
+        )
+
+        os.environ["ADMIN_USERNAMES"] = "aluno.a"
+        try:
+            resposta = client.get("/api/admin/panorama", headers=auth(token_a2))
+            verificar(resposta.status_code == 200, "o dono abre o painel")
+            painel = resposta.json()
+            usuarios = {c["username"] for c in painel["contas"]}
+            verificar(
+                {"aluno.a@unoesc.edu.br", "aluno.b@unoesc.edu.br"} <= usuarios,
+                "o painel lista todas as contas — é o único endpoint que faz isso",
+            )
+            verificar(
+                client.get("/api/me", headers=auth(token_a2)).json()["is_admin"] is True,
+                "o dono é anunciado como admin para o frontend desenhar o link",
+            )
+
+            # A matrícula do secret veio sem domínio e o login tem domínio: se
+            # a comparação fosse literal, o dono ficaria de fora do próprio
+            # painel dependendo de como digitou o login.
+            verificar(
+                painel["resumo"]["total"] >= 2 and "servidor" in painel,
+                "o painel traz resumo e estado do servidor",
+            )
+
+            # O aluno comum não pode nem descobrir que a rota existe.
+            verificar(
+                client.get("/api/admin/panorama", headers=auth(token_b3)).status_code == 404,
+                "aluno comum recebe 404 no painel, não 403",
+            )
+            verificar(
+                client.get("/api/me", headers=auth(token_b3)).json()["is_admin"] is False,
+                "aluno comum não é anunciado como admin",
+            )
+            verificar(
+                client.get("/api/admin/panorama").status_code == 401,
+                "sem sessão nenhuma o painel exige login antes de tudo",
+            )
+
+            # O painel olha todo mundo; o que ele NÃO pode fazer é levar junto
+            # o que abre a conta de alguém.
+            bruto = resposta.text.lower()
+            vazamentos = [
+                termo for termo in
+                ("password", "senha", "token", "ics_token", "endpoint", "p256dh", "auth\"")
+                if termo in bruto
+            ]
+            verificar(
+                not vazamentos,
+                f"o painel não devolve credencial de aluno (achado: {vazamentos})",
+            )
+        finally:
+            os.environ.pop("ADMIN_USERNAMES", None)
 
     print()
     if falhas:
