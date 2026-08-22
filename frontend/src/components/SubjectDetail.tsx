@@ -123,6 +123,7 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
   const allSynced = events.length > 0 && events.every((e) => e.synced);
   const upcomingCount = events.filter((e) => !isPast(e)).length;
   const novidades = subject.new_materials ?? [];
+  const semData = subject.pending_activities ?? [];
 
   return (
     <section className="subject-detail">
@@ -231,7 +232,7 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
         </section>
       )}
 
-      {events.length === 0 ? (
+      {events.length === 0 && semData.length === 0 ? (
         <div className="empty-state">Nenhum evento identificado nesta disciplina.</div>
       ) : (
         <div className="subject-detail__sections">
@@ -334,6 +335,14 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
                                   {peso}
                                 </span>
                               )}
+                              {event.source === 'atividade_moodle' && (
+                                <span
+                                  className="status-pill status-pill--origem"
+                                  title="Prazo lido na página da atividade: o professor não cadastrou esta data no calendário do Moodle."
+                                >
+                                  Da sala
+                                </span>
+                              )}
                             </div>
 
                             <h4 className="event-title">{event.title}</h4>
@@ -350,6 +359,48 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
               </div>
             );
           })}
+
+          {/*
+            Avaliação que a sala tem e que não tem data em canto nenhum — nem
+            no calendário, nem na própria página. Fica aqui embaixo, junto dos
+            eventos e não no card de novidades, porque "prova sem data
+            marcada" é informação de agenda: o aluno precisa saber que ela
+            existe para perguntar ao professor quando é.
+          */}
+          {semData.length > 0 && (
+            <div className="event-section">
+              <h3 className="event-section__title">
+                <span className="event-section__icon event-section__icon--other">
+                  <Icon name="alerta" />
+                </span>
+                Sem data marcada
+                <span className="event-section__count">{semData.length}</span>
+              </h3>
+
+              <ul className="sem-data">
+                {semData.map((item, i) => (
+                  <li key={`${item.name}-${i}`} className="sem-data__item">
+                    {item.url ? (
+                      <a
+                        className="sem-data__link"
+                        href={moodleUrl(item.url)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {item.name}
+                      </a>
+                    ) : (
+                      <span>{item.name}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+              <p className="sem-data__nota">
+                Estas atividades estão na sala, mas o Moodle não informa prazo
+                para elas. Confirme a data com o professor.
+              </p>
+            </div>
+          )}
         </div>
       )}
 

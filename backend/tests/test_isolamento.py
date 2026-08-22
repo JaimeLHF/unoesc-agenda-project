@@ -54,21 +54,36 @@ AGENDAS = {
         "subjects": [{
             "id": "1", "name": "Cálculo I", "content": "",
             "dof": "CAL1", "course_id": 101, "course_url": "https://on.unoesc.edu.br/course/view.php?id=101",
-            "activities": [{"cmid": "111", "name": "Plano de ensino",
-                            "modname": "resource", "url": "/mod/resource/view.php?id=111"}],
+            "activities": [
+                {"cmid": "111", "name": "Plano de ensino",
+                 "modname": "resource", "url": "/mod/resource/view.php?id=111"},
+                # Avaliação sem prazo em canto nenhum: é a que a tela mostra
+                # em "sem data marcada".
+                {"cmid": "112", "name": "Trabalho sem data de A",
+                 "modname": "assign", "url": "/mod/assign/view.php?id=112"},
+                # Esta tem prazo no calendário (o evento abaixo aponta para
+                # ela) e por isso não pode aparecer como "sem data".
+                {"cmid": "113", "name": "Prova 1",
+                 "modname": "quiz", "url": "/mod/quiz/view.php?id=113"},
+            ],
         }],
         "calendar_events": [{
             "id": "ev-a", "moodle_event_id": 9001, "title": "Prova 1", "date": "2099-05-10",
             "time": "19:00", "description": "", "subject": "Cálculo I",
-            "type": "exam", "source": "moodle_calendar", "url": None,
+            "type": "exam", "source": "moodle_calendar",
+            "url": "https://on.unoesc.edu.br/mod/quiz/view.php?id=113",
         }],
     },
     "aluno.b@unoesc.edu.br": {
         "subjects": [{
             "id": "2", "name": "Redes de Computadores", "content": "",
             "dof": "RED1", "course_id": 202, "course_url": "https://on.unoesc.edu.br/course/view.php?id=202",
-            "activities": [{"cmid": "222", "name": "Regras do trabalho",
-                            "modname": "resource", "url": "/mod/resource/view.php?id=222"}],
+            "activities": [
+                {"cmid": "222", "name": "Regras do trabalho",
+                 "modname": "resource", "url": "/mod/resource/view.php?id=222"},
+                {"cmid": "223", "name": "Trabalho sem data de B",
+                 "modname": "assign", "url": "/mod/assign/view.php?id=223"},
+            ],
         }],
         "calendar_events": [{
             "id": "ev-b", "moodle_event_id": 9002, "title": "Trabalho de Redes", "date": "2099-06-20",
@@ -239,6 +254,20 @@ def main_teste() -> int:
             "o que já estava na sala no primeiro acesso não conta como novidade",
         )
         verificar(novos_b == set(), f"B não vê o material que apareceu na sala de A ({novos_b})")
+
+        # Atividade avaliativa sem prazo: aparece para quem a tem na sala, e
+        # só para essa pessoa. A que já tem evento no calendário fica de fora,
+        # senão a tela mostraria a mesma prova duas vezes.
+        sem_data_a = {m["name"] for m in cache_a["subjects"][0]["pending_activities"]}
+        sem_data_b = {m["name"] for m in cache_b["subjects"][0]["pending_activities"]}
+        verificar(sem_data_a == {"Trabalho sem data de A"},
+                  f"A vê só a atividade sem data dele ({sem_data_a})")
+        verificar(sem_data_b == {"Trabalho sem data de B"},
+                  f"B vê só a atividade sem data dele ({sem_data_b})")
+        verificar("Prova 1" not in sem_data_a,
+                  "atividade que já tem prazo no calendário não vira “sem data”")
+        verificar("Plano de ensino" not in sem_data_a,
+                  "material de leitura não entra em “sem data” — arquivo não tem prazo")
 
         disciplina_a = cache_a["subjects"][0]
         disciplina_b = cache_b["subjects"][0]

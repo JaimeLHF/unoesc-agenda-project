@@ -81,6 +81,10 @@ class SubjectModel(BaseModel):
     # O que o professor publicou nos últimos dias. Em curso presencial é o
     # único sinal que a sala emite — lá não há evento de calendário nenhum.
     new_materials: list[NewMaterial] = []
+    # Avaliação que existe na sala e não tem prazo em lugar nenhum — nem no
+    # calendário, nem na própria página. A tela mostra junto dos eventos: para
+    # quem estuda, "prova sem data" não é a mesma coisa que "prova nenhuma".
+    pending_activities: list[NewMaterial] = []
     # Epoch em segundos. O frontend usa `end_date` para separar o semestre
     # corrente das disciplinas já encerradas.
     start_date: Optional[int] = None
@@ -669,9 +673,11 @@ async def scrape_portal(session: app_session.PortalSession = Depends(require_ses
             db.commit()
             # Depois do commit: as novidades deste scrape já contam.
             novidades = repo.novidades_por_disciplina(db, session.user_id)
+            sem_prazo = repo.atividades_sem_prazo(db, session.user_id)
 
         for sub in result["subjects"]:
             sub["new_materials"] = novidades.get(sub["name"], [])
+            sub["pending_activities"] = sem_prazo.get(sub["name"], [])
 
         for ev in events:
             ev["synced"] = ev.get("stable_key") in synced_keys
@@ -694,6 +700,7 @@ async def get_cache(session: app_session.PortalSession = Depends(require_session
     """
     with repo.get_session() as db:
         novidades = repo.novidades_por_disciplina(db, session.user_id)
+        sem_prazo = repo.atividades_sem_prazo(db, session.user_id)
         subjects = []
         for s in repo.list_subjects(db, session.user_id):
             saiu_nota, nota_anterior = repo.aviso_de_nota(s)
@@ -705,6 +712,7 @@ async def get_cache(session: app_session.PortalSession = Depends(require_session
                 end_date=s.end_date,
                 final_grade=s.final_grade,
                 new_materials=novidades.get(s.name, []),
+                pending_activities=sem_prazo.get(s.name, []),
                 grade_changed=saiu_nota,
                 previous_grade=nota_anterior,
             ))

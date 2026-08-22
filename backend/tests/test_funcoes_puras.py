@@ -182,6 +182,42 @@ def main_teste() -> int:
     igual(normalizar_login("professor@unoesc.edu.br"), "professor@unoesc.edu.br",
           "quem já digitou o domínio passa direto")
 
+    # -- prazo lido na página da atividade -------------------------------
+    #
+    # Estas frases são o que a página do Moodle mostra quando o professor
+    # publicou a avaliação sem cadastrar a data no calendário. Ler errado aqui
+    # coloca um prazo inventado na agenda de alguém — por isso teste puro.
+    print("\n▶ prazo na página da atividade")
+    from app.moodle import prazo_no_texto, cmid_da_url
+
+    igual(prazo_no_texto("Aberto: quarta-feira, 6 agosto 2026, 00:00 "
+                         "Vencimento: domingo, 6 setembro 2026, 23:59"),
+          ("2026-09-06", "23:59"),
+          "vencimento por extenso vira data e hora")
+    igual(prazo_no_texto("Este questionário será encerrado em terça-feira, "
+                         "9 de setembro de 2026 às 22:00"),
+          ("2026-09-09", "22:00"),
+          "questionário anuncia o fechamento em outra forma")
+    igual(prazo_no_texto("Data de entrega 06/09/2026, 23:59"),
+          ("2026-09-06", "23:59"),
+          "data numérica também conta")
+    igual(prazo_no_texto("Aberto: quarta-feira, 6 agosto 2026, 00:00"),
+          None,
+          "data de abertura não é prazo — viraria um evento no dia em que a "
+          "atividade nasceu")
+    igual(prazo_no_texto("Última modificação: 12 agosto 2026"), None,
+          "data solta na página não vira prazo")
+    igual(prazo_no_texto("Vencimento: 31 fevereiro 2026"), None,
+          "data impossível é descartada em vez de virar evento errado")
+    igual(prazo_no_texto(""), None, "página vazia não inventa prazo")
+
+    igual(cmid_da_url("https://moodle.unoesc.edu.br/mod/assign/view.php?id=123&action=view"),
+          "123", "cmid sai do link da tarefa")
+    igual(cmid_da_url("https://moodle.unoesc.edu.br/mod/quiz/view.php?id=456"),
+          "456", "cmid sai do link do questionário")
+    igual(cmid_da_url("https://moodle.unoesc.edu.br/course/view.php?id=9"), None,
+          "link de curso não é atividade — casar aqui esconderia a atividade 9")
+
     print()
     if falhas:
         print(f"❌ {len(falhas)} verificação(ões) falharam:")

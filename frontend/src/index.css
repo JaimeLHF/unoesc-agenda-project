@@ -1815,6 +1815,14 @@ body {
   color: var(--color-text-muted);
 }
 
+/* Prazo que veio da página da atividade, e não do calendário. Discreto de
+   propósito: é dado do professor, só não cadastrado no lugar certo. */
+.status-pill--origem {
+  background: var(--color-surface-2);
+  color: var(--color-text-muted);
+  border: 1px dashed var(--color-border);
+}
+
 /* ---- Toggle de "concluído" no card ---- */
 .event-done-toggle {
   display: flex;
@@ -4357,6 +4365,32 @@ body {
   color: inherit;
   text-decoration: underline;
   text-underline-offset: 0.15em;
+}
+
+/* ---- Atividades sem data marcada ---- */
+.sem-data {
+  margin: 0;
+  padding-left: 1.1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.sem-data__item {
+  font-size: 0.9rem;
+  color: var(--color-text);
+}
+
+.sem-data__link {
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.sem-data__nota {
+  margin: 0.6rem 0 0;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
 }
 
 /* ---- Instalar no celular (QR + passo a passo) ---- */

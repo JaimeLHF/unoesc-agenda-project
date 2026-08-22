@@ -108,6 +108,107 @@ MODULE_TYPE_MAP = {
 # eles — só ao que pode de fato ser um compromisso.
 MATERIAL_MODULES = {"resource", "folder", "book", "imscp", "glossary", "wiki"}
 
+# Atividades que valem nota e, por isso, merecem uma visita à própria página
+# quando o calendário não as trouxe. Material de leitura fica de fora: `folder`
+# e `resource` não têm prazo, e abrir os 58 arquivos de um curso presencial
+# custaria 58 requisições para não achar nada.
+ATIVIDADES_AVALIATIVAS = {"assign", "quiz", "workshop", "lesson"}
+
+# Teto de páginas de atividade abertas por disciplina no mesmo scrape. Cada uma
+# é uma requisição ao Moodle; nas contas medidas, uma disciplina tem entre 2 e 5
+# avaliações, então 12 cobre com folga e ainda protege de uma sala atípica.
+MAX_ATIVIDADES_SEM_EVENTO = 12
+
+_MESES_PT = {
+    "jan": 1, "fev": 2, "mar": 3, "abr": 4, "mai": 5, "jun": 6,
+    "jul": 7, "ago": 8, "set": 9, "out": 10, "nov": 11, "dez": 12,
+}
+
+# "domingo, 6 setembro 2026, 23:59" e "6 de setembro de 2026 às 23:59" — o
+# Moodle pt-BR usa as duas formas dependendo do tema e do idioma do curso.
+_DATA_EXTENSO = re.compile(
+    r"(?i)\b(\d{1,2})\s*(?:de\s+)?"
+    r"(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)[a-zç]*\.?"
+    r"\s*(?:de\s+)?(\d{4})"
+    r"(?:[,\s]+(?:às\s*)?(\d{1,2})[:h](\d{2}))?"
+)
+_DATA_NUMERICA = re.compile(
+    r"\b(\d{1,2})/(\d{1,2})/(\d{2,4})"
+    r"(?:[,\s]+(?:às\s*)?(\d{1,2})[:h](\d{2}))?"
+)
+
+# Rótulos que anunciam um **prazo**. "Aberto"/"Disponível a partir de" ficam de
+# fora de propósito: data de abertura não é compromisso, e tratá-la como prazo
+# encheria a agenda de eventos no dia em que a atividade nasceu.
+_ROTULO_PRAZO = re.compile(
+    r"(?i)(vencimento|data de entrega|data limite|prazo final|prazo de entrega"
+    r"|encerramento|encerra em|encerrar[áa] em|encerrou em|encerrado em"
+    r"|fechado em|fecha em|fechamento|dispon[íi]vel at[ée]|entrega at[ée]"
+    r"|at[ée] o dia)"
+)
+
+# Quanto texto depois do rótulo ainda conta como "a data desse rótulo". Medido
+# na página de uma tarefa: entre "Vencimento:" e a data cabem o dia da semana e
+# alguns espaços — 160 caracteres cobrem isso sem alcançar a linha seguinte.
+_JANELA_ROTULO = 160
+
+
+def cmid_da_url(url: str) -> Optional[str]:
+    """
+    O id do módulo (`cmid`) dentro de um link do Moodle.
+
+    É o que liga o inventário da sala ao calendário: o evento aponta para
+    `/mod/assign/view.php?id=123` e a atividade listada pelo estado do curso
+    tem `cmid=123`. Sem isso não dá para saber se uma atividade já tem prazo.
+    """
+    m = re.search(r"/mod/[a-z0-9_]+/view\.php\?(?:[^#]*?[&;])?(?:amp;)?id=(\d+)",
+                  url or "")
+    return m.group(1) if m else None
+
+
+def prazo_no_texto(texto: str) -> Optional[tuple[str, Optional[str]]]:
+    """
+    Data e hora de encerramento anunciadas no texto de uma atividade.
+
+    Devolve `("AAAA-MM-DD", "HH:MM" | None)`, ou `None` quando a página não
+    anuncia prazo nenhum — que é o caso honesto de uma atividade publicada sem
+    data, e não um erro de leitura.
+
+    Só datas precedidas de um rótulo de prazo contam. A página inteira tem
+    muitas datas (abertura, última modificação, calendário lateral); pegar "a
+    primeira data que aparecer" produziria prazo inventado.
+    """
+    if not texto:
+        return None
+
+    for rotulo in _ROTULO_PRAZO.finditer(texto):
+        trecho = texto[rotulo.end():rotulo.end() + _JANELA_ROTULO]
+
+        m = _DATA_EXTENSO.search(trecho)
+        if m:
+            dia, mes_txt, ano = int(m.group(1)), m.group(2).lower(), int(m.group(3))
+            mes = _MESES_PT.get(mes_txt[:3])
+            hora = f"{int(m.group(4)):02d}:{m.group(5)}" if m.group(4) else None
+        else:
+            m = _DATA_NUMERICA.search(trecho)
+            if not m:
+                continue
+            dia, mes, ano = int(m.group(1)), int(m.group(2)), int(m.group(3))
+            if ano < 100:                      # "06/09/26" → 2026
+                ano += 2000
+            hora = f"{int(m.group(4)):02d}:{m.group(5)}" if m.group(4) else None
+
+        if not mes:
+            continue
+        try:
+            data = datetime(ano, mes, dia, tzinfo=TZ_BR)
+        except ValueError:                     # 31/02 e outros enganos
+            continue
+        return data.strftime("%Y-%m-%d"), hora
+
+    return None
+
+
 
 # ---------------------------------------------------------------------------
 # Cache de sessão
@@ -975,6 +1076,79 @@ class MoodleClient:
             ))
         return eventos
 
+    def activity_events(self, course: dict, atividades: list[dict],
+                        cmids_no_calendario: set) -> list[dict]:
+        """
+        Prazos das atividades que a sala tem e o calendário não trouxe.
+
+        O calendário do Moodle só recebe a atividade cujo prazo o professor
+        cadastrou no campo certo — e nem sempre ele faz isso. Medido em
+        21/08/2026: uma sala anunciava "ATIVIDADE AVALIATIVA 3 - Prova
+        Objetiva" e um questionário copiado de outro semestre, nenhum dos dois
+        no calendário. A página da própria atividade, essa, diz o prazo.
+
+        Custa uma requisição por atividade avaliativa sem evento, com teto em
+        `MAX_ATIVIDADES_SEM_EVENTO`. Atividade que a página não datar fica de
+        fora: sem prazo não há evento, e inventar um seria pior que a omissão
+        — ela continua visível em "publicado recentemente na sala".
+        """
+        pendentes = [
+            a for a in atividades
+            if a.get("modname") in ATIVIDADES_AVALIATIVAS
+            and str(a.get("cmid") or "") not in cmids_no_calendario
+            and a.get("url")
+        ]
+        if not pendentes:
+            return []
+
+        if len(pendentes) > MAX_ATIVIDADES_SEM_EVENTO:
+            logger.info("%s: %d atividade(s) sem evento além do teto, não abertas",
+                        course["name"], len(pendentes) - MAX_ATIVIDADES_SEM_EVENTO)
+
+        subject = clean_course_name(course["name"])
+        eventos: list[dict] = []
+
+        for a in pendentes[:MAX_ATIVIDADES_SEM_EVENTO]:
+            try:
+                resp = self._client.get(a["url"], follow_redirects=True)
+                if "/login/index.php" in str(resp.url):
+                    raise PermissionError("A sessão do Moodle expirou.")
+                resp.raise_for_status()
+            except PermissionError:
+                raise
+            except Exception as exc:  # acessório: não derruba a agenda
+                logger.info("%s: não abriu “%s” (%s)", subject, a["name"], exc)
+                continue
+
+            prazo = prazo_no_texto(html_to_text(main_region(resp.text)))
+            if not prazo:
+                logger.info("%s: “%s” não anuncia prazo na página",
+                            subject, a["name"])
+                continue
+
+            data, hora = prazo
+            eventos.append({
+                "id": str(uuid.uuid4()),
+                "title": clean_event_title(a["name"]),
+                "date": data,
+                "time": hora,
+                "description": "Prazo lido na página da atividade — o professor "
+                               "não cadastrou este prazo no calendário do Moodle.",
+                "subject": subject,
+                "type": guess_type(a["modname"], a["name"]),
+                "synced": False,
+                "source": "atividade_moodle",
+                "url": a["url"],
+                # O `cmid` é tão estável quanto o id de evento: sobrevive a
+                # renomear a atividade e a mexer na data.
+                "moodle_event_id": f"cm-{a['cmid']}",
+                "event_type": "due",
+                "module": a["modname"],
+                "course_id": course.get("course_id"),
+            })
+
+        return eventos
+
     def activity_content(self, url: str, title: str = "") -> dict:
         """
         Página de uma atividade, lida com a sessão que o backend já mantém.
@@ -1394,10 +1568,17 @@ class MoodleClient:
         # disciplina que não gerou nenhum evento tem seus PDFs abertos.
         eventos = self.calendar_events()
         com_evento = {e.get("course_id") for e in eventos}
+        # Quais atividades o calendário já cobre. Sem isso, a visita à página
+        # da atividade repetiria o prazo que já está na agenda.
+        cmids_no_calendario = {
+            cmid for cmid in (cmid_da_url(e.get("url") or "") for e in eventos)
+            if cmid
+        }
 
         subjects = []
         webconfs: list[dict] = []
         prazos_pdf: list[dict] = []
+        prazos_sala: list[dict] = []
         for i, c in enumerate(cursos, start=1):
             conteudo = ""
             try:
@@ -1421,6 +1602,18 @@ class MoodleClient:
             except Exception as exc:  # acessório: não derruba a agenda
                 logger.warning("%s: sem lista de atividades (%s)", c["name"], exc)
                 atividades = []
+
+            # A atividade que vale nota e não está no calendário: o prazo dela
+            # sai da própria página. É o caso da avaliação que o professor
+            # publicou sem cadastrar a data no campo que alimenta o calendário.
+            try:
+                prazos_sala.extend(
+                    self.activity_events(c, atividades, cmids_no_calendario)
+                )
+            except PermissionError:
+                raise
+            except Exception as exc:  # acessório: não derruba a agenda
+                logger.warning("%s: prazos da sala falharam (%s)", c["name"], exc)
 
             # Plano B: disciplina sem nenhum evento de calendário. Acontece no
             # curso presencial, onde o professor publica só arquivo e anuncia
@@ -1457,14 +1650,16 @@ class MoodleClient:
 
         logger.info(
             "%d evento(s) no calendário + %d webconferência(s) no texto "
-            "+ %d prazo(s) em PDF",
+            "+ %d prazo(s) em PDF + %d prazo(s) lidos na página da atividade",
             len(eventos),
             len(webconfs),
             len(prazos_pdf),
+            len(prazos_sala),
         )
 
         eventos.extend(webconfs)
         eventos.extend(prazos_pdf)
+        eventos.extend(prazos_sala)
         eventos.sort(key=lambda e: (e["date"], e["time"] or ""))
         return {"subjects": subjects, "calendar_events": eventos}
 

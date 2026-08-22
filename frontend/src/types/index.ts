@@ -26,6 +26,12 @@ export interface Subject {
    */
   new_materials?: NewMaterial[];
   /**
+   * Avaliação que existe na sala e não tem prazo em lugar nenhum — nem no
+   * calendário, nem na própria página da atividade. A tela mostra junto dos
+   * eventos: "prova sem data" não é a mesma coisa que "prova nenhuma".
+   */
+  pending_activities?: NewMaterial[];
+  /**
    * Início e fim do componente no Moodle, epoch em segundos. A matrícula
    * continua ativa depois do fim do semestre, então é `end_date` que diz se a
    * disciplina ainda está rolando ou já encerrou.
@@ -68,8 +74,15 @@ export interface AcademicEvent {
    * De onde a data veio. `moodle_calendar` é o prazo cadastrado pelo
    * professor; `pdf_curso` foi lido do PDF da disciplina, e por isso a tela
    * marca — data interpretada por regex não vale o mesmo que data recebida.
+   * `atividade_moodle` é o prazo que estava na página da atividade e não no
+   * calendário — dado do professor, mas lido por regex, então também marca.
    */
-  source?: 'moodle_calendar' | 'moodle_course_text' | 'pdf_curso' | string;
+  source?:
+    | 'moodle_calendar'
+    | 'moodle_course_text'
+    | 'pdf_curso'
+    | 'atividade_moodle'
+    | string;
   /**
    * A data que este evento tinha antes de o professor mexer. Só vem enquanto a
    * mudança é recente; é o que permite a tela dizer "adiado" em vez de trocar

@@ -180,6 +180,14 @@ const WeekView: React.FC<WeekViewProps> = ({ events, onOpenEvent }) => {
                           PDF
                         </span>
                       )}
+                      {e.source === 'atividade_moodle' && (
+                        <span
+                          className="semana__origem"
+                          title="Prazo lido na página da atividade: o professor não cadastrou esta data no calendário do Moodle."
+                        >
+                          SALA
+                        </span>
+                      )}
                       <span className="semana__disciplina">
                         {e.subject.replace(/^\d+\s*-\s*/, '')}
                       </span>

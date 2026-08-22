@@ -17,7 +17,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
-from app.moodle import normalizar_login
+from app.moodle import ATIVIDADES_AVALIATIVAS, cmid_da_url, normalizar_login
 from app.database import (
     AppSession,
     CourseItem,
@@ -529,6 +529,51 @@ def novidades_por_disciplina(
             "first_seen_at": item.first_seen_at.isoformat() if item.first_seen_at else None,
         })
     return novidades
+
+
+def atividades_sem_prazo(session: Session, user_id: str) -> dict[str, list[dict]]:
+    """
+    Atividades avaliativas da sala que não têm prazo em lugar nenhum.
+
+    O `run()` já procura o prazo na página de cada avaliação que o calendário
+    não trouxe. O que sobra aqui é a atividade que realmente não tem data — e
+    ela precisa aparecer junto dos eventos mesmo assim: para o aluno, "prova
+    sem data marcada" é informação, e não a mesma coisa que "não existe prova".
+
+    O cruzamento é pelo `cmid`: o evento aponta para
+    `/mod/assign/view.php?id=123` e a atividade da sala tem `cmid=123`.
+    """
+    com_prazo = {
+        cmid
+        for cmid in (
+            cmid_da_url(url or "")
+            for (url,) in session.execute(
+                select(Event.url).where(Event.user_id == user_id)
+            )
+        )
+        if cmid
+    }
+
+    linhas = session.execute(
+        select(CourseItem)
+        .where(
+            CourseItem.user_id == user_id,
+            CourseItem.modname.in_(sorted(ATIVIDADES_AVALIATIVAS)),
+        )
+        .order_by(CourseItem.first_seen_at.desc())
+    ).scalars().all()
+
+    pendentes: dict[str, list[dict]] = {}
+    for item in linhas:
+        if str(item.cmid) in com_prazo:
+            continue
+        pendentes.setdefault(item.subject, []).append({
+            "name": item.name,
+            "url": item.url,
+            "modname": item.modname,
+            "first_seen_at": item.first_seen_at.isoformat() if item.first_seen_at else None,
+        })
+    return pendentes
 
 
 def set_google_event_id(
