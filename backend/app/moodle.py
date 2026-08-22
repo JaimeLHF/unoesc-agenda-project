@@ -108,11 +108,18 @@ MODULE_TYPE_MAP = {
 # eles — só ao que pode de fato ser um compromisso.
 MATERIAL_MODULES = {"resource", "folder", "book", "imscp", "glossary", "wiki"}
 
-# Atividades que valem nota e, por isso, merecem uma visita à própria página
-# quando o calendário não as trouxe. Material de leitura fica de fora: `folder`
-# e `resource` não têm prazo, e abrir os 58 arquivos de um curso presencial
+# Atividades que valem nota. Material de leitura fica de fora: `folder` e
+# `resource` não têm prazo, e abrir os 58 arquivos de um curso presencial
 # custaria 58 requisições para não achar nada.
 ATIVIDADES_AVALIATIVAS = {"assign", "quiz", "workshop", "lesson"}
+
+# Quem tem a página visitada quando o calendário não trouxe prazo. O fórum
+# entra aqui e **não** na lista acima: na UNOESC a "Atividade de Resgate" é um
+# `hsuforum` com data de entrega, mas "Tira-dúvidas" e "Fórum de apresentação"
+# também são fóruns e não são compromisso nenhum. Visitar todos é barato e só
+# gera evento para o que anuncia prazo; já listá-los como "sem data marcada"
+# encheria a tela de fórum que nunca teve data para ter.
+ATIVIDADES_VISITADAS = ATIVIDADES_AVALIATIVAS | {"forum", "hsuforum"}
 
 # Teto de páginas de atividade abertas por disciplina no mesmo scrape. Cada uma
 # é uma requisição ao Moodle; nas contas medidas, uma disciplina tem entre 2 e 5
@@ -1094,12 +1101,17 @@ class MoodleClient:
         """
         pendentes = [
             a for a in atividades
-            if a.get("modname") in ATIVIDADES_AVALIATIVAS
+            if a.get("modname") in ATIVIDADES_VISITADAS
             and str(a.get("cmid") or "") not in cmids_no_calendario
             and a.get("url")
         ]
         if not pendentes:
             return []
+
+        # Tarefa e questionário primeiro. Quando o teto corta, o que fica de
+        # fora tem que ser o fórum: dele o prazo é exceção, da avaliação é
+        # regra.
+        pendentes.sort(key=lambda a: a["modname"] not in ATIVIDADES_AVALIATIVAS)
 
         if len(pendentes) > MAX_ATIVIDADES_SEM_EVENTO:
             logger.info("%s: %d atividade(s) sem evento além do teto, não abertas",

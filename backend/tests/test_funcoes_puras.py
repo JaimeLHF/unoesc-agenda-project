@@ -205,6 +205,12 @@ def main_teste() -> int:
           None,
           "data de abertura não é prazo — viraria um evento no dia em que a "
           "atividade nasceu")
+    igual(prazo_no_texto("Atividade de Resgate Data de entrega: sexta-feira, "
+                         "11 setembro 2026, 23:59 Adicionar tópico de discussão"),
+          ("2026-09-11", "23:59"),
+          "fórum avaliativo (hsuforum) anuncia entrega como qualquer tarefa")
+    igual(prazo_no_texto("Tira-dúvidas Adicionar tópico de discussão"), None,
+          "fórum sem prazo não vira compromisso")
     igual(prazo_no_texto("Última modificação: 12 agosto 2026"), None,
           "data solta na página não vira prazo")
     igual(prazo_no_texto("Vencimento: 31 fevereiro 2026"), None,
