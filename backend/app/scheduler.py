@@ -15,8 +15,8 @@ notificação desligada no Android não se recupera.
 ## Por que o servidor precisa da senha aqui
 
 "Saiu nota" só existe se o servidor consultar o Moodle com o app fechado. A
-senha da sessão morre em 8h de inatividade, ou seja, às 7h da manhã ela nunca
-está lá. Quem opta por notificação guarda a senha cifrada junto da inscrição —
+senha da sessão morre por inatividade — e nem enquanto viva ela serve, porque
+o aluno não está com o app aberto às 7h da manhã. Quem opta por notificação guarda a senha cifrada junto da inscrição —
 está escrito na tela de opt-in, e some no instante em que ele desliga. Ver
 `database.PushSubscription`.
 

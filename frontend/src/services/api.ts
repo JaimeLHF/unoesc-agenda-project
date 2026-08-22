@@ -20,13 +20,17 @@ const api = axios.create({
  * Sessão
  *
  * A senha vai para o backend uma única vez, em /api/login, e o que fica no
- * navegador é um token opaco, guardado em `sessionStorage`.
+ * navegador é um token opaco.
  *
- * Ficava só em memória, e qualquer reload derrubava a sessão. `sessionStorage`
- * e não `localStorage`: o token morre quando a aba fecha, então um computador
- * de laboratório não fica com sessão aberta para o próximo que sentar. Contra
- * XSS os dois valem o mesmo — um script injetado na página usa o token em
- * memória do mesmo jeito. A proteção real seria cookie httpOnly, que exige
+ * Onde ele fica é escolha de quem entra. `sessionStorage` morria com a aba, e
+ * no iPhone fechar o app instalado é fechar a aba: o aluno reabria o ícone e
+ * caía no login, todo dia. Agora o padrão é `localStorage` — "Manter conectado"
+ * marcado na tela de entrada —, e o token sobrevive a fechar o app. Desmarcar
+ * volta ao `sessionStorage`, que é o que serve para o computador do
+ * laboratório, onde o próximo que sentar não pode herdar a sessão.
+ *
+ * Contra XSS os dois valem o mesmo — um script injetado na página usa o token
+ * em memória do mesmo jeito. A proteção real seria cookie httpOnly, que exige
  * CSRF e um proxy no dev; está anotado como evolução.
  *
  * Isso vale para o navegador. No servidor a senha é guardada cifrada, porque
@@ -41,7 +45,7 @@ const TOKEN_KEY = 'agenda_token';
    pode barrar o storage. Aí a sessão volta a viver só em memória, como antes. */
 function lerToken(): string | null {
   try {
-    return sessionStorage.getItem(TOKEN_KEY);
+    return localStorage.getItem(TOKEN_KEY) ?? sessionStorage.getItem(TOKEN_KEY);
   } catch {
     return null;
   }
@@ -49,11 +53,20 @@ function lerToken(): string | null {
 
 let authToken: string | null = lerToken();
 
-function guardarToken(token: string | null): void {
+/**
+ * Guarda o token. `persistir` decide entre sobreviver ao fechamento do app
+ * (`localStorage`) e morrer com a aba (`sessionStorage`). Limpa sempre os
+ * dois: trocar de modo não pode deixar uma cópia velha do token para trás.
+ */
+function guardarToken(token: string | null, persistir = true): void {
   authToken = token;
   try {
-    if (token) sessionStorage.setItem(TOKEN_KEY, token);
-    else sessionStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(TOKEN_KEY);
+    sessionStorage.removeItem(TOKEN_KEY);
+    if (token) {
+      const alvo = persistir ? localStorage : sessionStorage;
+      alvo.setItem(TOKEN_KEY, token);
+    }
   } catch {
     /* sem storage: o token continua valendo nesta aba, só não sobrevive ao reload */
   }
@@ -95,10 +108,16 @@ api.interceptors.response.use(
   },
 );
 
-/** Autentica no portal UNOESC e guarda o token da sessão. */
+/**
+ * Autentica no portal UNOESC e guarda o token da sessão.
+ *
+ * `manterConectado` não vai para o servidor — é só onde o token fica no
+ * navegador. Do lado de lá a sessão tem a mesma validade nos dois casos.
+ */
 export async function login(credentials: LoginCredentials): Promise<void> {
-  const { data } = await api.post<{ token: string }>('/login', credentials);
-  guardarToken(data.token);
+  const { manterConectado = true, ...dados } = credentials;
+  const { data } = await api.post<{ token: string }>('/login', dados);
+  guardarToken(data.token, manterConectado);
 }
 
 /** Encerra a sessão no backend e descarta o token local. */

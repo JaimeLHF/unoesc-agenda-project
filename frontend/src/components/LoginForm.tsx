@@ -26,6 +26,14 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, loading, error }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
+  /*
+    Marcado por padrão porque este app vive no celular de quem estuda, e lá
+    "sair" é fechar o ícone — deslogar a cada abertura era o comportamento
+    errado. Desmarcar é o caminho do computador de laboratório: aí o token
+    morre com a aba, como era antes para todo mundo.
+  */
+  const [manterConectado, setManterConectado] = useState(true);
+
   const senhaRef = useRef<HTMLInputElement>(null);
 
   /*
@@ -38,7 +46,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, loading, error }) => {
     e.preventDefault();
     if (!username.trim() || !password.trim()) return;
 
-    const entrou = await onSubmit({ username: username.trim(), password });
+    const entrou = await onSubmit({ username: username.trim(), password, manterConectado });
     if (!entrou) {
       setPassword('');
       // Depois do commit do React: enquanto `loading` era verdadeiro o campo
@@ -144,6 +152,19 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, loading, error }) => {
                   autoComplete="current-password"
                 />
               </div>
+
+              <label className="auth__manter">
+                <input
+                  type="checkbox"
+                  checked={manterConectado}
+                  onChange={(e) => setManterConectado(e.target.checked)}
+                  disabled={loading}
+                />
+                <span>
+                  Manter conectado neste aparelho
+                  <small>Desmarque em computador compartilhado.</small>
+                </span>
+              </label>
 
               {error && (
                 <div className="error-banner" role="alert">

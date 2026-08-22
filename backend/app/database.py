@@ -244,7 +244,7 @@ class PushSubscription(Base):
 
     `password_enc` é a parte que não é óbvia. Para avisar "saiu nota" com o app
     fechado, o servidor precisa consultar o Moodle sozinho — e a senha da
-    sessão morre em 8h de inatividade, ou seja, nunca está lá às 7h da manhã.
+    sessão vive presa a uma sessão, que o aluno encerra quando quiser.
     Guardar aqui estende a retenção da senha de "enquanto a sessão dura" para
     "enquanto o aluno quiser receber notificação". É por isso que o aviso está
     escrito na tela de opt-in e a linha é apagada assim que ele desliga. Cifrada

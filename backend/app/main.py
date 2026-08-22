@@ -1320,8 +1320,8 @@ async def push_subscribe(
 
     Essa é a parte que o aluno precisa ter lido antes de chegar aqui: para
     avisar "saiu nota" com o app fechado, o servidor consulta o Moodle sozinho,
-    e a senha da sessão morre em 8h de inatividade — às 7h da manhã ela nunca
-    está lá. A tela de opt-in diz isso com todas as letras, e o
+    e a senha da sessão vale só enquanto a sessão existe — sair do app ou trocar
+    de aparelho apagaria a fonte do aviso das 7h. A tela de opt-in diz isso com todas as letras, e o
     `DELETE /api/push/subscribe` apaga a senha junto com a inscrição.
     """
     if not push.configurado():

@@ -23,7 +23,15 @@ from app.database import AppSession, SessionLocal, User, utc_now
 from app.repository import get_or_create_user
 
 # Tempo de inatividade após o qual a sessão é descartada. Cada uso renova.
-SESSION_IDLE_TTL = timedelta(hours=8)
+#
+# Eram 8 horas, e isso deslogava o aluno todo dia: o app é aberto de manhã e à
+# noite, e a janela fechava no meio. Pior no iPhone, onde o PWA fechado limpa a
+# aba — o aluno reabria o ícone e caía na tela de login. Trinta dias renovados a
+# cada uso significa que quem usa o app na rotina normal nunca mais vê o login;
+# quem some por um mês faz de novo. O que a janela curta protegia era o
+# computador de laboratório, e isso agora é decisão de quem entra: o "Manter
+# conectado" desmarcado guarda o token no `sessionStorage`, que morre com a aba.
+SESSION_IDLE_TTL = timedelta(days=30)
 
 
 @dataclass

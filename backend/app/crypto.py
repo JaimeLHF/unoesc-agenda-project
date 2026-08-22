@@ -4,7 +4,7 @@ Cifragem simétrica das senhas do Moodle guardadas em sessão.
 ## Por que a senha é guardada
 
 O `MoodleClient` refaz o login sozinho quando a sessão do Moodle expira no meio
-do uso (o cookie do Moodle vale bem menos que as 8h de sessão do app). Guardar
+do uso (o cookie do Moodle vale bem menos que a sessão do app). Guardar
 só o cookie obrigaria o aluno a redigitar a senha no meio da navegação, várias
 vezes por dia.
 

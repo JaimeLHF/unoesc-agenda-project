@@ -4,6 +4,8 @@
 export interface LoginCredentials {
   username: string;
   password: string;
+  /** Só do lado do navegador: onde o token da sessão é guardado. */
+  manterConectado?: boolean;
 }
 
 /** Item publicado na sala da disciplina depois que o aluno já usava o app. */

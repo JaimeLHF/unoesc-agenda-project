@@ -41,10 +41,16 @@ respondem `servicenotavailable` nesta instância. O total por disciplina sai de
 `/grade/report/user`. Situação acadêmica ("Aprovado") o Moodle não guarda: o
 app deriva do corte em `PASSING_GRADE`, e só para disciplina encerrada.
 
-**O token de sessão vive no `sessionStorage`.** Antes ficava só em memória e
-todo F5 caía no login. Morre quando a aba fecha; contra XSS os dois valem o
-mesmo, e a proteção real seria cookie httpOnly — anotado em
-`frontend/src/services/api.ts`.
+**O aluno fica conectado, e onde o token mora é escolha dele.** O token vivia
+no `sessionStorage` e a sessão do servidor durava 8h: no iPhone, fechar o app
+instalado é fechar a aba, então toda abertura caía no login. Agora o padrão é
+`localStorage` com TTL de 30 dias renovado a cada uso (`SESSION_IDLE_TTL` em
+`session.py`), e a caixa "Manter conectado neste aparelho" desmarcada volta ao
+`sessionStorage` — que é o caso do computador de laboratório, o motivo pelo
+qual era assim para todo mundo. Contra XSS os dois valem o mesmo; a proteção
+real seria cookie httpOnly, anotado em `frontend/src/services/api.ts`. A
+notificação push nunca dependeu dessa sessão: ela usa a senha cifrada da
+própria inscrição.
 
 **O assistente se chama Lumi e é acessado por um botão flutuante.** O acesso
 ficava na barra de cima, junto de Atualizar — onde o aluno passa uma vez ao

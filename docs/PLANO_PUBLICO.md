@@ -59,7 +59,7 @@ e enxerga a agenda do primeiro. **Nada mais pode ser publicado antes disso.**
 desloga todo mundo, e com duas instâncias metade das requisições falha.
 
 1. Criar tabela `sessions` — `token_hash` (sha256 do token, nunca o token puro),
-   `user_id`, `created_at`, `last_used_at`. Mesmo TTL de 8h por inatividade.
+   `user_id`, `created_at`, `last_used_at`. TTL de 30 dias por inatividade, renovado a cada uso.
 
 2. A senha do Moodle precisa continuar acessível para o relogin automático
    (`MoodleClient` reloga sozinho quando a sessão do portal cai). Guardar
