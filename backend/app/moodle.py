@@ -1120,6 +1120,10 @@ class MoodleClient:
         subject = clean_course_name(course["name"])
         eventos: list[dict] = []
 
+        hoje = datetime.now(TZ_BR)
+        limite_min = (hoje - timedelta(days=31 * MONTHS_BACK)).strftime("%Y-%m-%d")
+        limite_max = (hoje + timedelta(days=31 * MONTHS_AHEAD)).strftime("%Y-%m-%d")
+
         for a in pendentes[:MAX_ATIVIDADES_SEM_EVENTO]:
             try:
                 resp = self._client.get(a["url"], follow_redirects=True)
@@ -1139,6 +1143,15 @@ class MoodleClient:
                 continue
 
             data, hora = prazo
+            # Mesma janela do calendário. Sem ela entram prazos de 2025: as
+            # salas antigas continuam na matrícula do aluno, e a página delas
+            # ainda anuncia o vencimento daquele semestre. Medido em
+            # 22/08/2026: 3 dos 5 prazos lidos eram de edições encerradas.
+            if not (limite_min <= data <= limite_max):
+                logger.info("%s: “%s” tem prazo em %s, fora da janela",
+                            subject, a["name"], data)
+                continue
+
             eventos.append({
                 "id": str(uuid.uuid4()),
                 "title": clean_event_title(a["name"]),
