@@ -86,6 +86,25 @@ Voltou em 14/08/2026 com destino único: a página da atividade. `assistant.py`
 monta o contexto com data, disciplina e título, e só. Não passe o enunciado para
 ele.
 
+**A espera é narrada, e a narração segue o servidor.** "Buscando seus dados no
+Moodle…" ficava parado por até um minuto na primeira busca — esqueleto
+pulsando e texto imóvel parece app travado. O `LoadingSkeleton` agora troca de
+frase a cada 3,5s (`frontend/src/lib/frasesCarregando.ts`), na ordem real do
+`run()` em `moodle.py`: login, disciplinas, calendário, as salas, notas. Se
+aquela ordem mudar, a lista muda junto, senão vira mentira educada. A lista
+**não dá a volta**: para na última, porque recomeçar em "Entrando no Moodle…"
+aos 40 segundos diria que o app reiniciou. Para leitor de tela o texto é
+`aria-hidden` e a seção tem rótulo fixo — uma interrupção a cada 3,5s não
+ajuda ninguém.
+
+**A agenda abre no topo, e isso precisa das duas metades.** O app monta como
+esqueleto e cresce quando a lista chega, então o scroll que o navegador guarda
+é sempre de um conteúdo que não existia mais — no iPhone o aluno abria o ícone
+e caía no meio da lista. `main.tsx` desliga o `history.scrollRestoration`, e o
+`App` rola ao topo quando a busca termina. Uma sem a outra não resolve: só
+desligar deixa a posição a cargo do navegador na navegação interna, e só rolar
+não impede o navegador de reaplicar a posição velha depois.
+
 **A agenda não abre com o cache.** Espera o Moodle responder mostrando só o
 esqueleto. Meia agenda velha, numa tela de prazos, é pior que nenhuma — o aluno
 não tem como saber qual metade está velha. O cache só entra se o Moodle estiver

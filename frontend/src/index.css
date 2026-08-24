@@ -857,6 +857,26 @@ body {
 
 /* Aviso do que está acontecendo. Não é bloco cinza: é a única coisa legível
    da tela enquanto os dados não chegam, então tem cor e contraste de texto. */
+/*
+  A frase do status troca sozinha durante a espera. Ela entra com um fade
+  curto: sem isso a troca parece um erro de renderização, e com algo mais
+  longo o texto fica ilegível justamente enquanto é lido.
+*/
+.skeleton__frase {
+  animation: skeleton-frase 0.35s ease-out;
+}
+
+@keyframes skeleton-frase {
+  from {
+    opacity: 0;
+    transform: translateY(0.2rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .skeleton__status {
   display: inline-flex;
   align-items: center;
@@ -972,6 +992,10 @@ body {
   .skeleton__pill {
     animation: none;
     background: var(--color-border);
+  }
+
+  .skeleton__frase {
+    animation: none;
   }
 }
 

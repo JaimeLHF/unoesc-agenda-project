@@ -57,7 +57,6 @@ const App: React.FC = () => {
   // bloquear nada — se o Moodle não responder, a barra fica com as iniciais.
   const [profile, setProfile] = useState<Profile | null>(null);
 
-  const [loadingMessage, setLoadingMessage] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
@@ -104,7 +103,6 @@ const App: React.FC = () => {
 
   /** Busca disciplinas e eventos no Moodle. Usado no login e no refresh. */
   const fetchAll = async () => {
-    setLoadingMessage('Buscando seus dados no Moodle…');
     const scrapeResult = await scrapePortal();
 
     setSubjects(scrapeResult.subjects);
@@ -138,7 +136,6 @@ const App: React.FC = () => {
     // Senha aceita: daqui para frente a espera é longa e tem o que mostrar.
     setLoginLoading(false);
     setAbrindoAgenda(true);
-    setLoadingMessage('Buscando seus dados no Moodle…');
 
     try {
       await abrirSessao();
@@ -199,7 +196,6 @@ const App: React.FC = () => {
   useEffect(() => {
     if (!isAuthenticated()) return;
     setAbrindoAgenda(true);
-    setLoadingMessage('Retomando sua sessão…');
     void abrirSessao()
       .then(() => setStep('results'))
       .catch((err) => setLoginError(mensagemDeErro(err)))
@@ -207,6 +203,21 @@ const App: React.FC = () => {
     // Só no mount: é a retomada, não uma reação a mudança de estado.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /*
+    A agenda começa no topo, sempre.
+
+    Ela nasce como esqueleto e só depois recebe a lista inteira, então
+    qualquer posição de scroll anterior — a do reload, a de antes do
+    "Atualizar", a de quando o aluno foi ao perfil — cairia no meio de um
+    conteúdo que ainda não existia quando ele saiu. `scrollRestoration` já
+    está em `manual` no `main.tsx`; aqui é a outra metade: assim que a busca
+    termina e a lista aparece, o topo.
+  */
+  useEffect(() => {
+    if (step !== 'results' || refreshing || abrindoAgenda) return;
+    window.scrollTo(0, 0);
+  }, [step, refreshing, abrindoAgenda]);
 
   /** Re-busca disciplinas e eventos. Pede login novamente se a sessão caiu. */
   const handleRefresh = async () => {
@@ -383,10 +394,7 @@ const App: React.FC = () => {
         )}
 
         {step === 'login' && abrindoAgenda && (
-          <LoadingSkeleton
-            status={loadingMessage}
-            message="Na primeira vez isso leva cerca de um minuto, porque estamos lendo todas as suas disciplinas."
-          />
+          <LoadingSkeleton message="Na primeira vez isso leva cerca de um minuto, porque estamos lendo todas as suas disciplinas." />
         )}
 
         {step === 'results' && naRotaAdmin && (
@@ -407,10 +415,7 @@ const App: React.FC = () => {
           da busca anterior — o aluno não teria como saber qual metade é velha.
         */}
         {step === 'results' && !naRotaAdmin && !activityKey && !selectedSubject && refreshing && (
-          <LoadingSkeleton
-            status={loadingMessage || 'Buscando seus dados no Moodle…'}
-            cards={Math.max(subjects.length, 3)}
-          />
+          <LoadingSkeleton cards={Math.max(subjects.length, 3)} />
         )}
 
         {/*
