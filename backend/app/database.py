@@ -85,6 +85,13 @@ class User(Base):
     # entrou sem que ele tenha que decorar matrícula. Chega quando o aluno
     # abre o app (é o `/api/profile` que preenche) e fica nulo até lá.
     full_name: Mapped[Optional[str]] = mapped_column(String)
+    # Curso, na forma como o Moodle o guarda no campo `department` do cadastro.
+    # Chega pelo mesmo `/api/profile` que traz o nome, e é a única pista de
+    # curso que o app tem: o `dof` da disciplina é só um número e o nome dela
+    # não diz o curso. Fica nulo enquanto ninguém abriu o app — e continua nulo
+    # se a UNOESC não preencher esse campo, que é por isso que o painel só
+    # desenha a coluna quando alguém tem valor.
+    course: Mapped[Optional[str]] = mapped_column(String)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
     last_login_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
 

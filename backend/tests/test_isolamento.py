@@ -97,7 +97,11 @@ AGENDAS = {
 PERFIS = {
     "aluno.a@unoesc.edu.br": {
         "moodle_id": 1, "fullname": "Aluno A", "firstname": "Aluno", "lastname": "A",
-        "username": "aluno.a", "email": "aluno.a@unoesc.edu.br", "department": "",
+        "username": "aluno.a", "email": "aluno.a@unoesc.edu.br",
+        # O curso do aluno sai daqui — é o campo `department` do cadastro no
+        # Moodle. B fica vazio de propósito: é o caso de a UNOESC não
+        # preencher, e o painel não pode inventar nada por isso.
+        "department": "Análise e Desenvolvimento de Sistemas",
         "institution": "", "city": "", "country": "BR", "timezone": "America/Sao_Paulo",
         "first_access": None, "last_access": None, "avatar": None,
     },
@@ -638,11 +642,21 @@ def main_teste() -> int:
                 "quem ainda não abriu o perfil aparece sem nome, e não com lixo",
             )
             client.get("/api/profile", headers=auth(token_b3))
+            client.get("/api/profile", headers=auth(token_a2))
             depois = client.get("/api/admin/panorama", headers=auth(token_a2)).json()
             nomes = {c["username"]: c["nome"] for c in depois["contas"]}
             verificar(
                 nomes.get("aluno.b@unoesc.edu.br") == "Aluno B",
                 "o nome do Moodle chega ao painel depois da primeira visita",
+            )
+            cursos = {c["username"]: c["curso"] for c in depois["contas"]}
+            verificar(
+                cursos.get("aluno.a@unoesc.edu.br") == "Análise e Desenvolvimento de Sistemas",
+                f"o curso do cadastro chega ao painel ({cursos.get('aluno.a@unoesc.edu.br')!r})",
+            )
+            verificar(
+                cursos.get("aluno.b@unoesc.edu.br") == "",
+                "cadastro sem curso fica vazio em vez de herdar o do outro aluno",
             )
 
             # A matrícula do secret veio sem domínio e o login tem domínio: se

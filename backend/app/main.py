@@ -542,7 +542,10 @@ async def profile(session: app_session.PortalSession = Depends(require_session))
             # O nome só existe aqui: o login é a matrícula e o banco não
             # tinha como dizer quem é quem no painel do dono.
             with repo.get_session() as db:
-                repo.set_full_name(db, session.user_id, dados.get("fullname", ""))
+                repo.set_cadastro(
+                    db, session.user_id,
+                    dados.get("fullname", ""), dados.get("department", ""),
+                )
                 db.commit()
     except PermissionError as exc:
         resposta.moodle_error = str(exc)

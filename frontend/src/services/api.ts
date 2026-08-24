@@ -241,6 +241,8 @@ export interface AdminConta {
   username: string;
   /** Nome no Moodle. Vazio até o aluno abrir o app pela primeira vez. */
   nome: string;
+  /** Curso, quando o Moodle preenche o campo; vazio quando não. */
+  curso: string;
   criado_em: string;
   ultimo_acesso: string;
   plano: string;

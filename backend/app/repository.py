@@ -80,21 +80,25 @@ def aviso_de_mudanca(event: Event) -> Optional[str]:
 # Usuários
 # ---------------------------------------------------------------------------
 
-def set_full_name(session: Session, user_id: str, nome: str) -> None:
+def set_cadastro(session: Session, user_id: str, nome: str, curso: str = "") -> None:
     """
-    Guarda o nome que o Moodle devolveu, se veio algum.
+    Guarda o nome e o curso que o Moodle devolveu, se vieram.
 
-    Escreve só quando muda: esta função é chamada a cada visita ao perfil, e
+    Escreve só o que mudou: esta função é chamada a cada visita ao perfil, e
     gravar o mesmo texto de novo seria uma escrita por visita sem nenhuma
-    informação nova. Nome vazio não apaga o que já está lá — o Moodle já
+    informação nova. Campo vazio não apaga o que já está lá — o Moodle já
     respondeu sem cadastro em falha temporária, e apagar seria silencioso.
+    Vale principalmente para o curso, que pode simplesmente não estar
+    preenchido nesta instância.
     """
-    limpo = (nome or "").strip()
-    if not limpo:
-        return
     user = session.get(User, user_id)
-    if user is not None and user.full_name != limpo:
-        user.full_name = limpo
+    if user is None:
+        return
+
+    for campo, valor in (("full_name", nome), ("course", curso)):
+        limpo = (valor or "").strip()
+        if limpo and getattr(user, campo) != limpo:
+            setattr(user, campo, limpo)
 
 
 def get_or_create_user(session: Session, moodle_username: str) -> User:

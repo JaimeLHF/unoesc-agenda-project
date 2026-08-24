@@ -111,6 +111,12 @@ const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
 
   const { resumo, contas, por_dia: porDia, servidor } = dados;
 
+  // A coluna do curso só existe se o Moodle da UNOESC preencher o campo
+  // `department` de alguém. Se ele vier vazio para todo mundo — e não dá para
+  // saber sem uma conta real na mão — a tabela fica exatamente como estava, em
+  // vez de ganhar uma coluna de travessões.
+  const temCurso = contas.some((c) => c.curso);
+
   return (
     <section className="admin">
       {voltar}
@@ -156,6 +162,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
           <thead>
             <tr>
               <th>aluno</th>
+              {temCurso && <th>curso</th>}
               <th>último acesso</th>
               <th>entrou</th>
               <th className="num">disc.</th>
@@ -176,6 +183,7 @@ const AdminPage: React.FC<AdminPageProps> = ({ onBack }) => {
                   </span>
                   <span className="mono admin-matricula">{c.username}</span>
                 </td>
+                {temCurso && <td>{c.curso || '—'}</td>}
                 <td>{quando(c.ultimo_acesso)}</td>
                 <td>{quando(c.criado_em)}</td>
                 <td className="num">{c.disciplinas}</td>

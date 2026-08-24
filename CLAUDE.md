@@ -265,13 +265,20 @@ mesma senha. As contas antigas são migradas no `init_db`; quando as duas
 formas já existem, nenhuma é alterada, porque juntar duas agendas exigiria
 decidir de quem é cada "concluído".
 
-**O nome do aluno é guardado só para o painel.** O login é matrícula, e uma
-lista de números não diz quem entrou. O `full_name` chega pelo `/api/profile`
-— a mesma visita que já busca o cadastro no Moodle para a barra do app — e é
-gravado só quando muda; nome vazio nunca apaga o que já está lá, porque o
-Moodle já respondeu sem cadastro em falha temporária. Ele não autentica nada e
-não aparece para outro aluno: quem ainda não abriu o app aparece como "sem
-nome ainda" no painel.
+**O nome e o curso do aluno são guardados só para o painel.** O login é
+matrícula, e uma lista de números não diz quem entrou. O `full_name` e o
+`course` chegam pelo `/api/profile` — a mesma visita que já busca o cadastro
+no Moodle para a barra do app, então nenhuma requisição nova — e são gravados
+só quando mudam; campo vazio nunca apaga o que já está lá, porque o Moodle já
+respondeu sem cadastro em falha temporária. Não autenticam nada e não aparecem
+para outro aluno: quem ainda não abriu o app aparece como "sem nome ainda".
+
+O curso sai do campo `department` do cadastro, e **não se sabe se a UNOESC o
+preenche** — não havia conta real à mão para conferir em 24/08/2026. Por isso a
+coluna do painel só é desenhada quando algum aluno tem valor (`temCurso` no
+`AdminPage.tsx`): se o campo vier vazio para todos, a tabela fica como estava
+em vez de ganhar uma coluna de travessões. Não há outra fonte — o `dof` da
+disciplina é só um número (`1414949`) e o nome dela não diz o curso.
 
 **O painel do dono é a única tela que olha todos os alunos.** Existe porque
 "alguém está usando isso, e está funcionando?" não tinha resposta sem abrir um
