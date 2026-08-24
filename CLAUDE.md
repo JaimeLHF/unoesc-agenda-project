@@ -105,10 +105,25 @@ e caía no meio da lista. `main.tsx` desliga o `history.scrollRestoration`, e o
 desligar deixa a posição a cargo do navegador na navegação interna, e só rolar
 não impede o navegador de reaplicar a posição velha depois.
 
-**A agenda não abre com o cache.** Espera o Moodle responder mostrando só o
-esqueleto. Meia agenda velha, numa tela de prazos, é pior que nenhuma — o aluno
-não tem como saber qual metade está velha. O cache só entra se o Moodle estiver
-fora, e a tela avisa.
+**A agenda abre com o que está salvo e se atualiza por baixo.** Era o
+contrário: a tela segurava tudo no esqueleto até o Moodle responder, porque
+meia agenda velha, numa tela de prazos, é pior que nenhuma — o aluno não teria
+como saber qual metade está velha. O que faltava não era a espera, era o aluno
+saber em que pé estava. Agora a agenda salva vai para a tela na hora, o botão
+"Atualizar" gira enquanto a busca corre, e o que chegou é anunciado no topo
+(`AvisoNovidades`, frase montada em `frontend/src/lib/novidades.ts`) — com as
+duas coisas na tela, "qual metade é velha" tem resposta: nenhuma, e o app
+avisa quando mudar. O esqueleto ficou para quem não tem agenda nenhuma a
+mostrar: primeiro acesso, ou cache apagado.
+
+Duas decisões junto: a busca ao abrir **pula** se a última tem menos de
+`MINUTOS_AGENDA_FRESCA` (15) — fechar e abrir o app é o que mais acontece no
+iPhone, e cada abertura era um login no Moodle para trazer o mesmo dado; e o
+aviso só fala do que **surgiu**, porque prazo que mudou de data e nota que saiu
+já têm selo próprio, e repetir viraria dois avisos para o mesmo fato. A
+comparação usa `stable_key`, então adiar uma prova não a transforma em evento
+novo. O botão "Atualizar" ignora a janela de frescor e, quando nada mudou, diz
+isso — busca que termina sem sinal nenhum parece busca que não aconteceu.
 
 **Login automático no Moodle é impossível.** O navegador não aceita cookie de
 outro domínio; a única saída seria um plugin instalado pelo admin da UNOESC. Não

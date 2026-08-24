@@ -3,6 +3,7 @@ import ActivityPage from './components/ActivityPage';
 import AppHeader from './components/AppHeader';
 import Icon from './components/Icon';
 import LoadingSkeleton from './components/LoadingSkeleton';
+import AvisoNovidades from './components/AvisoNovidades';
 import ConviteNotificacoes from './components/ConviteNotificacoes';
 import LoginForm from './components/LoginForm';
 import SubjectList from './components/SubjectList';
@@ -29,6 +30,7 @@ import type { Account, Profile } from './services/api';
 import { requestGoogleAccessToken } from './services/googleAuth';
 import { useDoneEvents, eventKey } from './contexts/DoneEventsContext';
 import { ROTA_ADMIN, activityPath, navigate, useActivityRoute, useAdminRoute } from './lib/router';
+import { agendaEstaFresca, compararAgendas } from './lib/novidades';
 import type { Subject, AcademicEvent, LoginCredentials } from './types';
 import './index.css';
 
@@ -59,6 +61,15 @@ const App: React.FC = () => {
 
   const [loginError, setLoginError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
+  /*
+    A busca que acontece por baixo da agenda já na tela. É separada de
+    `refreshing` de propósito: aquela é a espera que o aluno pediu (o botão
+    "Atualizar"), esta ele nem sabe que começou — e por isso não pode mexer no
+    scroll nem esconder o que está sendo lido.
+  */
+  const [atualizandoAoFundo, setAtualizandoAoFundo] = useState(false);
+  /** O que chegou na última busca, para o aviso no topo da agenda. */
+  const [novidades, setNovidades] = useState<string | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
@@ -101,13 +112,35 @@ const App: React.FC = () => {
   // Não há mais carga de cache antes do login: num app multi-usuário o cache
   // pertence a alguém, e o backend precisa da sessão para saber a quem.
 
-  /** Busca disciplinas e eventos no Moodle. Usado no login e no refresh. */
+  /**
+   * Busca disciplinas e eventos no Moodle e devolve o que veio — o retorno é
+   * o que permite comparar com a agenda que já estava na tela e dizer o que
+   * mudou.
+   */
   const fetchAll = async () => {
     const scrapeResult = await scrapePortal();
 
     setSubjects(scrapeResult.subjects);
     setEvents(scrapeResult.calendar_events);
     setLastScrapedAt(new Date().toISOString());
+    return { subjects: scrapeResult.subjects, events: scrapeResult.calendar_events };
+  };
+
+  /**
+   * Vai ao Moodle sem tirar a agenda da tela, e anuncia o que voltou de lá.
+   *
+   * `anunciarVazio` liga o "sua agenda já está em dia": vale quando o aluno
+   * apertou "Atualizar" e precisa saber que a busca terminou, e não vale na
+   * busca que acontece sozinha ao abrir o app — ali, nada novo é para passar
+   * despercebido mesmo.
+   */
+  const atualizarComparando = async (
+    base: { subjects: Subject[]; events: AcademicEvent[] },
+    anunciarVazio = false,
+  ) => {
+    const depois = await fetchAll();
+    const { frase } = compararAgendas(base, depois);
+    setNovidades(frase ?? (anunciarVazio ? 'Sua agenda já está em dia.' : null));
   };
 
   /** Login inicial — autentica e só abre a agenda depois de atualizá-la. */
@@ -160,31 +193,47 @@ const App: React.FC = () => {
       void fetchAccount().then(setAccount).catch(() => setAccount(null));
       void fetchProfile().then(setProfile).catch(() => setProfile(null));
 
-      // O cache entra antes só pelas marcações de concluído; as disciplinas e
-      // eventos dele ficam de reserva e não vão para a tela.
       const cache = await fetchCache().catch(() => null);
       if (cache) hydrate(cache.doneKeys);
+      const temCache = Boolean(cache && (cache.subjects.length > 0 || cache.events.length > 0));
 
-      // Enquanto a agenda não está atualizada, a tela mostra só o esqueleto.
-      // Abrir com o cache e atualizar por baixo deixava o aluno lendo dados
-      // velhos sem saber que eram velhos — numa tela de prazos, isso é pior
-      // do que esperar.
-      try {
-        await fetchAll();
-      } catch (err) {
-        // Moodle fora do ar ou sem rede: em vez de travar na tela de entrada,
-        // mostra o que estava salvo, avisando que não é dado novo.
-        const temCache = Boolean(cache && (cache.subjects.length > 0 || cache.events.length > 0));
-        if (!cache || !temCache) throw err;
+      /*
+        A agenda salva vai para a tela na hora.
 
-        console.warn('Falha ao atualizar; usando os dados salvos:', err);
+        Isto já foi o contrário: o app segurava tudo no esqueleto até o Moodle
+        responder, porque meia agenda velha numa tela de prazos é pior que
+        nenhuma. O que faltava não era a espera, era o aluno saber em que pé
+        estava — e agora ele sabe: o botão "Atualizar" gira enquanto a busca
+        corre por baixo, e o que chegar é anunciado no topo. Esperar um minuto
+        por uma agenda que quase sempre voltava igual era o preço mais alto.
+      */
+      if (cache && temCache) {
         setSubjects(cache.subjects);
         setEvents(cache.events);
         setLastScrapedAt(cache.lastScrapedAt);
-        setRefreshError(
-          'Não consegui falar com o Moodle agora. Esta é a sua última agenda salva.',
-        );
+
+        // Fechar e abrir o app não é motivo para outro login no Moodle: dentro
+        // da janela de frescor, o que está na tela é o que o Moodle diria.
+        if (!agendaEstaFresca(cache.lastScrapedAt)) {
+          setAtualizandoAoFundo(true);
+          void atualizarComparando({ subjects: cache.subjects, events: cache.events })
+            .catch((err) => {
+              // A tela já tem o que mostrar; o aviso diz de quando ela é.
+              console.warn('Falha ao atualizar em segundo plano:', err);
+              setRefreshError(
+                'Não consegui falar com o Moodle agora. Esta é a sua última agenda salva.',
+              );
+            })
+            .finally(() => setAtualizandoAoFundo(false));
+        }
+        return;
       }
+
+      // Primeiro acesso: não há agenda salva, então não há o que mostrar antes
+      // de o Moodle responder — aqui o esqueleto é a tela inteira, e falhar
+      // devolve o login com o aviso. Quem já tem agenda nunca chega nesta
+      // linha: saiu acima, com a lista na tela.
+      await fetchAll();
     }
   };
 
@@ -227,10 +276,11 @@ const App: React.FC = () => {
       return;
     }
     setRefreshError(null);
+    setNovidades(null);
     setRefreshing(true);
     setSelectedSubjectId(null);
     try {
-      await fetchAll();
+      await atualizarComparando({ subjects, events }, true);
     } catch (err) {
       console.error('Erro ao atualizar disciplinas:', err);
       setRefreshError(mensagemDeErro(err));
@@ -246,6 +296,7 @@ const App: React.FC = () => {
     setProfile(null);
     setSubjects([]);
     setEvents([]);
+    setNovidades(null);
     setSelectedSubjectId(null);
     setLoginError(null);
     setRefreshError(null);
@@ -331,6 +382,13 @@ const App: React.FC = () => {
     }
   };
 
+  /*
+    O esqueleto substitui a agenda só quando não existe agenda: primeiro
+    acesso, ou cache apagado. Havendo lista na tela, ela fica — a busca por
+    baixo se anuncia no botão "Atualizar", que gira.
+  */
+  const mostrandoEsqueleto = refreshing && subjects.length === 0;
+
   const selectedSubject = subjects.find((s) => s.id === selectedSubjectId) ?? null;
   const eventsForSelected = selectedSubject
     ? events.filter((e) => e.subject === selectedSubject.name)
@@ -351,7 +409,7 @@ const App: React.FC = () => {
           fullName={profile?.moodle?.fullname}
           avatar={profile?.moodle?.avatar}
           onRefresh={handleRefresh}
-          refreshing={refreshing}
+          refreshing={refreshing || atualizandoAoFundo}
           onOpenProfile={() => setStep('profile')}
           onClearCache={handleClearCache}
           onLogout={handleLogout}
@@ -410,11 +468,13 @@ const App: React.FC = () => {
         )}
 
         {/*
-          Atualizar troca a lista pelo esqueleto, e não por números mudando por
-          baixo: a agenda não pode misturar o que já chegou com o que ainda é
-          da busca anterior — o aluno não teria como saber qual metade é velha.
+          O esqueleto é para quando não há agenda nenhuma para mostrar — o
+          primeiro acesso. Com uma lista na tela, atualizar não a apaga: ela
+          fica, o botão "Atualizar" gira, e o que mudar é anunciado. Trocar a
+          lista pelo esqueleto a cada busca era esconder do aluno justamente o
+          que ele abriu o app para ver.
         */}
-        {step === 'results' && !naRotaAdmin && !activityKey && !selectedSubject && refreshing && (
+        {step === 'results' && !naRotaAdmin && !activityKey && !selectedSubject && mostrandoEsqueleto && (
           <LoadingSkeleton cards={Math.max(subjects.length, 3)} />
         )}
 
@@ -424,11 +484,15 @@ const App: React.FC = () => {
           assunto tem o "Não mostre isso novamente" ali mesmo, sem precisar
           caçar configuração.
         */}
-        {step === 'results' && !naRotaAdmin && !activityKey && !selectedSubject && !refreshing && (
+        {step === 'results' && !naRotaAdmin && !activityKey && !selectedSubject && (
+          <AvisoNovidades frase={novidades} onFechar={() => setNovidades(null)} />
+        )}
+
+        {step === 'results' && !naRotaAdmin && !activityKey && !selectedSubject && !mostrandoEsqueleto && (
           <ConviteNotificacoes username={account?.username} />
         )}
 
-        {step === 'results' && !naRotaAdmin && !activityKey && !selectedSubject && !refreshing && (
+        {step === 'results' && !naRotaAdmin && !activityKey && !selectedSubject && !mostrandoEsqueleto && (
           <SubjectList
             subjects={subjects}
             events={events}

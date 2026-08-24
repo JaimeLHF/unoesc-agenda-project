@@ -999,6 +999,74 @@ body {
   }
 }
 
+/* ---- Aviso do que chegou na última busca ---- */
+/*
+  Fica acima da lista, onde o olho já está quando a agenda abre. Cor de
+  destaque e não de alerta: novidade não é problema.
+*/
+.aviso-novidades {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--color-primary-border);
+  border-radius: 0.75rem;
+  background: var(--color-primary-soft);
+  color: var(--color-primary);
+  font-size: 0.9rem;
+  line-height: 1.4;
+  animation: aviso-novidades-entra 0.3s ease-out;
+}
+
+@keyframes aviso-novidades-entra {
+  from {
+    opacity: 0;
+    transform: translateY(-0.4rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aviso-novidades {
+    animation: none;
+  }
+}
+
+.aviso-novidades svg {
+  flex: none;
+}
+
+.aviso-novidades__texto {
+  flex: 1;
+  /* Título de atividade é longo e não tem espaço: quebrar é melhor que
+     empurrar o botão de fechar para fora da tela. */
+  overflow-wrap: anywhere;
+}
+
+.aviso-novidades__fechar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  /* 2.25rem é o mínimo que o polegar acerta sem mirar. */
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: none;
+  padding: 0;
+  border: none;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.aviso-novidades__fechar:hover {
+  background: var(--color-primary-border);
+}
+
 /* ---- Banner de backend offline ---- */
 .backend-offline-banner {
   display: flex;
