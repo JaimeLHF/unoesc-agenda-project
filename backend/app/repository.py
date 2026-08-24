@@ -21,6 +21,7 @@ from app.moodle import ATIVIDADES_AVALIATIVAS, cmid_da_url, normalizar_login
 from app.database import (
     AppSession,
     CourseItem,
+    GradeItem,
     DoneEvent,
     PushSubscription,
     Event,
@@ -134,6 +135,7 @@ def delete_user(session: Session, user_id: str) -> None:
     session.execute(delete(Subject).where(Subject.user_id == user_id))
     session.execute(delete(DoneEvent).where(DoneEvent.user_id == user_id))
     session.execute(delete(CourseItem).where(CourseItem.user_id == user_id))
+    session.execute(delete(GradeItem).where(GradeItem.user_id == user_id))
     session.execute(delete(PushSubscription).where(PushSubscription.user_id == user_id))
     session.execute(delete(Meta).where(Meta.user_id == user_id))
     session.execute(delete(AppSession).where(AppSession.user_id == user_id))
@@ -502,6 +504,93 @@ def registrar_materiais(
         ))
 
 
+def registrar_notas_itens(
+    session: Session, user_id: str, subject: str, itens: list[dict]
+) -> list[dict]:
+    """
+    Guarda o boletim item a item e devolve o que **ganhou nota** desde a última
+    passagem — a matéria-prima da notificação "saiu nota".
+
+    Três regras que vieram de erro real:
+
+    **Boletim vazio não apaga nada.** O relatório do Moodle já respondeu
+    `servicenotavailable` nesta instância, e `course_grade_items` devolve lista
+    vazia em qualquer falha de rede. Tratar isso como "o professor apagou as
+    notas" faria a próxima rodada anunciar o semestre inteiro de novo.
+
+    **Nota que some não sobrescreve a nota guardada**, pelo mesmo motivo — é a
+    regra que `upsert_subjects` já aplica ao total da disciplina.
+
+    **Disciplina vista pela primeira vez entra como `baseline`**: quem liga a
+    notificação no meio do semestre não quer as cinco notas velhas chegando
+    como novidade.
+
+    Nota corrigida (7,0 que virou 9,0) conta como aviso: para o aluno é a mesma
+    notícia, e ficar em silêncio seria pior que repetir.
+    """
+    if not itens:
+        return []
+
+    conhecidos = {
+        row.name: row
+        for row in session.execute(
+            select(GradeItem).where(
+                GradeItem.user_id == user_id, GradeItem.subject == subject
+            )
+        ).scalars()
+    }
+    primeira_vez = not conhecidos
+    agora = utc_now()
+    novidades: list[dict] = []
+
+    for item in itens:
+        nome = (item.get("nome") or "").strip()
+        if not nome:
+            continue
+
+        nota = item.get("nota")
+        maximo = item.get("maximo")
+        peso = item.get("peso")
+        anterior = conhecidos.get(nome)
+
+        if anterior is None:
+            conhecidos[nome] = GradeItem(
+                user_id=user_id,
+                subject=subject,
+                name=nome,
+                grade=nota,
+                max_grade=maximo,
+                weight=peso,
+                first_seen_at=agora,
+                graded_at=agora if nota is not None else None,
+                baseline=1 if primeira_vez else 0,
+            )
+            session.add(conhecidos[nome])
+            # Item que nasce já com nota numa disciplina conhecida é notícia: o
+            # professor criou a avaliação e lançou a nota entre duas rodadas.
+            if not primeira_vez and nota is not None:
+                novidades.append(
+                    {"subject": subject, "name": nome, "grade": nota,
+                     "max": maximo, "previous": None}
+                )
+            continue
+
+        anterior.weight = peso if peso is not None else anterior.weight
+        anterior.max_grade = maximo if maximo is not None else anterior.max_grade
+
+        if nota is None or nota == anterior.grade:
+            continue
+
+        novidades.append(
+            {"subject": subject, "name": nome, "grade": nota,
+             "max": maximo or anterior.max_grade, "previous": anterior.grade}
+        )
+        anterior.grade = nota
+        anterior.graded_at = agora
+
+    return novidades
+
+
 def novidades_por_disciplina(
     session: Session, user_id: str, dias: int = DIAS_MATERIAL_NOVO
 ) -> dict[str, list[dict]]:
@@ -695,4 +784,5 @@ def clear_cache(session: Session, user_id: str) -> None:
     session.execute(delete(Event).where(Event.user_id == user_id))
     session.execute(delete(Subject).where(Subject.user_id == user_id))
     session.execute(delete(CourseItem).where(CourseItem.user_id == user_id))
+    session.execute(delete(GradeItem).where(GradeItem.user_id == user_id))
     session.execute(delete(Meta).where(Meta.user_id == user_id))

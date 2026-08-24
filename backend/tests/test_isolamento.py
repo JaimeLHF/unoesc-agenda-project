@@ -295,6 +295,60 @@ def main_teste() -> int:
             f"scrape sem nota não apaga a nota guardada ({depois['final_grade']})",
         )
 
+        # -- boletim item a item --------------------------------------------
+        #
+        # O total da disciplina fica vazio enquanto o Moodle não dá peso a
+        # todas as avaliações, e foi por isso que a nota 9,0 de Desenvolvimento
+        # Mobile chegou por e-mail da UNOESC sem o app avisar nada. Quem lê
+        # esta tabela é o disparo de notificação, não um endpoint — por isso o
+        # teste chama o repositório direto.
+        from app import repository as repo
+        from app.database import GradeItem
+
+        item = "Tarefa ATIVIDADE AVALIATIVA 1"
+        sem_nota = [{"nome": item, "nota": None, "peso": None, "maximo": 10}]
+        com_nota = [{"nome": item, "nota": 9.0, "peso": 90.0, "maximo": 10}]
+
+        with repo.get_session() as db:
+            uid_a = repo.get_or_create_user(db, "aluno.a@unoesc.edu.br").id
+            uid_b = repo.get_or_create_user(db, "aluno.b@unoesc.edu.br").id
+
+            verificar(
+                repo.registrar_notas_itens(db, uid_a, "Cálculo I", sem_nota) == [],
+                "a primeira leitura do boletim é baseline e não vira aviso",
+            )
+            db.commit()
+
+            novas = repo.registrar_notas_itens(db, uid_a, "Cálculo I", com_nota)
+            db.commit()
+            verificar(
+                [(n["name"], n["grade"]) for n in novas] == [(item, 9.0)],
+                f"a nota lançada na avaliação vira aviso ({novas})",
+            )
+            verificar(
+                repo.registrar_notas_itens(db, uid_a, "Cálculo I", com_nota) == [],
+                "a mesma nota na rodada seguinte não avisa de novo",
+            )
+
+            # Mesmo nome de item, outro aluno: sem o filtro por user_id, B
+            # herdaria o histórico de A e nunca receberia o próprio aviso.
+            verificar(
+                repo.registrar_notas_itens(db, uid_b, "Cálculo I", com_nota) == [],
+                "o boletim de B começa do zero, não no estado de A",
+            )
+            db.commit()
+
+            # Mesma regra do total da disciplina: relatório que volta sem nota
+            # é falha do Moodle, não nota apagada pelo professor.
+            repo.registrar_notas_itens(db, uid_a, "Cálculo I", sem_nota)
+            repo.registrar_notas_itens(db, uid_a, "Cálculo I", [])
+            db.commit()
+            guardada = db.get(GradeItem, (uid_a, "Cálculo I", item))
+            verificar(
+                guardada is not None and guardada.grade == 9.0,
+                "boletim sem nota não apaga a nota já guardada",
+            )
+
         print("\n[3] Nenhum endpoint de dados responde sem sessão")
         sem_sessao = [
             ("get", "/api/cache", None),

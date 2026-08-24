@@ -166,6 +166,23 @@ Moodle já respondeu `servicenotavailable` nesta instância, e apagar seria
 silencioso. O `upsert_subjects` trata os dois casos, e o teste de isolamento
 cobre o segundo.
 
+**O aviso de nota olha o boletim item a item, não o total.** O total da
+disciplina (`/grade/report/overview`) só existe depois que o Moodle atribui
+peso a todas as avaliações, e durante boa parte do semestre ele vem vazio: em
+24/08/2026 a UNOESC mandou e-mail de "publicação de nota parcial" de
+Desenvolvimento Mobile, a nota 9,0 estava no boletim, e o app ficou calado
+porque o total continuava `None`. O boletim (`/grade/report/user`) a tela já
+lia sob demanda e não guardava em lugar nenhum — sem retrato anterior não há o
+que comparar. Agora a tabela `grade_items` guarda nome, nota, peso e escala por
+disciplina, e `_boletins` no `scheduler.py` a alimenta em cada disparo: **uma
+requisição por disciplina, três vezes ao dia**. O `run()` não faz isso de
+propósito — ele também roda quando o aluno abre a agenda, e ali requisição
+extra é espera na tela. Duas regras herdadas do total valem aqui: disciplina
+vista pela primeira vez entra como `baseline` e não anuncia nada, e boletim
+que volta vazio nunca apaga nota guardada. Quando o item tem novidade, ele
+**substitui** o aviso do total em vez de somar — é o mesmo fato, e duas
+notificações para um fato só queimam o canal.
+
 **"Novidades na sala" é o único sinal que o curso presencial emite.** Lá não há
 evento de calendário nenhum, só arquivo — então o app registra o inventário da
 sala (`course_items`) e marca o que apareceu desde a última visita. O que já

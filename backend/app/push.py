@@ -216,6 +216,44 @@ def notas_novas(disciplinas: list[dict]) -> Optional[tuple[str, str, str]]:
     )
 
 
+def _sem_tipo(nome: str) -> str:
+    """"Tarefa ATIVIDADE AVALIATIVA 1" → "ATIVIDADE AVALIATIVA 1"."""
+    for prefixo in ("Tarefa ", "Questionário ", "Fórum ", "Arquivo ", "Pesquisa "):
+        if nome.startswith(prefixo):
+            return nome[len(prefixo):].strip()
+    return nome
+
+
+def _nota_legivel(nota: float, maximo: Optional[float]) -> str:
+    """"9,0" na escala do item; "45,0/50" quando a escala não é 0–10."""
+    texto = f"{nota:.1f}".replace(".", ",")
+    if maximo and abs(maximo - 10) > 0.01:
+        return f"{texto}/{maximo:g}"
+    return texto
+
+
+def notas_de_item(itens: list[dict]) -> Optional[tuple[str, str, str]]:
+    """
+    Saiu nota numa avaliação — o aviso que o total da disciplina não dá.
+
+    O total (`notas_novas`) só existe quando o Moodle já atribuiu peso a tudo,
+    e no meio do semestre ele vem vazio: em Desenvolvimento Mobile o professor
+    lançou 9,0 na Avaliativa 1, a UNOESC mandou e-mail de nota parcial, e o
+    app ficou calado porque o total continuava `None`. Este texto fala do item.
+    """
+    if not itens:
+        return None
+
+    if len(itens) == 1:
+        item = itens[0]
+        nota = _nota_legivel(item["grade"], item.get("max"))
+        disciplina = _sem_codigo(item["subject"])
+        return "Saiu nota", f"{disciplina} · {_sem_tipo(item['name'])} — {nota}", "/"
+
+    disciplinas = list(dict.fromkeys(_sem_codigo(i["subject"]) for i in itens))
+    return f"Saíram {len(itens)} notas", _lista(disciplinas), "/"
+
+
 def prazos_alterados(eventos: list[dict]) -> Optional[tuple[str, str, str]]:
     """Mudou a data de algo. É notícia, não lembrete — por isso sai na hora."""
     if not eventos:

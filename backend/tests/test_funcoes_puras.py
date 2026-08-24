@@ -168,6 +168,22 @@ def main_teste() -> int:
     igual(push.notas_novas([{"name": "90112 - Farmacologia", "final_grade": 85}])[1],
           "Farmacologia — 8,5", "a nota aparece na escala que o aluno lê")
 
+    # O total da disciplina só existe quando o Moodle já deu peso a tudo; no
+    # meio do semestre a única notícia é a nota da avaliação. Foi o que faltou
+    # quando a UNOESC mandou o e-mail de nota parcial e o app ficou calado.
+    item = [{"subject": "28743 - Desenvolvimento Mobile",
+             "name": "Tarefa ATIVIDADE AVALIATIVA 1", "grade": 9.0, "max": 10}]
+    igual(push.notas_de_item(item)[1],
+          "Desenvolvimento Mobile · ATIVIDADE AVALIATIVA 1 — 9,0",
+          "o aviso diz qual avaliação saiu, não só a disciplina")
+    igual(push.notas_de_item([{**item[0], "max": 50, "grade": 45}])[1],
+          "Desenvolvimento Mobile · ATIVIDADE AVALIATIVA 1 — 45,0/50",
+          "escala que não é 0–10 mostra o total, senão 45 pareceria acima da média")
+    igual(push.notas_de_item([])[0] if push.notas_de_item([]) else None, None,
+          "boletim sem novidade não vira notificação")
+    igual(push.notas_de_item(item + [{**item[0], "name": "Tarefa AVALIATIVA 2"}])[0],
+          "Saíram 2 notas", "duas notas viram um aviso só")
+
     print("\n[10] Login: matrícula sozinha vale pelo e-mail inteiro")
     from app.moodle import normalizar_login
 

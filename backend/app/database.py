@@ -232,6 +232,40 @@ class CourseItem(Base):
     baseline: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
 
 
+class GradeItem(Base):
+    """
+    Uma linha do boletim da disciplina, guardada por aluno.
+
+    Existe por causa de um caso real: a UNOESC mandou e-mail de "publicação de
+    nota parcial" de Desenvolvimento Mobile e o app não avisou nada. A nota
+    estava lá — 9,0 na Avaliativa 1 — mas só no boletim item a item
+    (`/grade/report/user`), que a tela busca na hora e não guardava em lugar
+    nenhum. O push comparava apenas o **total** da disciplina, e o total vem
+    vazio enquanto o Moodle não deu peso a todas as avaliações. Sem esta tabela
+    não há o que comparar entre uma rodada e a seguinte.
+
+    A chave é o nome do item porque o relatório do Moodle não expõe id nenhum
+    ali. Professor que renomeia uma avaliação já lançada cria uma linha nova —
+    o preço de não ter id, e o motivo de `baseline` existir também aqui.
+
+    `graded_at` é quando a nota apareceu, não quando a linha nasceu: item sem
+    nota é registrado na hora em que surge no boletim, e a notícia só acontece
+    depois.
+    """
+
+    __tablename__ = "grade_items"
+
+    user_id: Mapped[str] = mapped_column(String, primary_key=True)
+    subject: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String, primary_key=True)
+    grade: Mapped[Optional[float]] = mapped_column(Float)
+    max_grade: Mapped[Optional[float]] = mapped_column(Float)
+    weight: Mapped[Optional[float]] = mapped_column(Float)  # % do total do curso
+    first_seen_at: Mapped[datetime] = mapped_column(DateTime, default=utc_now)
+    graded_at: Mapped[Optional[datetime]] = mapped_column(DateTime)
+    baseline: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
 class PushSubscription(Base):
     """
     Inscrição de notificação push de um aluno — uma por navegador/aparelho.

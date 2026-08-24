@@ -8,9 +8,10 @@ O relógio que dispara as notificações.
     19:00  véspera ("amanhã tem prova") + o que mudou
 
 Três, e não um por hora: cada rodada faz um login no Moodle **por aluno
-inscrito**, e o Moodle da UNOESC não é nosso para bombardear. Três também é o
-teto de barulho que a rotina do aluno aguenta sem ele desligar tudo — e
-notificação desligada no Android não se recupera.
+inscrito**, mais uma requisição de boletim por disciplina (ver `_boletins`), e
+o Moodle da UNOESC não é nosso para bombardear. Três também é o teto de barulho
+que a rotina do aluno aguenta sem ele desligar tudo — e notificação desligada
+no Android não se recupera.
 
 ## Por que o servidor precisa da senha aqui
 
@@ -137,6 +138,30 @@ def _diferencas(
     return notas_novas, prazos
 
 
+def _boletins(moodle: MoodleClient, subjects: list[dict]) -> dict[str, list[dict]]:
+    """
+    Boletim item a item de cada disciplina, na mesma sessão já logada do `run()`.
+
+    É o custo desta função: uma requisição por disciplina em cada disparo — no
+    caso real, 7 disciplinas × 3 horários. O `run()` não faz isso porque ele
+    também roda quando o aluno abre a agenda, e ali cada requisição extra é
+    espera na tela; aqui ninguém está olhando.
+
+    `course_grade_items` já engole a própria falha e devolve `[]`, e
+    `registrar_notas_itens` trata lista vazia como "não veio", nunca como
+    "as notas sumiram".
+    """
+    boletins: dict[str, list[dict]] = {}
+    for sub in subjects:
+        try:
+            course_id = int(sub.get("course_id") or 0)
+        except (TypeError, ValueError):
+            continue
+        if course_id:
+            boletins[sub["name"]] = moodle.course_grade_items(course_id)
+    return boletins
+
+
 def _do_dia(user_id: str, dia: str) -> list[dict]:
     """Eventos de uma data que o aluno ainda não marcou como concluídos."""
     with repo.get_session() as db:
@@ -226,6 +251,7 @@ def atender(user_id: str, slot: str) -> int:
             notas_antes, datas_antes = _estado_atual(user_id)
             with MoodleClient() as moodle:
                 resultado = moodle.run(*credencial)
+                boletins = _boletins(moodle, resultado["subjects"])
 
             with repo.get_session() as db:
                 repo.upsert_subjects(db, user_id, resultado["subjects"])
@@ -235,10 +261,25 @@ def atender(user_id: str, slot: str) -> int:
                     repo.registrar_materiais(
                         db, user_id, sub["name"], sub.get("activities") or []
                     )
+                notas_item = [
+                    nova
+                    for nome, itens in boletins.items()
+                    for nova in repo.registrar_notas_itens(db, user_id, nome, itens)
+                ]
                 db.commit()
 
             notas_novas, prazos = _diferencas(resultado, notas_antes, datas_antes)
-            enviados += entregar(user_id, push.notas_novas(notas_novas), "nota")
+            # Um fato, uma notificação. O boletim item a item ganha do total da
+            # disciplina porque diz *qual* avaliação saiu — e porque o total
+            # fica `None` durante boa parte do semestre, enquanto o Moodle não
+            # dá peso a todas as avaliações. Foi esse silêncio que fez a nota
+            # 9,0 de Desenvolvimento Mobile chegar por e-mail da UNOESC e não
+            # pelo app. O total só é usado quando o relatório do item não veio.
+            enviados += entregar(
+                user_id,
+                push.notas_de_item(notas_item) or push.notas_novas(notas_novas),
+                "nota",
+            )
             enviados += entregar(user_id, push.prazos_alterados(prazos), "prazo")
 
         hoje = _agora().date()
