@@ -699,36 +699,6 @@ body {
   também trazia autoria e o link de privacidade — os dois já estavam no rodapé
   da página, na mesma tela, e apareciam duas vezes.
 */
-/*
-  Caixa de "Manter conectado". Fica entre a senha e o botão porque é decisão
-  sobre o que acabou de ser digitado, e some do fluxo de quem só quer entrar:
-  já vem marcada.
-*/
-.auth__manter {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.6rem;
-  font-size: 0.85rem;
-  line-height: 1.4;
-  color: var(--color-text);
-  cursor: pointer;
-}
-
-.auth__manter input {
-  width: 1rem;
-  height: 1rem;
-  margin: 0.15rem 0 0;
-  flex: none;
-  accent-color: var(--color-primary);
-  cursor: pointer;
-}
-
-.auth__manter small {
-  display: block;
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
-}
-
 .auth__nota {
   margin: 0;
   font-size: 0.75rem;

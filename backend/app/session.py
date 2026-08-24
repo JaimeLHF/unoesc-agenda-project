@@ -22,16 +22,18 @@ from app import crypto
 from app.database import AppSession, SessionLocal, User, utc_now
 from app.repository import get_or_create_user
 
-# Tempo de inatividade após o qual a sessão é descartada. Cada uso renova.
+# A sessão não expira por inatividade.
 #
-# Eram 8 horas, e isso deslogava o aluno todo dia: o app é aberto de manhã e à
-# noite, e a janela fechava no meio. Pior no iPhone, onde o PWA fechado limpa a
-# aba — o aluno reabria o ícone e caía na tela de login. Trinta dias renovados a
-# cada uso significa que quem usa o app na rotina normal nunca mais vê o login;
-# quem some por um mês faz de novo. O que a janela curta protegia era o
-# computador de laboratório, e isso agora é decisão de quem entra: o "Manter
-# conectado" desmarcado guarda o token no `sessionStorage`, que morre com a aba.
-SESSION_IDLE_TTL = timedelta(days=30)
+# Eram 8 horas, depois 30 dias, e mesmo 30 dias derruba quem passa um recesso
+# sem abrir o app — volta em fevereiro e cai no login, que é justamente o
+# momento em que a agenda importa. Agora o token vale até alguém encerrar:
+# "Sair" no perfil, `revoke_for_user` (o que a troca de senha usa), ou uma
+# `SESSION_SECRET` nova, que faz a senha guardada deixar de decifrar e derruba
+# todas de uma vez. O custo é que token copiado do aparelho vale até ser
+# revogado — a janela curta nunca protegeu contra isso de verdade, já que cada
+# uso a renovava. Voltar a expirar é trocar o None por um `timedelta`: as duas
+# checagens abaixo já tratam os dois casos.
+SESSION_IDLE_TTL: timedelta | None = None
 
 
 @dataclass
@@ -90,7 +92,10 @@ def get(token: str) -> PortalSession | None:
         if row is None:
             return None
 
-        if utc_now() - _aware(row.last_used_at) > SESSION_IDLE_TTL:
+        if (
+            SESSION_IDLE_TTL is not None
+            and utc_now() - _aware(row.last_used_at) > SESSION_IDLE_TTL
+        ):
             db.delete(row)
             db.commit()
             return None
@@ -139,7 +144,13 @@ def purge_expired() -> int:
     """
     Remove sessões paradas além do TTL. Chamado no startup; sem isso a tabela
     só cresce, já que uma sessão abandonada nunca passa por `get()` de novo.
+
+    Com `SESSION_IDLE_TTL` em None não há sessão parada demais: a linha por
+    aluno é barata, e apagar aqui seria deslogar quem voltou do recesso.
     """
+    if SESSION_IDLE_TTL is None:
+        return 0
+
     cutoff = utc_now() - SESSION_IDLE_TTL
     with SessionLocal() as db:
         rows = db.execute(

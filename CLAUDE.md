@@ -41,16 +41,21 @@ respondem `servicenotavailable` nesta instância. O total por disciplina sai de
 `/grade/report/user`. Situação acadêmica ("Aprovado") o Moodle não guarda: o
 app deriva do corte em `PASSING_GRADE`, e só para disciplina encerrada.
 
-**O aluno fica conectado, e onde o token mora é escolha dele.** O token vivia
+**O aluno fica conectado e não é mais perguntado sobre isso.** O token vivia
 no `sessionStorage` e a sessão do servidor durava 8h: no iPhone, fechar o app
-instalado é fechar a aba, então toda abertura caía no login. Agora o padrão é
-`localStorage` com TTL de 30 dias renovado a cada uso (`SESSION_IDLE_TTL` em
-`session.py`), e a caixa "Manter conectado neste aparelho" desmarcada volta ao
-`sessionStorage` — que é o caso do computador de laboratório, o motivo pelo
-qual era assim para todo mundo. Contra XSS os dois valem o mesmo; a proteção
-real seria cookie httpOnly, anotado em `frontend/src/services/api.ts`. A
-notificação push nunca dependeu dessa sessão: ela usa a senha cifrada da
-própria inscrição.
+instalado é fechar a aba, então toda abertura caía no login. Virou
+`localStorage` com TTL de 30 dias e uma caixa "Manter conectado neste
+aparelho" marcada por padrão — e nem os 30 dias nem a caixa se sustentaram:
+quem passa um recesso sem abrir volta em fevereiro e cai no login, e a caixa
+só existia para o computador de laboratório, onde o botão "Sair" do perfil já
+resolvia. Hoje o token é sempre `localStorage` e `SESSION_IDLE_TTL`
+(`session.py`) é `None` — a sessão acaba em "Sair", em `revoke_for_user` ou
+numa `SESSION_SECRET` nova, que derruba todas de uma vez porque a senha
+guardada deixa de decifrar. Voltar a expirar é trocar o `None` por um
+`timedelta`; `get()` e `purge_expired()` já tratam os dois casos. Contra XSS
+`localStorage` e `sessionStorage` valem o mesmo; a proteção real seria cookie
+httpOnly, anotado em `frontend/src/services/api.ts`. A notificação push nunca
+dependeu dessa sessão: ela usa a senha cifrada da própria inscrição.
 
 **O assistente se chama Lumi e é acessado por um botão flutuante.** O acesso
 ficava na barra de cima, junto de Atualizar — onde o aluno passa uma vez ao
@@ -163,11 +168,11 @@ ver o próximo passo em `docs/PLANO_PUBLICO.md`.
 credencial inteira, só de leitura e trocável num clique. Ele serve o cache —
 buscar no Moodle exigiria a senha e demoraria mais do que o cliente espera.
 
-**A notificação no celular guarda a senha por mais tempo que a sessão.** Este é
-o custo do recurso, e está escrito na tela de opt-in: para avisar "saiu nota"
-com o app fechado, o servidor entra no Moodle sozinho às 7h, 13h e 19h — e a
-senha da sessão morre em 8h de inatividade, ou seja, nunca está lá de manhã.
-Quem liga os avisos guarda a senha cifrada junto da inscrição
+**A notificação no celular guarda a senha fora da sessão.** Este é o custo do
+recurso, e está escrito na tela de opt-in: para avisar "saiu nota" com o app
+fechado, o servidor entra no Moodle sozinho às 7h, 13h e 19h — quem dispara é o
+relógio e não uma visita, então não há token de navegador nenhum em jogo nessa
+hora. Quem liga os avisos guarda a senha cifrada junto da inscrição
 (`push_subscriptions.password_enc`), e desligar apaga na hora. Três horários e
 não um por hora: cada rodada é um login no Moodle da UNOESC por aluno inscrito.
 Os textos vivem em `push.py`, o relógio em `scheduler.py`.
