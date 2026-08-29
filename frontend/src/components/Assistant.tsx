@@ -25,7 +25,7 @@ const SUGESTOES = [
   'O que eu preciso entregar nesta semana?',
   'Monte um plano de estudo até a minha próxima prova.',
   'Tem algum dia com entregas acumuladas?',
-  'Por onde eu começo hoje?',
+  'Sobre o que é a minha próxima entrega?',
 ];
 
 /**
@@ -224,8 +224,8 @@ const Assistant: React.FC<AssistantProps> = ({
           <div>
             <h2 className="lumi__nome">Lumi</h2>
             <p className="lumi__descricao">
-              Enxerga suas atividades pendentes — título, data e disciplina. Não tem
-              acesso ao conteúdo delas.
+              Enxerga seus prazos e resume o que cada atividade pede. Não faz o
+              trabalho por você.
             </p>
           </div>
         </header>

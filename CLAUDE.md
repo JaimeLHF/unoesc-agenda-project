@@ -80,11 +80,30 @@ para um dado que só interessa a quem escreveu. A chave inclui a matrícula
 laboratório o próximo aluno abre o mesmo Chrome. Ver
 `frontend/src/lib/lumiConversas.ts`.
 
-**O enunciado da atividade é lido, mas só para a tela.** `activity_content()` já
-foi apagado uma vez, porque alimentava um assistente que respondia provas.
-Voltou em 14/08/2026 com destino único: a página da atividade. `assistant.py`
-monta o contexto com data, disciplina e título, e só. Não passe o enunciado para
-ele.
+**A Lumi lê o enunciado, e só para resumir.** `activity_content()` já foi
+apagado uma vez, porque alimentava um assistente que respondia provas — por
+isso, entre 14/08 e 29/08/2026, ele servia só a página da atividade. O que
+mudou: o aluno perguntava "sobre o que é essa atividade?" e ouvia "não tenho
+acesso", que é a pergunta mais natural de quem olha um título e uma data. Hoje
+`quer_conteudo()` reconhece a pergunta de conteúdo, `escolher_atividade()`
+decide **no servidor** de qual atividade se trata (pontuando as palavras da
+pergunta contra título e disciplina, com a conversa anterior como segunda
+tentativa para o "essa"), e só então o enunciado daquela entra no prompt,
+cortado em 4000 caracteres. A escolha é do servidor de propósito: o modelo não
+escolhe URL, senão a Lumi vira um navegador com a senha do aluno. O que não
+volta é o assistente que resolve: `_REGRAS_COM_ENUNCIADO` proíbe resposta,
+código pronto, texto para copiar e rascunho da entrega, e o teste de funções
+puras verifica que essa regra está no prompt. Custa um login no Moodle e uma
+requisição, só nas perguntas de conteúdo — pergunta de agenda não paga isso.
+
+**A pergunta só desconta do saldo quando a Lumi ajuda.** Era o contrário: o
+consumo era gravado antes da chamada, para que falha de API não saísse de
+graça. Só que quem paga essa conta é o aluno que perguntou e não recebeu nada
+— e a Lumi respondendo "não tenho acesso a isso" gastava uma das 20 do mês. O
+modelo abre a resposta com a linha `SEM_AJUDA` quando não conseguiu ajudar; o
+backend tira a marca, mostra o texto e não desconta. Falha da API (502/503)
+também não desconta. O risco aceito é a chamada que custa e não entra na
+conta: é o app que erra nessa hora, não o aluno.
 
 **A espera é narrada, e a narração segue o servidor.** "Buscando seus dados no
 Moodle…" ficava parado por até um minuto na primeira busca — esqueleto

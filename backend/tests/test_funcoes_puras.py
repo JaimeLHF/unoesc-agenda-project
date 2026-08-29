@@ -14,7 +14,7 @@ Sai com código 1 na primeira falha.
 import sys
 from datetime import datetime
 
-from app import push
+from app import assistant, push
 from app.database import event_key, moodle_event_key, stable_event_key
 from app.moodle import (
     TZ_BR,
@@ -239,6 +239,70 @@ def main_teste() -> int:
           "456", "cmid sai do link do questionário")
     igual(cmid_da_url("https://moodle.unoesc.edu.br/course/view.php?id=9"), None,
           "link de curso não é atividade — casar aqui esconderia a atividade 9")
+
+    # ---- Lumi: quando o enunciado entra, e quando a pergunta é de graça ----
+    #
+    # As duas coisas quebram caladas. Uma detecção frouxa manda o app abrir o
+    # Moodle a cada "e aí?" — espera na tela por nada; uma frouxa demais no
+    # outro sentido deixa o aluno ouvindo "não tenho acesso", que foi a queixa
+    # de 29/08/2026. E o desconto injusto do saldo só apareceria no contador.
+    igual(assistant.quer_conteudo("Sobre o que é exatamente a atividade de "
+                                  "desenvolvimento mobile?"), True,
+          "pergunta de conteúdo é reconhecida")
+    igual(assistant.quer_conteudo("O que preciso fazer na avaliativa 2?"), True,
+          "'o que preciso fazer' pede o enunciado")
+    igual(assistant.quer_conteudo("me explica essa atividade"), True,
+          "'explica' pede o enunciado")
+    igual(assistant.quer_conteudo("O que preciso entregar até o dia 06/09?"), True,
+          "pergunta de agenda com 'o que preciso entregar' também abre o "
+          "enunciado — custa uma requisição e responde melhor")
+    igual(assistant.quer_conteudo("Quais são meus prazos desta semana?"), False,
+          "pergunta de agenda pura não vai ao Moodle")
+    igual(assistant.quer_conteudo("Como divido meu tempo até sexta?"), False,
+          "planejamento não precisa de enunciado")
+
+    class _Ev:
+        def __init__(self, title, subject, date, url="http://x"):
+            self.title, self.subject, self.date, self.url = title, subject, date, url
+
+    eventos = [
+        _Ev("Entrega da Atividade Avaliativa 2", "DESENVOLVIMENTO MOBILE", "2026-09-06"),
+        _Ev("Entrega da Atividade Avaliativa 2",
+            "REDES DE COMPUTADORES E SISTEMAS DISTRIBUÍDOS", "2026-09-06"),
+    ]
+    escolhido = assistant.escolher_atividade(
+        "Sobre o que é exatamente a atividade de desenvolvimento mobile?", eventos)
+    igual(escolhido and escolhido.subject, "DESENVOLVIMENTO MOBILE",
+          "a disciplina citada escolhe entre duas entregas de mesmo nome")
+    escolhido = assistant.escolher_atividade(
+        "e essa atividade, sobre o que é?", eventos,
+        anteriores="quero saber de redes de computadores")
+    igual(escolhido and escolhido.subject,
+          "REDES DE COMPUTADORES E SISTEMAS DISTRIBUÍDOS",
+          "'essa' aponta para o que foi dito antes na conversa")
+    igual(assistant.escolher_atividade("bom dia", eventos), None,
+          "pergunta sem nenhuma pista não abre atividade nenhuma")
+    igual(assistant.escolher_atividade("qualquer coisa", []), None,
+          "agenda vazia não escolhe atividade")
+
+    igual(assistant.formatar_enunciado(eventos[0], {"intro": ""}), "",
+          "atividade sem enunciado não vira bloco vazio no prompt")
+    longo = assistant.formatar_enunciado(eventos[0], {"intro": "x" * 9000}, limite=100)
+    igual(len(longo) < 400, True, "enunciado gigante é cortado")
+
+    igual(assistant.separar_marca("SEM_AJUDA\nNão tenho essa informação."),
+          ("Não tenho essa informação.", False),
+          "resposta marcada sai limpa e não desconta a pergunta")
+    igual(assistant.separar_marca("06/09 às 23:59: entrega de Mobile."),
+          ("06/09 às 23:59: entrega de Mobile.", True),
+          "resposta útil desconta normalmente")
+    igual(assistant.separar_marca("SEM_AJUDA"), ("Não consegui ajudar com isso.", False),
+          "marca sozinha ainda mostra alguma frase ao aluno")
+
+    prompt = assistant.build_system_prompt("- 06/09 | MOBILE | entrega: AV2",
+                                           "Enunciado: faça um app.")
+    igual("Nunca produza o trabalho" in prompt, True,
+          "com enunciado à mão, a regra de não resolver o trabalho está no prompt")
 
     print()
     if falhas:

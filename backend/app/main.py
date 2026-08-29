@@ -26,6 +26,7 @@ except ImportError:  # pragma: no cover - dependência declarada
 from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
+from types import SimpleNamespace
 from typing import Optional
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, UploadFile
@@ -864,14 +865,19 @@ async def ask_assistant(
 ):
     """
     Assistente de organização: prioridades, plano de estudo, acúmulo de prazos.
+    Quando a pergunta é sobre o que a atividade pede, o enunciado **daquela**
+    atividade entra no prompt — a escolha é de `assistant.escolher_atividade`,
+    aqui no servidor, então só abre o que já está na agenda deste aluno.
 
-    Só recebe metadados dos eventos já em cache — título, data, disciplina.
-    Não abre atividade no Moodle e não responde questão de prova; ver o prompt
-    em `assistant.build_system_prompt`.
+    A pergunta só é descontada do saldo do mês quando a Lumi ajuda: falha da
+    API e resposta marcada com `SEM_AJUDA` saem de graça. Cobrar por "não sei"
+    é cobrar pelo que o aluno não recebeu. O risco conhecido é a chamada que
+    custa e não entra na conta — aceito, porque é o app que erra nessa hora.
     """
     if not request.messages:
         raise HTTPException(status_code=400, detail="Envie ao menos uma mensagem.")
 
+    alvo = None
     with repo.get_session() as db:
         user = repo.get_user(db, session.user_id)
         if user is None:
@@ -883,22 +889,48 @@ async def ask_assistant(
                 detail="O assistente não está disponível no momento.",
             )
 
-        try:
-            quota = assistant.consume_quota(user)
-        except assistant.QuotaExceededError as exc:
-            raise HTTPException(status_code=429, detail=str(exc)) from exc
+        quota = assistant.current_quota(user)
+        if quota.remaining <= 0:
+            raise HTTPException(
+                status_code=429,
+                detail=f"Você usou as {quota.limit} perguntas deste mês.",
+            )
 
         context = assistant.build_context(db, session.user_id)
-        # Grava o consumo antes de chamar o modelo: numa falha da API o aluno
-        # perde uma pergunta do saldo, o que é preferível a deixar a chamada
-        # sair de graça quando a resposta chega e o commit não.
-        db.commit()
 
-    system_prompt = assistant.build_system_prompt(context)
+        pergunta = request.messages[-1].content
+        if assistant.quer_conteudo(pergunta):
+            anteriores = "\n".join(m.content for m in request.messages[:-1])
+            evento = assistant.escolher_atividade(
+                pergunta, assistant.eventos_pendentes(db, session.user_id), anteriores
+            )
+            # Os campos saem agora, com a sessão aberta: o objeto vira
+            # `detached` ao sair do `with` e ler atributo ali dá erro.
+            if evento is not None and evento.url:
+                alvo = SimpleNamespace(
+                    title=evento.title, subject=evento.subject,
+                    date=evento.date, url=evento.url,
+                )
+
+    enunciado = ""
+    if alvo is not None:
+        # Falhar aqui não derruba a resposta: a Lumi segue com data, título e
+        # disciplina, que é exatamente o que ela tinha antes desta busca.
+        try:
+            with MoodleClient() as moodle:
+                await asyncio.to_thread(moodle.login, session.username, session.password)
+                conteudo = await asyncio.to_thread(moodle.activity_content, alvo.url, alvo.title)
+            enunciado = assistant.formatar_enunciado(alvo, conteudo)
+        except Exception as exc:
+            observability.logger.info(
+                "Enunciado indisponível para a Lumi (user=%s): %s", session.user_id, exc
+            )
+
+    system_prompt = assistant.build_system_prompt(context, enunciado)
     messages = [{"role": m.role, "content": m.content} for m in request.messages]
 
     try:
-        answer = await asyncio.to_thread(assistant.ask, system_prompt, messages)
+        bruta = await asyncio.to_thread(assistant.ask, system_prompt, messages)
     except assistant.AssistantUnavailableError as exc:
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     except Exception as exc:
@@ -906,6 +938,21 @@ async def ask_assistant(
         raise HTTPException(
             status_code=502, detail=mensagem_amigavel(codigo, "falar com o assistente")
         ) from exc
+
+    answer, ajudou = assistant.separar_marca(bruta)
+
+    if ajudou:
+        with repo.get_session() as db:
+            user = repo.get_user(db, session.user_id)
+            if user is not None:
+                try:
+                    quota = assistant.consume_quota(user)
+                    db.commit()
+                except assistant.QuotaExceededError:
+                    # Corrida com outra aba do mesmo aluno: a resposta já foi
+                    # gerada, então ela vai — o saldo já está zerado de todo
+                    # jeito e a próxima pergunta bate no 429 lá em cima.
+                    pass
 
     return AssistantResponse(response=answer, used=quota.used, limit=quota.limit)
 

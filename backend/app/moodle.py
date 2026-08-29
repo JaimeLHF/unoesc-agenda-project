@@ -1179,10 +1179,10 @@ class MoodleClient:
         Página de uma atividade, lida com a sessão que o backend já mantém.
 
         Este método já existiu e foi apagado quando o app virou público, porque
-        alimentava o assistente que resolvia provas. Voltou em 14/08/2026 com
-        um destino só: a tela de detalhe que o aluno abre. O conteúdo daqui
-        **não entra no contexto do assistente** — ele continua montando o
-        prompt a partir de data, disciplina e título, e só (`assistant.py`).
+        alimentava o assistente que resolvia provas. Voltou em 14/08/2026 para
+        a tela de detalhe, e desde 29/08/2026 também alimenta a Lumi — mas só
+        na pergunta de conteúdo, só a atividade que o servidor escolheu, e com
+        o prompt proibindo produzir o trabalho (`assistant.py`).
 
         O aluno já vê exatamente isto no Moodle dele; o que muda é não precisar
         logar de novo para ler.
