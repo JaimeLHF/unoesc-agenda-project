@@ -1787,6 +1787,12 @@ body {
   color: var(--color-primary);
 }
 
+.alert-pill--later {
+  background: var(--color-surface-2);
+  border-color: var(--color-border);
+  color: var(--color-surface-2-ink);
+}
+
 /* ---- Card de evento clicável + badge de data ---- */
 .event-card--clickable {
   display: flex;

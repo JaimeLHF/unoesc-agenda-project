@@ -9,7 +9,15 @@ interface EventAlertsProps {
   onOpenEvent: (event: AcademicEvent) => void;
 }
 
-type Urgency = 'today' | 'tomorrow' | 'soon' | 'week';
+type Urgency = 'today' | 'tomorrow' | 'soon' | 'week' | 'later';
+
+/**
+ * Quantos dias à frente a faixa enxerga. Eram 7, e trabalho de duas semanas
+ * só aparecia com uma semana de prazo — tarde demais para se programar. São
+ * 15 porque é o horizonte em que dá para começar: mais que isso e a faixa de
+ * urgência viraria a agenda inteira repetida no topo.
+ */
+const DIAS_ALERTA = 15;
 
 interface Alert {
   event: AcademicEvent;
@@ -43,13 +51,14 @@ function computeAlerts(events: AcademicEvent[]): Alert[] {
 
     const eventDay = new Date(`${ev.date}T00:00:00`).getTime();
     const diffDays = Math.round((eventDay - todayMs) / (1000 * 60 * 60 * 24));
-    if (diffDays < 0 || diffDays > 7) continue;
+    if (diffDays < 0 || diffDays > DIAS_ALERTA) continue;
 
     let urgency: Urgency;
     if (diffDays === 0) urgency = 'today';
     else if (diffDays === 1) urgency = 'tomorrow';
     else if (diffDays <= 3) urgency = 'soon';
-    else urgency = 'week';
+    else if (diffDays <= 7) urgency = 'week';
+    else urgency = 'later';
 
     alerts.push({ event: ev, urgency, diffDays });
   }
@@ -93,10 +102,15 @@ function buildMessage(alert: Alert): { icon: string; text: string } {
         icon: '📅',
         text: `EM ${diffDays} DIAS: ${noun} de ${subject}`,
       };
+    case 'later':
+      return {
+        icon: '📌',
+        text: `EM ${diffDays} DIAS: ${noun} de ${subject}`,
+      };
   }
 }
 
-const EventAlerts: React.FC<EventAlertsProps> = ({ events, maxAlerts = 6, onOpenEvent }) => {
+const EventAlerts: React.FC<EventAlertsProps> = ({ events, maxAlerts = 10, onOpenEvent }) => {
   const { isDone } = useDoneEvents();
 
   // Eventos já marcados como concluídos não geram alertas — o aluno já os fez
