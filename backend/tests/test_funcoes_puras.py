@@ -199,6 +199,21 @@ def main_teste() -> int:
           "Prova em 45 min", "abaixo de uma hora e meia a conta é em minutos")
     igual(push.lembrete([], 0), None, "tarde sem compromisso não vira notificação")
 
+    # O empurrãozinho de quem sumiu. Não tem fato por trás, então o que
+    # sustenta é o repertório: frase repetida vira paisagem, e frase que
+    # promete tela inexistente custa a confiança de quem abriu.
+    verificar(len(push.LEMBRETES_DE_HABITO) >= 10,
+              "há repertório suficiente para não repetir frase no mesmo mês")
+    verificar(len({t for t, _, _ in push.LEMBRETES_DE_HABITO})
+              == len(push.LEMBRETES_DE_HABITO), "nenhum título de hábito repetido")
+    verificar(all(t and c and u.startswith("/")
+                  for t, c, u in push.LEMBRETES_DE_HABITO),
+              "toda frase tem título, corpo e um destino dentro do app")
+    verificar(all(len(t) <= 40 for t, _, _ in push.LEMBRETES_DE_HABITO),
+              "título curto o bastante para caber na tela bloqueada")
+    igual(push.habito(len(push.LEMBRETES_DE_HABITO)), push.habito(0),
+          "a rotação dá a volta em vez de estourar a lista")
+
     igual(push.notas_novas([{"name": "90112 - Farmacologia", "final_grade": 85}])[1],
           "Farmacologia — 8,5", "a nota aparece na escala que o aluno lê")
 

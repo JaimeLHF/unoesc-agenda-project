@@ -277,6 +277,18 @@ do laboratório. A chave inclui a matrícula, como no `lumiConversas`. Desligar
 os avisos pelo perfil devolve o convite, senão quem apertou "não mostre mais"
 ficaria sem caminho de volta. Ver `frontend/src/lib/avisoNotificacao.ts`.
 
+**O empurrãozinho só existe para quem sumiu.** São 12 frases de lembrança do
+app ("Sua agenda pode ter mudado", "Por onde começar esta semana?") em
+`push.LEMBRETES_DE_HABITO`, e elas não têm fato por trás — é o tipo de aviso
+que ensina o aluno a ignorar os outros. Por isso três travas no `_habito` do
+`scheduler.py`: só no disparo das 13h **quando nada concreto saiu naquela
+rodada**, só para quem não abre o app há `DIAS_SEM_ABRIR` (3) dias — o
+`last_scraped_at`, que marca visita de verdade e não rodada do relógio — e no
+máximo um a cada `DIAS_ENTRE_HABITOS` (3) dias. A rotação é sequencial e
+guardada por aluno (`push:habito:frase` no `meta`): a mesma frase duas vezes
+seguidas vira paisagem. Toda frase precisa ser verdade sobre alguma tela que
+existe hoje.
+
 **Notificação demais queima o canal.** No Android, bloqueio de notificação não
 se recupera — o navegador não pergunta de novo. Por isso são no máximo três por
 dia, com conteúdo diferente em cada uma, e o `tag` faz o aviso novo substituir o

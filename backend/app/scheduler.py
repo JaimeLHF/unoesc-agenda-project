@@ -4,7 +4,8 @@ O relógio que dispara as notificações.
 ## Os quatro horários
 
     07:00  resumo do dia + o que mudou desde ontem
-    13:00  só o que mudou (nota lançada, prazo alterado)
+    13:00  só o que mudou (nota lançada, prazo alterado) — e, quando não
+           mudou nada e o aluno sumiu há dias, um empurrãozinho
     17:00  o que começa daqui a pouco — **não fala com o Moodle**
     19:00  véspera ("amanhã tem prova") + o que mudou
 
@@ -64,6 +65,14 @@ SLOTS_SEM_MOODLE = {"lembrete"}
 # do dia já anunciou de manhã.
 LEMBRETE_MIN = timedelta(minutes=30)
 LEMBRETE_MAX = timedelta(hours=5)
+
+# O empurrãozinho de quem sumiu (`push.LEMBRETES_DE_HABITO`). Só sai para quem
+# não abre o app há `DIAS_SEM_ABRIR` dias — quem entrou ontem já sabe que o app
+# existe, e mandar "lembre-se de atualizar" para ele é o aviso que ensina a
+# ignorar os outros. `DIAS_ENTRE_HABITOS` é o piso entre dois: um a cada três
+# dias é lembrete; um por dia é o que faz o aluno desligar tudo.
+DIAS_SEM_ABRIR = 3
+DIAS_ENTRE_HABITOS = 3
 
 # De quanto em quanto tempo o laço acorda para olhar o relógio. Um minuto é
 # folgado: a janela de tolerância abaixo é bem maior que isso.
@@ -220,6 +229,57 @@ def _em_breve(user_id: str, agora: datetime) -> tuple[list[dict], int]:
     return [e for _, e in proximos], int(proximos[0][0].total_seconds() // 60)
 
 
+def _dias_desde(marca: Optional[str], agora: datetime) -> int:
+    """
+    Quantos dias desde a marca guardada no `meta`. Sem marca, um número grande.
+
+    Aceita data (`2026-09-01`) e instante (`2026-09-01T13:00:00+00:00`): a
+    primeira é do envio deste aviso, a segunda é do `last_scraped_at`.
+    """
+    if not marca:
+        return 10_000
+    try:
+        quando = datetime.fromisoformat(marca)
+    except ValueError:
+        return 10_000
+    if quando.tzinfo is None:
+        quando = quando.replace(tzinfo=agora.tzinfo)
+    return (agora - quando).days
+
+
+def _habito(user_id: str, agora: datetime) -> Optional[tuple[tuple[str, str, str], int]]:
+    """
+    (aviso de hábito, próximo índice) para quem sumiu — ou `None`.
+
+    Duas perguntas antes de falar: faz dias que ele não abre o app? E faz dias
+    que este aviso não sai? Só o "sim" nas duas justifica uma notificação sem
+    fato novo por trás.
+    """
+    with repo.get_session() as db:
+        aberto_em = repo.get_meta(db, user_id, "last_scraped_at")
+        enviado_em = repo.get_meta(db, user_id, "push:habito")
+        indice = repo.get_meta(db, user_id, "push:habito:frase")
+
+    if _dias_desde(aberto_em, agora) < DIAS_SEM_ABRIR:
+        return None
+    if _dias_desde(enviado_em, agora) < DIAS_ENTRE_HABITOS:
+        return None
+
+    try:
+        atual = int(indice or 0)
+    except ValueError:
+        atual = 0
+    return push.habito(atual), atual + 1
+
+
+def _marcar_habito(user_id: str, agora: datetime, proximo: int) -> None:
+    """Guarda quando saiu e qual frase vem depois — a rotação é por aluno."""
+    with repo.get_session() as db:
+        repo.set_meta(db, user_id, "push:habito", agora.date().isoformat())
+        repo.set_meta(db, user_id, "push:habito:frase", str(proximo))
+        db.commit()
+
+
 # ---------------------------------------------------------------------------
 # Disparo
 # ---------------------------------------------------------------------------
@@ -334,6 +394,18 @@ def atender(user_id: str, slot: str) -> int:
             enviados += entregar(
                 user_id, push.resumo_do_dia(_do_dia(user_id, hoje.isoformat())), "dia"
             )
+        elif slot == "meio" and enviados == 0:
+            # Só quando o disparo não teve nada de concreto a dizer: nota
+            # lançada e prazo alterado são o motivo pelo qual ele ligou os
+            # avisos, e um empurrãozinho na mesma leva rouba a atenção deles.
+            agora = _agora()
+            proposta = _habito(user_id, agora)
+            if proposta is not None:
+                aviso, proximo = proposta
+                saiu = entregar(user_id, aviso, "habito")
+                if saiu:
+                    _marcar_habito(user_id, agora, proximo)
+                enviados += saiu
         elif slot == "lembrete":
             agora = _agora()
             proximos, minutos = _em_breve(user_id, agora)

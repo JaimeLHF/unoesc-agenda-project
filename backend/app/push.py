@@ -312,6 +312,54 @@ def prazos_alterados(eventos: list[dict]) -> Optional[tuple[str, str, str]]:
     )
 
 
+# ---------------------------------------------------------------------------
+# O empurrãozinho de quem sumiu
+#
+# Aviso sem fato novo é o que queima o canal mais rápido — no Android, quem
+# bloqueia não é perguntado de novo. Por isso este repertório só sai para quem
+# **não abre o app há dias**, no máximo um a cada três dias, e nunca no mesmo
+# disparo em que já saiu nota ou mudança de prazo (ver `_habito` no
+# `scheduler.py`). A rotação é sequencial e guardada por aluno: repetir a mesma
+# frase duas vezes seguidas é o que faz o aviso virar paisagem.
+#
+# Toda frase aqui precisa ser verdade sobre o app. "Assine o calendário" existe
+# no perfil, a Lumi existe no botão flutuante, o boletim existe na disciplina —
+# um convite para uma tela que não existe custa a confiança de quem abriu.
+# ---------------------------------------------------------------------------
+
+LEMBRETES_DE_HABITO: list[tuple[str, str, str]] = [
+    ("Sua agenda pode ter mudado",
+     "Abra e atualize — leva alguns segundos.", "/"),
+    ("Por onde começar esta semana?",
+     "Pergunte para a Lumi, no botão do canto da tela.", "/"),
+    ("Prazo não avisa duas vezes",
+     "Dê uma olhada no que vem pela frente.", "/"),
+    ("Saiu nota nova?",
+     "O boletim de cada disciplina está na agenda.", "/"),
+    ("Semana cheia ou tranquila?",
+     "A agenda conta quantos compromissos vêm aí.", "/"),
+    ("Todas as disciplinas num lugar só",
+     "Prazos, provas e webconferências na mesma tela.", "/"),
+    ("Organize os estudos com a Lumi",
+     "Ela responde em cinco linhas o que fazer primeiro.", "/"),
+    ("Cinco minutos agora poupam a correria",
+     "Confira os prazos da semana.", "/"),
+    ("Sua agenda no calendário do celular",
+     "Assine o link no seu perfil e nunca mais copie data na mão.", "/"),
+    ("Instale na tela inicial",
+     "Assim a agenda abre como app, e os avisos chegam sempre.", "/"),
+    ("O que você entrega esta semana?",
+     "Abra a agenda e confira.", "/"),
+    ("Marque o que já fez",
+     "O concluído sai da frente e sobra só o que falta.", "/"),
+]
+
+
+def habito(indice: int) -> tuple[str, str, str]:
+    """A frase da vez. O índice gira sozinho quando passa do fim da lista."""
+    return LEMBRETES_DE_HABITO[indice % len(LEMBRETES_DE_HABITO)]
+
+
 def payload_de_teste() -> tuple[str, str, str]:
     """O que o botão "enviar teste" manda. Existe para o aluno conferir."""
     return (
