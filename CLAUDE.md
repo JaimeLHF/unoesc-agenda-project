@@ -230,6 +230,16 @@ banco por dois caminhos — o disparo de notificação (três vezes ao dia) e a
 própria visita ao boletim, que agora grava o que leu. Quem nunca fez nem uma
 coisa nem outra não recebe previsão nenhuma, e o cartão fica como estava.
 
+**A tela `/notas` responde "como estou no semestre?".** O cartão de cada
+disciplina já diz quanto falta, mas espalhado pela grade — e essa pergunta é
+sobre o conjunto: qual está em risco, qual já está garantida, onde vale gastar
+o fim de semana. `BoletimPage.tsx` ordena da mais urgente para a mais tranquila
+e **não busca nada**: monta com o que a agenda já tem em memória, por isso abre
+instantânea. Disciplina sem boletim guardado aparece como "sem base" em vez de
+sumir — some da conta, não da lista. Os números vêm nos campos
+`grade_current`/`grade_needed`/`grade_status` do mesmo `/api/cache`; a frase
+continua vindo pronta do servidor, senão haveria duas redações do mesmo cálculo.
+
 **Cinco coisas pequenas que vieram juntas, e o que cada uma custa.** Um lote
 de 01/09/2026: o **simulador** ("e se eu tirar 8?") vive no `GradesPanel` e
 repete a fórmula do `grades.py` no cliente de propósito — ele recalcula a cada
@@ -317,10 +327,18 @@ seguinte comparava contra a data velha de novo, e a página da atividade (que l�
 o banco) mostrava 30/09 enquanto o cartão da agenda (que lê o scrape) mostrava
 02/09. Duas travas: `extract_webconferences` fica com o primeiro anúncio de cada
 chave, e `upsert_events` ignora chave repetida dentro do mesmo lote, valha ela
-de onde vier. Junto disso entrou o disparo das **17h** (`lembrete`), o único que
-**não abre o Moodle** — ele só lê o banco e avisa do que começa entre 30 minutos
-e 5 horas dali, que é a webconferência das 19h. O resumo das 7h fala do dia
-inteiro e já saiu da tela quando ela chega.
+de onde vier. Junto disso entrou o disparo das **17h** (`lembrete`) e, depois,
+o das **21h** (`ultima_chamada`) — os dois **não abrem o Moodle**, só leem o
+banco. O das 17h avisa do que começa entre 30 minutos e 5 horas dali, que é a
+webconferência das 19h; o das 21h fala da entrega que vence hoje e ainda não
+foi marcada como concluída, porque nota perdida por esquecimento é a única que
+não se recupera estudando. São cinco horários e três idas ao Moodle: o resumo
+das 7h fala do dia inteiro e já saiu da tela quando a noite chega.
+
+O resumo das 7h também diz o que **abriu para envio** hoje: o calendário do
+Moodle marca essa data (`event_type: open`) e não avisa ninguém, e o banco
+jogava o campo fora. Vai junto do resumo, e não num horário próprio — é a mesma
+pergunta ("o que tenho hoje?") vista do outro lado.
 
 **O `fly.toml` deixou de escalar a zero por causa disso.** Disparo das 7h nasce
 do relógio, não de uma visita, e máquina suspensa não olha relógio. Quem quiser
@@ -348,6 +366,15 @@ máximo um a cada `DIAS_ENTRE_HABITOS` (3) dias. A rotação é sequencial e
 guardada por aluno (`push:habito:frase` no `meta`): a mesma frase duas vezes
 seguidas vira paisagem. Toda frase precisa ser verdade sobre alguma tela que
 existe hoje.
+
+**Notificação avulsa para todo mundo é comando na mão do Jaime.** Não existe
+endpoint nem botão para isso, de propósito: é a única ação do projeto que
+alcança o celular de outra pessoa sem que ela tenha pedido. O caminho é
+`fly ssh console` chamando `scheduler.entregar(user_id, (titulo, corpo, url),
+tag)` — funciona com uma das 12 frases de `push.LEMBRETES_DE_HABITO` ou com
+texto livre. Duas coisas que o envio manual **não** faz e o automático faz:
+marcar `push:habito` no `meta` (então o disparo das 13h pode mandar outra no
+mesmo dia) e respeitar as travas de quem sumiu.
 
 **Notificação demais queima o canal.** No Android, bloqueio de notificação não
 se recupera — o navegador não pergunta de novo. Por isso são no máximo três por
