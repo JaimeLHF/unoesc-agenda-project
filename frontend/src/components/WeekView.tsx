@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import type { AcademicEvent, EventType } from '../types';
 import { useDoneEvents } from '../contexts/DoneEventsContext';
 import Icon from './Icon';
-import { compartilharCartao } from '../lib/cartaoDaSemana';
+import { baixarCartao } from '../lib/cartaoDaSemana';
 import { formatarPeso, mudancaDePrazo } from '../lib/avisos';
 import { cargaDaSemana, descreverCarga } from '../lib/semana';
 
@@ -120,9 +120,10 @@ const WeekView: React.FC<WeekViewProps> = ({ events, onOpenEvent }) => {
             <Icon name="voltar" size={0.9} />
           </button>
           {/*
-            O cartão da semana: uma imagem com estes mesmos prazos, para mandar
-            no grupo da turma. É como este app é descoberto — link solto no
-            grupo não diz o que ele faz, e a imagem diz.
+            O cartão da semana: baixa uma imagem com estes mesmos prazos, para
+            o aluno mandar no grupo da turma. É como este app é descoberto —
+            link solto no grupo não diz o que ele faz, e a imagem diz. Sempre
+            download: o arquivo salvo é o que ele controla.
           */}
           <button
             type="button"
@@ -131,14 +132,14 @@ const WeekView: React.FC<WeekViewProps> = ({ events, onOpenEvent }) => {
             onClick={async () => {
               setCompartilhando(true);
               const eventosDaSemana = dias.flatMap((d) => d.eventos);
-              const deu = await compartilharCartao(eventosDaSemana, intervalo(primeira));
+              const deu = await baixarCartao(eventosDaSemana, intervalo(primeira));
               setCompartilhando(false);
               if (!deu) alert('Não consegui gerar a imagem neste navegador.');
             }}
-            aria-label="Compartilhar a semana como imagem"
+            aria-label="Baixar a semana como imagem"
           >
             <Icon name="mais" size={0.9} />
-            Cartão
+            Baixar cartão
           </button>
         </div>
       </div>

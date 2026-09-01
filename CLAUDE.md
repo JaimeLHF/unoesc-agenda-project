@@ -244,7 +244,10 @@ sem suporte ele não faz nada, e nada depende dele. A **busca** ocupa o lugar
 das visões enquanto há texto — mostrar as duas coisas faria procurar dentro da
 resposta. O **cartão da semana** (`lib/cartaoDaSemana.ts`) é `canvas` na mão,
 sem biblioteca, e não leva nome, matrícula nem nota: ele vai para o grupo da
-turma.
+turma. Ele **sempre baixa** o PNG — a folha de compartilhamento do sistema
+(`navigator.share`) chegou a estar ali e saiu a pedido do Jaime: ela não
+existe no computador, muda de comportamento a cada celular, e o arquivo salvo
+é o que o aluno controla.
 
 **O aviso de nota olha o boletim item a item, não o total.** O total da
 disciplina (`/grade/report/overview`) só existe depois que o Moodle atribui

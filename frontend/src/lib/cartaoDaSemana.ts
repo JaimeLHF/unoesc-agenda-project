@@ -8,9 +8,11 @@
  *
  * Desenhado em `<canvas>` na mão, sem biblioteca: são oito linhas de texto num
  * retângulo, e qualquer pacote de captura de tela custaria mais que o app
- * inteiro pesa hoje. O compartilhamento tenta primeiro o `navigator.share` com
- * arquivo, que é o caminho do celular (abre o WhatsApp direto); onde ele não
- * existe, cai no download do PNG.
+ * inteiro pesa hoje. O resultado é sempre um **download** do PNG: a folha de
+ * compartilhamento do sistema (`navigator.share`) chegou a existir aqui e foi
+ * retirada — ela some no computador, se comporta diferente em cada celular, e
+ * o arquivo salvo é o que o aluno controla, para mandar onde ele quiser e
+ * quando quiser.
  *
  * O que a imagem **não** leva: nome do aluno, matrícula e nota. Ela vai para um
  * grupo — o que aparece ali é o que qualquer colega da turma já sabe.
@@ -115,38 +117,23 @@ export async function desenharCartao(
 }
 
 /**
- * Compartilha o cartão. Devolve `false` quando não deu para fazer nada — aí a
- * tela precisa dizer isso, em vez de fingir que compartilhou.
+ * Baixa o cartão como PNG. Devolve `false` quando não deu para gerar a imagem
+ * — aí a tela precisa dizer isso, em vez de fingir que baixou.
  */
-export async function compartilharCartao(
+export async function baixarCartao(
   eventos: AcademicEvent[],
   intervalo: string,
 ): Promise<boolean> {
   const png = await desenharCartao(eventos, intervalo);
   if (!png) return false;
 
-  const arquivo = new File([png], 'minha-semana.png', { type: 'image/png' });
-
-  // O caminho do celular: abre a folha de compartilhamento do sistema, com o
-  // WhatsApp na primeira posição. `canShare` com arquivo é o único jeito
-  // confiável de saber se o navegador aceita — o `share` existe em lugares
-  // onde arquivo não passa.
-  if (navigator.canShare?.({ files: [arquivo] })) {
-    try {
-      await navigator.share({ files: [arquivo], title: 'Minha semana' });
-      return true;
-    } catch (err) {
-      // Cancelar não é falha: quem fechou a folha de compartilhamento não
-      // quer ver mensagem de erro por isso.
-      return (err as Error)?.name === 'AbortError';
-    }
-  }
-
   const url = URL.createObjectURL(png);
   const link = document.createElement('a');
   link.href = url;
   link.download = 'minha-semana.png';
   link.click();
-  URL.revokeObjectURL(url);
+  // Solta o blob no fim da fila: revogar no mesmo tick cancela o download
+  // antes de ele começar em alguns navegadores.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
   return true;
 }
