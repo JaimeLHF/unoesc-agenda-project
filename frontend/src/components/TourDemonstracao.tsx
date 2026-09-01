@@ -50,9 +50,9 @@ const PASSOS: Passo[] = [
     // A grade inteira, não um cartão: os selos de que este passo fala estão
     // em cartões diferentes, e acender só o primeiro apagava justamente eles.
     seletor: '.subject-grid-large',
-    titulo: 'Cada disciplina, com nota e novidades',
+    titulo: 'Quanto falta para passar',
     texto:
-      'O cartão mostra a nota assim que ela sai e marca o que o professor publicou na sala desde a sua última visita.',
+      'O cartão faz a conta que você faria na calculadora: o que ainda precisa tirar na avaliação que falta. E mostra a nota assim que ela sai, com o que o professor publicou na sala.',
     clicarAntes: '.visao__botao:last-child',
   },
   {

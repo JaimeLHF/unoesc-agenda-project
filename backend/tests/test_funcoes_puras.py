@@ -14,7 +14,7 @@ Sai com código 1 na primeira falha.
 import sys
 from datetime import datetime
 
-from app import assistant, push
+from app import assistant, grades, push
 from app.database import event_key, moodle_event_key, stable_event_key
 from app.moodle import (
     TZ_BR,
@@ -163,6 +163,57 @@ def main_teste() -> int:
     misturada = extract_webconferences(cruzado, "MAT", "https://on.unoesc.edu.br/c", 7)
     igual([e["moodle_event_id"] for e in misturada], ["webconf-7-2"],
           "a data não pula de um bloco para o outro")
+
+    print("\n[8.1] Quanto falta para passar")
+    # A conta que o aluno faz na calculadora do celular. Errar para menos aqui
+    # faz alguém relaxar na prova que decide a aprovação, e ninguém percebe:
+    # o número parece plausível.
+    meio_do_semestre = [
+        {"nome": "AV1", "nota": 6.0, "peso": 25.0, "maximo": 10},
+        {"nome": "AV2", "nota": 9.0, "peso": 50.0, "maximo": 10},
+        {"nome": "AV3", "nota": None, "peso": 25.0, "maximo": 10},
+    ]
+    previsao = grades.prever(meio_do_semestre)
+    igual(previsao["atual"], 6.0, "a média parcial usa o peso de cada avaliação")
+    igual(previsao["precisa"], 4.0, "e devolve quanto falta na que resta")
+    igual(previsao["situacao"], "precisa", "situação de quem ainda depende da última")
+
+    garantido = grades.prever([
+        {"nome": "AV1", "nota": 10.0, "peso": 80.0, "maximo": 10},
+        {"nome": "AV2", "nota": None, "peso": 20.0, "maximo": 10},
+    ])
+    igual(garantido["situacao"], "garantido", "8,0 de 10 com 20% em jogo já fecha a média")
+    verificar("Aprovação garantida" in (grades.frase(garantido) or ""),
+              "e a frase diz isso sem o aluno abrir a calculadora")
+
+    impossivel = grades.prever([
+        {"nome": "AV1", "nota": 2.0, "peso": 80.0, "maximo": 10},
+        {"nome": "AV2", "nota": None, "peso": 20.0, "maximo": 10},
+    ])
+    igual(impossivel["situacao"], "impossivel",
+          "nem 10 nos 20% restantes chega a 7,0 — e a tela precisa dizer")
+
+    # O caso que mais aparece: o Moodle só dá peso ao item depois de lançar a
+    # nota, então no meio do semestre os pesos não fecham. Aqui a resposta
+    # certa é "não dá para saber", nunca um número.
+    sem_peso = grades.prever([
+        {"nome": "AV1", "nota": 9.0, "peso": 20.0, "maximo": 10},
+        {"nome": "AV2", "nota": None, "peso": None, "maximo": 10},
+    ])
+    igual(sem_peso["situacao"], "sem_base", "pesos que não fecham 100% não viram previsão")
+    igual(grades.frase(sem_peso), None, "e sem base a tela não escreve nada")
+    igual(grades.prever([])["situacao"], "sem_base", "boletim vazio não vira conta")
+
+    # Nota que não foi lançada nunca conta como zero: isso diria "reprovado"
+    # para quem ainda não fez a prova.
+    igual(grades.prever([
+        {"nome": "AV1", "nota": None, "peso": 100.0, "maximo": 10},
+    ])["atual"], None, "avaliação sem nota não derruba a média para zero")
+
+    # Escala diferente de 0–10 (45 de 50) tem de virar 9,0 antes de pesar.
+    igual(grades.prever([
+        {"nome": "AV1", "nota": 45.0, "peso": 100.0, "maximo": 50},
+    ])["atual"], 9.0, "a nota é convertida para a escala 0–10 pelo máximo do item")
 
     print("\n[9] Texto das notificações")
     # Webconferência tem hora marcada e quem perde não recupera. Chamá-la de

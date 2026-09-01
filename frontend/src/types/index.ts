@@ -46,6 +46,13 @@ export interface Subject {
    */
   grade_changed?: boolean;
   previous_grade?: number | null;
+  /**
+   * "Precisa de 5,8 na avaliação que falta para fechar 7,0" — a conta pronta,
+   * calculada no servidor a partir do boletim já guardado. Ausente enquanto
+   * ninguém leu o boletim desta disciplina, ou quando os pesos do Moodle ainda
+   * não fecham 100% e a conta não significaria nada.
+   */
+  grade_forecast?: string | null;
 }
 
 /** Tipos possíveis de evento acadêmico */

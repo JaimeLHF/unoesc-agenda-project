@@ -4023,6 +4023,22 @@ body {
 
 /* Em curso presencial este é o único conteúdo que o cartão tem para mostrar —
    por isso ele abre a linha, antes da nota e do progresso. */
+/*
+  A previsão de nota no cartão. Fica em azul de tinta, e não com fundo de
+  alerta: não é aviso de que algo mudou, é uma conta que está sempre lá.
+*/
+.subject-card-large__previsao {
+  /* Linha inteira dentro da faixa de estado: ela é uma frase, e dividir a
+     linha com a pílula de "nota lançada" deixava as duas ilegíveis. */
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+  font-weight: 600;
+  color: var(--color-primary-ink);
+  text-wrap: pretty;
+}
+
 .subject-card-large__novo {
   display: inline-flex;
   align-items: center;

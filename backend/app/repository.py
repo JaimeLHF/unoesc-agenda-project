@@ -604,6 +604,38 @@ def registrar_notas_itens(
     return novidades
 
 
+def previsao_por_disciplina(session: Session, user_id: str) -> dict[str, dict]:
+    """
+    "Quanto falta para passar" de cada disciplina, calculado do que já está no
+    banco — nenhuma requisição ao Moodle.
+
+    O boletim chega aqui por dois caminhos, e é isso que faz a conta existir
+    sem custo: o disparo de notificação grava os itens três vezes ao dia (ver
+    `scheduler._boletins`), e a visita ao boletim da disciplina grava o que
+    leu. Quem nunca fez nem uma coisa nem outra simplesmente não recebe
+    previsão, e a tela não mostra nada — que é melhor que uma linha dizendo
+    "não sei".
+    """
+    from app import grades
+
+    linhas = session.execute(
+        select(GradeItem).where(GradeItem.user_id == user_id)
+    ).scalars().all()
+
+    por_disciplina: dict[str, list[dict]] = {}
+    for item in linhas:
+        por_disciplina.setdefault(item.subject, []).append({
+            "nome": item.name,
+            "peso": item.weight,
+            "nota": item.grade,
+            "maximo": item.max_grade,
+        })
+
+    return {
+        nome: grades.prever(itens) for nome, itens in por_disciplina.items()
+    }
+
+
 def novidades_por_disciplina(
     session: Session, user_id: str, dias: int = DIAS_MATERIAL_NOVO
 ) -> dict[str, list[dict]]:

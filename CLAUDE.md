@@ -213,6 +213,23 @@ Moodle já respondeu `servicenotavailable` nesta instância, e apagar seria
 silencioso. O `upsert_subjects` trata os dois casos, e o teste de isolamento
 cobre o segundo.
 
+**"Quanto falta para passar" está na lista, não escondido na disciplina.** A
+conta existia desde sempre no `GradesPanel`, mas só para quem abrisse a
+disciplina e esperasse uma requisição ao Moodle — e era a pergunta que o aluno
+respondia na calculadora do celular, quase sempre errado. Agora o cálculo vive
+em `backend/app/grades.py` (puro, coberto por `test_funcoes_puras.py`), sai do
+boletim **já guardado** em `grade_items` e viaja como frase pronta no campo
+`grade_forecast` de cada disciplina — zero requisição a mais. Três decisões:
+a frase é montada no servidor, porque a mesma conta serve à lista e um dia à
+notificação, e duas redações divergem no primeiro ajuste; a previsão só é
+calculada quando os pesos do Moodle somam entre 95% e 105% (`SOMA_MINIMA`),
+senão a divisão pelo peso pendente inventa um "precisa de 4,1" que faz alguém
+relaxar antes da prova que decide; e nota não lançada nunca conta como zero,
+que diria "reprovado" para quem ainda não fez a avaliação. O boletim entra no
+banco por dois caminhos — o disparo de notificação (três vezes ao dia) e a
+própria visita ao boletim, que agora grava o que leu. Quem nunca fez nem uma
+coisa nem outra não recebe previsão nenhuma, e o cartão fica como estava.
+
 **O aviso de nota olha o boletim item a item, não o total.** O total da
 disciplina (`/grade/report/overview`) só existe depois que o Moodle atribui
 peso a todas as avaliações, e durante boa parte do semestre ele vem vazio: em

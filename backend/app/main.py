@@ -39,6 +39,7 @@ from pydantic import BaseModel
 from app import admin
 from app import assistant
 from app import crypto
+from app import grades
 from app import observability
 from app import push
 from app import scheduler
@@ -96,6 +97,12 @@ class SubjectModel(BaseModel):
     # havia antes — nula quando esta é a primeira, que é o caso mais comum.
     grade_changed: bool = False
     previous_grade: Optional[float] = None
+    # "Precisa de 5,8 na avaliação que falta para fechar 7,0" — a conta que o
+    # aluno faz na calculadora do celular, já pronta. Sai do boletim guardado
+    # (`grade_items`), então não custa requisição nenhuma; vem nula enquanto
+    # ninguém leu o boletim desta disciplina, ou quando os pesos do Moodle
+    # ainda não fecham 100% e a conta não significaria nada. Ver `grades.py`.
+    grade_forecast: Optional[str] = None
 
 
 class AcademicEvent(BaseModel):
@@ -678,10 +685,13 @@ async def scrape_portal(session: app_session.PortalSession = Depends(require_ses
             # Depois do commit: as novidades deste scrape já contam.
             novidades = repo.novidades_por_disciplina(db, session.user_id)
             sem_prazo = repo.atividades_sem_prazo(db, session.user_id)
+            previsoes = repo.previsao_por_disciplina(db, session.user_id)
 
         for sub in result["subjects"]:
             sub["new_materials"] = novidades.get(sub["name"], [])
             sub["pending_activities"] = sem_prazo.get(sub["name"], [])
+            previsao = previsoes.get(sub["name"])
+            sub["grade_forecast"] = grades.frase(previsao) if previsao else None
 
         for ev in events:
             ev["synced"] = ev.get("stable_key") in synced_keys
@@ -705,6 +715,7 @@ async def get_cache(session: app_session.PortalSession = Depends(require_session
     with repo.get_session() as db:
         novidades = repo.novidades_por_disciplina(db, session.user_id)
         sem_prazo = repo.atividades_sem_prazo(db, session.user_id)
+        previsoes = repo.previsao_por_disciplina(db, session.user_id)
         subjects = []
         for s in repo.list_subjects(db, session.user_id):
             saiu_nota, nota_anterior = repo.aviso_de_nota(s)
@@ -719,6 +730,7 @@ async def get_cache(session: app_session.PortalSession = Depends(require_session
                 pending_activities=sem_prazo.get(s.name, []),
                 grade_changed=saiu_nota,
                 previous_grade=nota_anterior,
+                grade_forecast=grades.frase(previsoes[s.name]) if s.name in previsoes else None,
             ))
         events = [
             AcademicEvent(
@@ -985,7 +997,7 @@ class GradesRequest(BaseModel):
 
 
 @app.post("/api/grades", response_model=GradesResponse)
-async def grades(
+async def boletim_da_disciplina(
     request: GradesRequest,
     session: app_session.PortalSession = Depends(require_session),
 ):
@@ -1019,26 +1031,22 @@ async def grades(
             status_code=502, detail=mensagem_amigavel(codigo, "ler suas notas no Moodle")
         ) from exc
 
-    parcial = 0.0
-    peso_pendente = 0.0
-    pendentes = 0
-    for item in itens:
-        peso = (item.get("peso") or 0) / 100
-        maximo = item.get("maximo") or 10
-        nota = item.get("nota")
-        if nota is None:
-            pendentes += 1
-            peso_pendente += item.get("peso") or 0
-            continue
-        parcial += peso * (nota / maximo) * 10
+    # Guarda o que acabou de ler. Esta visita é o outro caminho pelo qual o
+    # boletim entra no banco — o primeiro é o disparo de notificação —, e é o
+    # que faz a previsão aparecer na lista de disciplinas de quem não ligou os
+    # avisos. `registrar_notas_itens` trata lista vazia como "não veio".
+    with repo.get_session() as db:
+        repo.registrar_notas_itens(db, session.user_id, request.subject_name, itens)
+        db.commit()
 
     passing = float(os.getenv("PASSING_GRADE", "7"))
-    needed = None
-    if peso_pendente > 0:
-        falta = (passing - parcial) / (peso_pendente / 100)
-        # Abaixo de zero significa aprovado independente do resto; acima de 10,
-        # inalcançável. Os dois casos a tela trata em texto, não em número.
-        needed = round(falta, 2)
+    previsao = grades.prever(itens, passing)
+    pendentes = previsao["pendentes"]
+    peso_pendente = sum(i.get("peso") or 0 for i in itens if i.get("nota") is None)
+    # `needed` é o contrato antigo da tela: número quando dá para calcular,
+    # nulo quando não dá. Quem decide isso agora é o `grades.prever`, que
+    # também exige os pesos fecharem 100% antes de responder.
+    needed = previsao["precisa"] if previsao["situacao"] != "sem_base" else None
 
     return GradesResponse(
         items=[
@@ -1047,7 +1055,7 @@ async def grades(
             )
             for i in itens
         ],
-        current=round(parcial, 2) if itens else None,
+        current=previsao["atual"],
         pending_count=pendentes,
         pending_weight=round(peso_pendente, 2),
         needed=needed,

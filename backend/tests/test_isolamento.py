@@ -372,6 +372,40 @@ def main_teste() -> int:
                 "boletim sem nota não apaga a nota já guardada",
             )
 
+        # -- a previsão de nota é de quem tem o boletim ----------------------
+        #
+        # "Precisa de 5,8 na que falta" sai do boletim guardado, e o boletim é
+        # de um aluno só. O campo viaja no /api/cache junto das disciplinas —
+        # é por ali que vazaria.
+        # Os pesos precisam fechar 100% contando o item que já está guardado
+        # acima — é exatamente a checagem que impede a conta de sair errada no
+        # meio do semestre, quando o Moodle ainda não deu peso a tudo.
+        com_pendente = [
+            {"nome": item, "nota": 9.0, "peso": 50.0, "maximo": 10},
+            {"nome": "Avaliação 1", "nota": 6.0, "peso": 25.0, "maximo": 10},
+            {"nome": "Avaliação 2", "nota": None, "peso": 25.0, "maximo": 10},
+        ]
+        with repo.get_session() as db:
+            repo.registrar_notas_itens(db, uid_a, "Cálculo I", com_pendente)
+            db.commit()
+
+        previsao_a = {
+            s["name"]: s.get("grade_forecast")
+            for s in client.get("/api/cache", headers=auth(token_a)).json()["subjects"]
+        }
+        previsao_b = {
+            s["name"]: s.get("grade_forecast")
+            for s in client.get("/api/cache", headers=auth(token_b)).json()["subjects"]
+        }
+        verificar(
+            (previsao_a.get("Cálculo I") or "").startswith("Precisa de 4,0"),
+            f"A vê quanto falta para passar na disciplina dele ({previsao_a})",
+        )
+        verificar(
+            all(v is None for v in previsao_b.values()),
+            f"B não recebe a previsão calculada com o boletim de A ({previsao_b})",
+        )
+
         print("\n[3] Nenhum endpoint de dados responde sem sessão")
         sem_sessao = [
             ("get", "/api/cache", None),

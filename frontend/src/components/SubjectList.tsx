@@ -305,6 +305,17 @@ const SubjectList: React.FC<SubjectListProps> = ({
                 : `Nota lançada · ${formatGrade(subject.final_grade)}`}
             </span>
           )}
+          {/*
+            A pergunta que o aluno responde na calculadora do celular, no meio
+            do semestre e quase sempre errado: quanto ainda preciso tirar. Vem
+            do backend já como frase, e só existe quando o Moodle deu peso a
+            todas as avaliações — antes disso a conta não significa nada, e um
+            número errado aqui faz alguém relaxar na prova que decide. Ver
+            `backend/app/grades.py`.
+          */}
+          {subject.grade_forecast && (
+            <span className="subject-card-large__previsao">{subject.grade_forecast}</span>
+          )}
           {ended && typeof subject.final_grade === 'number' ? (
             <>
               <span
