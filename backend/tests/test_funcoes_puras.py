@@ -145,6 +145,25 @@ def main_teste() -> int:
     igual(webconfs[0]["moodle_event_id"], "webconf-7-1",
           "a chave é curso + número, porque não há evento no Moodle")
 
+    # O bug de 01/09/2026: a página anunciava a Webconferência 1 duas vezes,
+    # com datas diferentes. As duas viravam evento com a mesma chave, a
+    # segunda sobrescrevia a primeira no banco com a data velha, e o disparo
+    # de notificação anunciava "prazo antecipado" de três em três horas.
+    repetido = (
+        "WEBCONFERÊNCIA 1\nData: 02/09/2026\nHorário: 19h - 21h\n"
+        "WEBCONFERÊNCIA 1\nData: 30/09/2026\nHorário: 19h - 21h\n"
+    )
+    dobrada = extract_webconferences(repetido, "MAT", "https://on.unoesc.edu.br/c", 7)
+    igual(len(dobrada), 1, "a mesma webconferência anunciada duas vezes é uma só")
+    igual(dobrada[0]["date"], "2026-09-02", "vale o primeiro anúncio da página")
+
+    # "Data:" que aparece depois de outra menção a webconferência é do bloco
+    # seguinte: casar com ele dava à Webconferência 1 a data da 2.
+    cruzado = "WEBCONFERÊNCIA 1 (gravada)\nWEBCONFERÊNCIA 2\nData: 30/09/2026\n"
+    misturada = extract_webconferences(cruzado, "MAT", "https://on.unoesc.edu.br/c", 7)
+    igual([e["moodle_event_id"] for e in misturada], ["webconf-7-2"],
+          "a data não pula de um bloco para o outro")
+
     print("\n[9] Texto das notificações")
     # Webconferência tem hora marcada e quem perde não recupera. Chamá-la de
     # "entrega" mandava o aluno olhar o lugar errado da agenda.
@@ -164,6 +183,21 @@ def main_teste() -> int:
     igual(push.resumo_do_dia([{"type": "deadline", "subject": "31002 - Banco de Dados"}])[0],
           "Hoje: 1 entrega", "singular sem parêntese — é uma notificação, não um relatório")
     igual(push.resumo_do_dia([]), None, "dia vazio não vira notificação")
+
+    # O lembrete da tarde: o resumo das 7h já saiu da tela quando a
+    # webconferência das 19h chega.
+    proximo = [{"type": "webconference", "title": "Webconferência 1", "time": "19:00",
+                "subject": "24728 - Empreendedorismo e Inovação"}]
+    igual(push.lembrete(proximo, 120)[1],
+          "Webconferência 1 — Empreendedorismo e Inovação · 19:00",
+          "o corpo diz qual é o compromisso e a que horas")
+    igual(push.lembrete(proximo + [{"type": "deadline", "title": "AV2",
+                                     "subject": "31002 - Banco de Dados"}], 120)[0],
+          "Webconferência em 2h", "o título diz quanto falta, não a data")
+    igual(push.lembrete([{"type": "exam", "title": "Prova 1", "time": "19:00",
+                          "subject": "90112 - Farmacologia"}], 45)[0],
+          "Prova em 45 min", "abaixo de uma hora e meia a conta é em minutos")
+    igual(push.lembrete([], 0), None, "tarde sem compromisso não vira notificação")
 
     igual(push.notas_novas([{"name": "90112 - Farmacologia", "final_grade": 85}])[1],
           "Farmacologia — 8,5", "a nota aparece na escala que o aluno lê")

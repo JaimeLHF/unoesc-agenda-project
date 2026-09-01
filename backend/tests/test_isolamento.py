@@ -118,6 +118,9 @@ PERFIS = {
 # arquivo. É o que faz nascer "prazo alterado" e "material novo" — os dois
 # avisos são dado do aluno e precisam ficar dentro da conta dele.
 SEGUNDA_RODADA = {"ativa": False}
+# O mesmo evento duas vezes no mesmo scrape, a segunda cópia com a data velha —
+# foi o que a página de Empreendedorismo devolveu em 01/09/2026.
+DUPLICADO = {"ativa": False}
 
 PROVA_ADIADA_PARA = "2099-05-17"
 MATERIAL_NOVO_DE_A = "Slides da aula 9"
@@ -156,6 +159,9 @@ class MoodleFalso:
                 "modname": "resource", "url": "/mod/resource/view.php?id=555",
             }]
             subjects[0]["final_grade"] = NOTA_LANCADA_PARA_A
+
+        if DUPLICADO["ativa"] and username == "aluno.a@unoesc.edu.br":
+            eventos.append({**eventos[0], "date": "2099-05-10"})
 
         return {"subjects": subjects, "calendar_events": eventos}
 
@@ -249,6 +255,19 @@ def main_teste() -> int:
             "A vê a data anterior da própria prova",
         )
         verificar(evento_b["previous_date"] is None, "B não herda o aviso de mudança de A")
+
+        # A mesma prova veio duas vezes no scrape, a segunda com a data velha.
+        # Enquanto a segunda sobrescrevia a primeira, o banco nunca chegava na
+        # data nova e o disparo de notificação anunciava "prazo antecipado" a
+        # cada três horas — era o mesmo fato, repetido para sempre.
+        DUPLICADO["ativa"] = True
+        SEGUNDA_RODADA["ativa"] = True
+        client.post("/api/scrape", headers=auth(token_a))
+        SEGUNDA_RODADA["ativa"] = False
+        DUPLICADO["ativa"] = False
+        repetido = client.get("/api/cache", headers=auth(token_a)).json()["events"][0]
+        verificar(repetido["date"] == PROVA_ADIADA_PARA,
+                  "evento repetido no mesmo scrape não devolve a data velha ao banco")
 
         novos_a = {m["name"] for m in cache_a["subjects"][0]["new_materials"]}
         novos_b = {m["name"] for m in cache_b["subjects"][0]["new_materials"]}

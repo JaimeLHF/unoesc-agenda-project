@@ -247,6 +247,21 @@ hora. Quem liga os avisos guarda a senha cifrada junto da inscrição
 não um por hora: cada rodada é um login no Moodle da UNOESC por aluno inscrito.
 Os textos vivem em `push.py`, o relógio em `scheduler.py`.
 
+**O aviso de mudança sai uma vez, e um quarto horário lembra perto da hora.**
+Em 01/09/2026 a mesma notificação "Prazo antecipado — Webconferência 1" chegou
+três vezes por dia: a página da disciplina anunciava a Webconferência 1 **duas
+vezes**, com datas diferentes, e as duas viravam evento com a mesma chave
+(`webconf-<curso>-<numero>`). No `upsert_events` a segunda sobrescrevia a
+primeira com a data velha — o banco nunca chegava na data nova, o disparo
+seguinte comparava contra a data velha de novo, e a página da atividade (que lê
+o banco) mostrava 30/09 enquanto o cartão da agenda (que lê o scrape) mostrava
+02/09. Duas travas: `extract_webconferences` fica com o primeiro anúncio de cada
+chave, e `upsert_events` ignora chave repetida dentro do mesmo lote, valha ela
+de onde vier. Junto disso entrou o disparo das **17h** (`lembrete`), o único que
+**não abre o Moodle** — ele só lê o banco e avisa do que começa entre 30 minutos
+e 5 horas dali, que é a webconferência das 19h. O resumo das 7h fala do dia
+inteiro e já saiu da tela quando ela chega.
+
 **O `fly.toml` deixou de escalar a zero por causa disso.** Disparo das 7h nasce
 do relógio, não de uma visita, e máquina suspensa não olha relógio. Quem quiser
 a conta de volta perto de zero: `min_machines_running = 0` mais o secret

@@ -1,17 +1,23 @@
 """
 O relógio que dispara as notificações.
 
-## Os três horários
+## Os quatro horários
 
     07:00  resumo do dia + o que mudou desde ontem
     13:00  só o que mudou (nota lançada, prazo alterado)
+    17:00  o que começa daqui a pouco — **não fala com o Moodle**
     19:00  véspera ("amanhã tem prova") + o que mudou
 
-Três, e não um por hora: cada rodada faz um login no Moodle **por aluno
+Três idas ao Moodle, e não uma por hora: cada rodada faz um login **por aluno
 inscrito**, mais uma requisição de boletim por disciplina (ver `_boletins`), e
 o Moodle da UNOESC não é nosso para bombardear. Três também é o teto de barulho
 que a rotina do aluno aguenta sem ele desligar tudo — e notificação desligada
 no Android não se recupera.
+
+O lembrete das 17h é o quarto horário e não quebra essa conta: ele lê só o
+banco (`SLOTS_SEM_MOODLE`), custa zero requisição, e só existe quando há
+compromisso com hora marcada nas próximas horas. O resumo das 7h fala do dia
+inteiro e some da tela até a webconferência das 19h chegar.
 
 ## Por que o servidor precisa da senha aqui
 
@@ -47,7 +53,17 @@ from app.moodle import TZ_BR, MoodleClient
 logger = logging.getLogger("agenda.scheduler")
 
 # Hora (no fuso de Brasília) → nome do disparo.
-HORARIOS = {7: "manha", 13: "meio", 19: "noite"}
+HORARIOS = {7: "manha", 13: "meio", 17: "lembrete", 19: "noite"}
+
+# Disparos que não abrem o Moodle: falam só do que já está no banco.
+SLOTS_SEM_MOODLE = {"lembrete"}
+
+# Janela do lembrete da tarde. Meia hora de piso porque aviso que chega junto
+# com o começo não serve para nada; cinco horas de teto para que o disparo das
+# 17h alcance a webconferência das 19h e não a entrega das 23:59, que o resumo
+# do dia já anunciou de manhã.
+LEMBRETE_MIN = timedelta(minutes=30)
+LEMBRETE_MAX = timedelta(hours=5)
 
 # De quanto em quanto tempo o laço acorda para olhar o relógio. Um minuto é
 # folgado: a janela de tolerância abaixo é bem maior que isso.
@@ -176,6 +192,34 @@ def _do_dia(user_id: str, dia: str) -> list[dict]:
         ]
 
 
+def _em_breve(user_id: str, agora: datetime) -> tuple[list[dict], int]:
+    """
+    (compromissos de hoje que começam dentro da janela, minutos até o primeiro).
+
+    Só entra evento com hora marcada: "23:59" de uma entrega é convenção do
+    Moodle para "fim do dia", não hora de começar nada.
+    """
+    proximos: list[tuple[timedelta, dict]] = []
+    for e in _do_dia(user_id, agora.date().isoformat()):
+        hora = e.get("time") or ""
+        try:
+            h, m = hora.split(":")[:2]
+            quando = agora.replace(
+                hour=int(h), minute=int(m), second=0, microsecond=0
+            )
+        except (ValueError, TypeError):
+            continue
+        falta = quando - agora
+        if LEMBRETE_MIN <= falta <= LEMBRETE_MAX:
+            proximos.append((falta, e))
+
+    if not proximos:
+        return [], 0
+
+    proximos.sort(key=lambda par: par[0])
+    return [e for _, e in proximos], int(proximos[0][0].total_seconds() // 60)
+
+
 # ---------------------------------------------------------------------------
 # Disparo
 # ---------------------------------------------------------------------------
@@ -243,7 +287,10 @@ def atender(user_id: str, slot: str) -> int:
     """
     enviados = 0
     try:
-        credencial = _credencial(user_id)
+        # O lembrete da tarde não abre o Moodle: o que ele anuncia já está no
+        # banco desde o disparo da manhã, e um quarto login por aluno seria
+        # pagar requisição para reler o mesmo dado.
+        credencial = None if slot in SLOTS_SEM_MOODLE else _credencial(user_id)
 
         # Sem credencial guardada ainda dá para avisar do que já está no banco.
         # O resumo do dia sai do cache; só "saiu nota" precisa do Moodle.
@@ -287,6 +334,10 @@ def atender(user_id: str, slot: str) -> int:
             enviados += entregar(
                 user_id, push.resumo_do_dia(_do_dia(user_id, hoje.isoformat())), "dia"
             )
+        elif slot == "lembrete":
+            agora = _agora()
+            proximos, minutos = _em_breve(user_id, agora)
+            enviados += entregar(user_id, push.lembrete(proximos, minutos), "lembrete")
         elif slot == "noite":
             amanha = (hoje + timedelta(days=1)).isoformat()
             enviados += entregar(user_id, push.vespera(_do_dia(user_id, amanha)), "vespera")

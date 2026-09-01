@@ -407,9 +407,18 @@ def upsert_events(session: Session, user_id: str, events: list[dict]) -> None:
         )
     }
 
+    escritos: set[str] = set()
     for e in events:
         key = event_key(e)
         e["stable_key"] = key  # devolvido ao frontend, que não recalcula mais
+
+        # O mesmo evento duas vezes no mesmo scrape: vale a primeira aparição.
+        # Sem isso a segunda sobrescrevia a primeira com uma data velha, o
+        # banco nunca chegava na data nova, e o disparo de notificação
+        # anunciava "prazo antecipado" de novo a cada três horas.
+        if key in escritos:
+            continue
+        escritos.add(key)
 
         antes = anteriores.get(key)
         if antes is not None and antes.date != e["date"]:

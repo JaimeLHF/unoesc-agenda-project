@@ -449,8 +449,12 @@ def guess_type(modulename: str, name: str) -> str:
 # texto-modelo que fala de webconferência sem marcar nenhuma ("Lembre-se! É de
 # suma importância que você participe…"), que aparece 3x mais vezes.
 
+# O miolo entre a âncora e a data não pode conter outra menção a
+# "WEBCONFER": quando contém, o "Data:" encontrado é o do bloco seguinte, e o
+# evento nasce com o número de um e a data de outro.
 _WEBCONF_ANCORA = re.compile(
-    r"WEBCONFER[ÊE]NCIA\s*(\d+)?.{0,80}?Data:\s*(\d{1,2})/(\d{1,2})/(\d{2,4})",
+    r"WEBCONFER[ÊE]NCIA\s*(\d+)?((?:(?!WEBCONFER).){0,80}?)Data:\s*"
+    r"(\d{1,2})/(\d{1,2})/(\d{2,4})",
     re.IGNORECASE | re.DOTALL,
 )
 # "19h - 21h", "19h até 21h", "19h às 21h.", "19:30"
@@ -460,9 +464,10 @@ _WEBCONF_HORA = re.compile(r"Hor[áa]rio:\s*(\d{1,2})\s*(?:h|:)\s*(\d{2})?", re.
 def extract_webconferences(texto: str, subject: str, course_url: str,
                            course_id: Any = None) -> list[dict]:
     """Eventos de webconferência garimpados do texto da página do curso."""
-    eventos = []
+    eventos: list[dict] = []
+    vistos: set[str] = set()
     for m in _WEBCONF_ANCORA.finditer(texto or ""):
-        numero, dia, mes, ano = m.group(1), m.group(2), m.group(3), m.group(4)
+        numero, dia, mes, ano = m.group(1), m.group(3), m.group(4), m.group(5)
         ano_int = int(ano)
         if ano_int < 100:                      # "10/03/26" → 2026
             ano_int += 2000
@@ -475,6 +480,16 @@ def extract_webconferences(texto: str, subject: str, course_url: str,
         janela = texto[m.end():m.end() + 120]
         hora_m = _WEBCONF_HORA.search(janela)
         hora = f"{int(hora_m.group(1)):02d}:{hora_m.group(2) or '00'}" if hora_m else "19:00"
+
+        # A mesma webconferência anunciada duas vezes na página é uma só. Vale
+        # o primeiro anúncio, que é o do bloco da própria semana; a repetição
+        # mais abaixo costuma ser cópia esquecida com a data velha — e deixar
+        # as duas passar fazia a segunda sobrescrever a primeira no banco, o
+        # que devolvia "prazo antecipado" a cada disparo de notificação.
+        chave = f"webconf-{course_id}-{numero or data.strftime('%Y%m%d')}"
+        if chave in vistos:
+            continue
+        vistos.add(chave)
 
         titulo = f"Webconferência {numero}" if numero else "Webconferência"
         eventos.append({
@@ -490,7 +505,7 @@ def extract_webconferences(texto: str, subject: str, course_url: str,
             "url": course_url,
             # Não há id de evento no Moodle — a webconferência não existe como
             # objeto lá. Curso + número é o que temos de estável.
-            "moodle_event_id": f"webconf-{course_id}-{numero or data.strftime('%Y%m%d')}",
+            "moodle_event_id": chave,
             "event_type": None,
             "module": "webconf",
             "course_id": course_id,

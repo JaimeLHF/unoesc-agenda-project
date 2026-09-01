@@ -194,6 +194,43 @@ def vespera(eventos: list[dict]) -> Optional[tuple[str, str, str]]:
     return _resumo(eventos, "amanhã")
 
 
+_NOME_DO_TIPO = {
+    "exam": "Prova",
+    "webconference": "Webconferência",
+    "deadline": "Entrega",
+}
+
+
+def _daqui(minutos: int) -> str:
+    """"em 2h" / "em 40 min" — quanto falta, do jeito que se fala."""
+    if minutos < 90:
+        return f"em {max(minutos, 1)} min"
+    return f"em {round(minutos / 60)}h"
+
+
+def lembrete(eventos: list[dict], minutos: int) -> Optional[tuple[str, str, str]]:
+    """
+    Falta pouco para o compromisso de hoje — o aviso da tarde.
+
+    O resumo das 7h fala do dia inteiro e é lido antes da aula; a webconferência
+    das 19h chega horas depois disso, quando o resumo já saiu da tela. Este é o
+    empurrão perto da hora, e por isso o título diz quanto falta em vez de
+    repetir a data. `minutos` é o que falta para o primeiro da lista.
+    """
+    if not eventos:
+        return None
+
+    e = eventos[0]
+    nome = _NOME_DO_TIPO.get(e.get("type") or "", "Compromisso")
+    corpo = f"{e.get('title') or nome} — {_sem_codigo(e['subject'])}"
+    if e.get("time"):
+        corpo += f" · {e['time']}"
+    if len(eventos) > 1:
+        corpo += f" · e mais {_plural(len(eventos) - 1, 'compromisso', 'compromissos')}"
+
+    return f"{nome} {_daqui(minutos)}", corpo, "/"
+
+
 def notas_novas(disciplinas: list[dict]) -> Optional[tuple[str, str, str]]:
     """
     Saiu nota. É o aviso que a UNOESC não manda por e-mail, e o motivo pelo
