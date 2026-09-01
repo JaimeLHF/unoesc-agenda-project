@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Icon from './Icon';
 import SubmissionBox from './SubmissionBox';
-import { fetchActivity } from '../services/api';
+import { fetchActivity, saveNote } from '../services/api';
 import type { ActivityDetail } from '../services/api';
 import { useDoneEvents } from '../contexts/DoneEventsContext';
 import type { AcademicEvent, EventType } from '../types';
@@ -61,6 +61,13 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ stableKey, onBack, onOpenPo
   const [detalhe, setDetalhe] = useState<ActivityDetail | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [abrindo, setAbrindo] = useState(false);
+  /*
+    A anotação do aluno sobre este compromisso. Salva sozinha, um segundo
+    depois da última tecla: botão "Salvar" numa caixa de recado é uma chance a
+    mais de perder o que foi escrito, e é justamente o que ele não perdoaria.
+  */
+  const [anotacao, setAnotacao] = useState('');
+  const [estadoNota, setEstadoNota] = useState<'parado' | 'salvando' | 'salvo'>('parado');
   const { isDone, toggleDone } = useDoneEvents();
 
   useEffect(() => {
@@ -68,8 +75,15 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ stableKey, onBack, onOpenPo
     setDetalhe(null);
     setErro(null);
 
+    setAnotacao('');
+    setEstadoNota('parado');
+
     fetchActivity(stableKey)
-      .then((d) => ativo && setDetalhe(d))
+      .then((d) => {
+        if (!ativo) return;
+        setDetalhe(d);
+        setAnotacao(d.note ?? '');
+      })
       .catch((err) => {
         if (!ativo) return;
         const detail = (err as { response?: { data?: { detail?: string } } })?.response?.data
@@ -81,6 +95,27 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ stableKey, onBack, onOpenPo
       ativo = false;
     };
   }, [stableKey]);
+
+  /*
+    Grava um segundo depois que o aluno para de escrever. O `detalhe` no guarda
+    evita salvar a caixa vazia enquanto a atividade ainda está carregando, o
+    que apagaria a anotação existente.
+  */
+  useEffect(() => {
+    if (!detalhe || anotacao === (detalhe.note ?? '')) return;
+
+    setEstadoNota('salvando');
+    const id = setTimeout(() => {
+      saveNote(stableKey, anotacao)
+        .then((texto) => {
+          setDetalhe((d) => (d ? { ...d, note: texto } : d));
+          setEstadoNota('salvo');
+        })
+        .catch(() => setEstadoNota('parado'));
+    }, 1000);
+
+    return () => clearTimeout(id);
+  }, [anotacao, detalhe, stableKey]);
 
   if (erro) {
     return (
@@ -211,6 +246,30 @@ const ActivityPage: React.FC<ActivityPageProps> = ({ stableKey, onBack, onOpenPo
           </button>
         )}
       </div>
+
+      {/*
+        O recado que não cabe em lugar nenhum do Moodle: "cobre os capítulos 3
+        a 5", "levar calculadora". Fica aqui, na tela em que a data está, e
+        não no bloco de notas do celular — onde ele some do contexto.
+      */}
+      <section className="anotacao">
+        <div className="anotacao__topo">
+          <label htmlFor="anotacao">Suas anotações</label>
+          <span className="anotacao__estado" aria-live="polite">
+            {estadoNota === 'salvando' && 'salvando…'}
+            {estadoNota === 'salvo' && 'salvo'}
+          </span>
+        </div>
+        <textarea
+          id="anotacao"
+          className="anotacao__campo"
+          rows={3}
+          value={anotacao}
+          placeholder="O que você precisa lembrar sobre esta atividade"
+          onChange={(e) => setAnotacao(e.target.value)}
+          maxLength={2000}
+        />
+      </section>
 
       {detalhe.content?.status?.length ? (
         <div className="activity__status">

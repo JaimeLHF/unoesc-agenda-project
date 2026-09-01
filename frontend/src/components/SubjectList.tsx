@@ -165,6 +165,7 @@ const SubjectList: React.FC<SubjectListProps> = ({
 }) => {
   const { isDone } = useDoneEvents();
   const [visao, setVisao] = React.useState<'semana' | 'disciplinas'>('disciplinas');
+  const [busca, setBusca] = React.useState('');
   const lastScrapedRel = formatRelative(lastScrapedAt);
 
   /*
@@ -385,6 +386,26 @@ const SubjectList: React.FC<SubjectListProps> = ({
     );
   };
 
+  /*
+    A busca. Nasceu de um caso simples: "onde está a Avaliativa 2?" — com sete
+    disciplinas e cinquenta eventos, achar um prazo pelo nome exigia abrir
+    disciplina por disciplina. Filtra título e disciplina, e some sozinha
+    quando o campo esvazia: enquanto há texto, o resultado ocupa o lugar das
+    visões, porque mostrar as duas coisas ao mesmo tempo faria o aluno
+    procurar dentro da resposta da busca.
+  */
+  const termo = busca.trim().toLowerCase();
+  const resultados =
+    termo.length >= 2
+      ? events
+          .filter(
+            (e) =>
+              e.title.toLowerCase().includes(termo) ||
+              e.subject.toLowerCase().includes(termo),
+          )
+          .sort((a, b) => a.date.localeCompare(b.date))
+      : [];
+
   return (
     <section className="subject-grid-section">
       <div className="page-heading">
@@ -395,6 +416,41 @@ const SubjectList: React.FC<SubjectListProps> = ({
         </p>
       </div>
 
+      <div className="busca">
+        <Icon name="lupa" size={1} />
+        <input
+          type="search"
+          className="busca__campo"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          placeholder="Procurar um prazo, prova ou disciplina"
+          aria-label="Procurar na agenda"
+        />
+        {termo.length >= 2 && (
+          <span className="busca__contagem">
+            {resultados.length} {resultados.length === 1 ? 'resultado' : 'resultados'}
+          </span>
+        )}
+      </div>
+
+      {termo.length >= 2 ? (
+        <ul className="busca__resultados">
+          {resultados.map((e) => (
+            <li key={e.stable_key ?? e.id}>
+              <button type="button" onClick={() => onOpenEvent(e)}>
+                <span className="busca__titulo">{e.title}</span>
+                <span className="busca__meta">
+                  {e.subject} · {formatNextEventDate(e.date, e.time)}
+                </span>
+              </button>
+            </li>
+          ))}
+          {resultados.length === 0 && (
+            <li className="busca__vazio">Nada com esse nome na sua agenda.</li>
+          )}
+        </ul>
+      ) : (
+        <>
       <NextDeadline events={events} onOpenEvent={onOpenEvent} />
 
       {/* Entre o próximo prazo e a lista de alertas: primeiro o que vence
@@ -443,6 +499,8 @@ const SubjectList: React.FC<SubjectListProps> = ({
               <div className="subject-grid-large">{encerradas.map(renderCard)}</div>
             </>
           )}
+        </>
+      )}
         </>
       )}
     </section>

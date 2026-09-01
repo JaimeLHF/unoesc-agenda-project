@@ -17,6 +17,7 @@ export type IconName =
   | 'marca'
   | 'atualizar'
   | 'organizar'
+  | 'lupa'
   | 'alerta'
   | 'urgente'
   | 'relogio'
@@ -60,6 +61,12 @@ const PATHS: Record<IconName, React.ReactNode> = {
     <>
       <path d="M21 12a9 9 0 1 1-2.64-6.36" />
       <path d="M21 3v5h-5" />
+    </>
+  ),
+  lupa: (
+    <>
+      <circle cx="11" cy="11" r="6.5" />
+      <path d="m16 16 4.5 4.5" />
     </>
   ),
   organizar: (

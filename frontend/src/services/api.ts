@@ -410,6 +410,8 @@ export interface ActivityDetail {
   url: string;
   done: boolean;
   synced: boolean;
+  /** A anotação que o aluno escreveu sobre este compromisso. */
+  note?: string;
   /** Página da atividade lida no Moodle com a sessão do servidor. */
   content: {
     /** O enunciado, já sem a tabela de status e sem rótulo de botão. */
@@ -499,6 +501,27 @@ export async function fetchActivity(stableKey: string): Promise<ActivityDetail> 
     `/activity/${encodeURIComponent(stableKey)}`,
   );
   return data;
+}
+
+/* -------------------------------------------------------------------------
+ * Anotações do aluno
+ *
+ * "A prova cobre os capítulos 3 a 5". Ficam no servidor, e não no navegador,
+ * porque este é o dado que o aluno mais lamentaria perder ao trocar de
+ * aparelho — e porque ele escreve no computador e lê no celular.
+ * ----------------------------------------------------------------------- */
+
+export async function fetchNotes(): Promise<Record<string, string>> {
+  const { data } = await api.get<Record<string, string>>('/event-notes');
+  return data;
+}
+
+export async function saveNote(stableKey: string, text: string): Promise<string> {
+  const { data } = await api.put<{ stable_key: string; text: string }>('/event-notes', {
+    stable_key: stableKey,
+    text,
+  });
+  return data.text;
 }
 
 /* -------------------------------------------------------------------------

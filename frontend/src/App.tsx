@@ -34,6 +34,7 @@ import { useDoneEvents, eventKey } from './contexts/DoneEventsContext';
 import { ROTA_ADMIN, activityPath, navigate, useActivityRoute, useAdminRoute } from './lib/router';
 import { agendaEstaFresca, compararAgendas } from './lib/novidades';
 import { agendaDeExemplo } from './lib/demonstracao';
+import { atualizarBadge } from './lib/badge';
 import type { Subject, AcademicEvent, LoginCredentials } from './types';
 import './index.css';
 
@@ -90,7 +91,7 @@ const App: React.FC = () => {
   */
   const [tour, setTour] = useState(false);
 
-  const { hydrate } = useDoneEvents();
+  const { hydrate, isDone } = useDoneEvents();
 
   // A atividade aberta mora no endereço, não no estado: assim o botão voltar
   // do navegador funciona e o link pode ser compartilhado com um colega.
@@ -267,6 +268,22 @@ const App: React.FC = () => {
     // Só no mount: é a retomada, não uma reação a mudança de estado.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /*
+    O número no ícone do app: quantos compromissos de hoje ainda não foram
+    marcados como concluídos. É o único recado que o app dá sem gastar uma
+    notificação — e some sozinho quando o aluno marca a última entrega. Na
+    demonstração fica de fora: o ícone é do aparelho, não da tela.
+  */
+  useEffect(() => {
+    if (demo || !authenticated) return;
+    const hoje = new Date();
+    const chaveHoje = `${hoje.getFullYear()}-${String(hoje.getMonth() + 1).padStart(2, '0')}-${String(
+      hoje.getDate(),
+    ).padStart(2, '0')}`;
+    const pendentesHoje = events.filter((e) => e.date === chaveHoje && !isDone(e)).length;
+    atualizarBadge(pendentesHoje);
+  }, [events, isDone, authenticated, demo]);
 
   /*
     A agenda começa no topo, sempre.
