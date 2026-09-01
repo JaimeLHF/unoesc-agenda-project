@@ -242,12 +242,8 @@ perder o que foi escrito. O **número no ícone** do app (`lib/badge.ts`,
 `navigator.setAppBadge`) é o único recado que o app dá sem gastar notificação;
 sem suporte ele não faz nada, e nada depende dele. A **busca** ocupa o lugar
 das visões enquanto há texto — mostrar as duas coisas faria procurar dentro da
-resposta. O **cartão da semana** (`lib/cartaoDaSemana.ts`) é `canvas` na mão,
-sem biblioteca, e não leva nome, matrícula nem nota: ele vai para o grupo da
-turma. Ele **sempre baixa** o PNG — a folha de compartilhamento do sistema
-(`navigator.share`) chegou a estar ali e saiu a pedido do Jaime: ela não
-existe no computador, muda de comportamento a cada celular, e o arquivo salvo
-é o que o aluno controla.
+resposta. O **cartão da semana** foi construído neste mesmo lote e removido — ver
+"removidas a pedido" abaixo.
 
 **O aviso de nota olha o boletim item a item, não o total.** O total da
 disciplina (`/grade/report/overview`) só existe depois que o Moodle atribui
@@ -406,10 +402,15 @@ ninguém consulta sobre o mês passado. Existe também o `make admin`, que baixa
 o banco e monta o mesmo panorama num HTML local — é o caminho de quando o
 próprio servidor está fora do ar.
 
-**Duas coisas já foram construídas e removidas a pedido do Jaime**, e não devem
+**Três coisas já foram construídas e removidas a pedido do Jaime**, e não devem
 voltar sem ele pedir: o painel de gráficos "Panorama" (commits `f747f84`,
-`36f8309`, `afc6fce`) e o lembrete por e-mail antes do prazo (`f62cc9d`) — a
-UNOESC já avisa dos prazos por e-mail, e mais um aviso no mesmo canal é ruído.
+`36f8309`, `afc6fce`), o lembrete por e-mail antes do prazo (`f62cc9d`) — a
+UNOESC já avisa dos prazos por e-mail, e mais um aviso no mesmo canal é ruído —
+e o **cartão da semana** (01/09/2026), a imagem PNG dos prazos para mandar no
+grupo da turma: o texto de título e disciplina estourava a largura do canvas
+com nome real, e a ideia não se sustentou de pé com o defeito à mostra.
+Desenhar texto em `canvas` sem medir cada linha (`measureText`) e quebrar é o
+que a torna feia — quem tentar de novo começa por aí.
 
 ## Ao mexer no código
 
