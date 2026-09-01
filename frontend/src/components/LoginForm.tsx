@@ -12,6 +12,9 @@ interface LoginFormProps {
   onSubmit: (credentials: LoginCredentials) => Promise<boolean>;
   loading: boolean;
   error: string | null;
+  /** Abre a agenda de exemplo. Quem nunca viu o app não deveria ter de
+      entregar a senha do Moodle para descobrir o que ele faz. */
+  onDemo: () => void;
 }
 
 /**
@@ -22,7 +25,7 @@ interface LoginFormProps {
  * empresa — este é um projeto de aluno, e a tela pode simplesmente dizer isso
  * em vez de vender alguma coisa.
  */
-const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, loading, error }) => {
+const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, loading, error, onDemo }) => {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
@@ -184,6 +187,22 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, loading, error }) => {
                 Moodle, e nunca é salva no navegador.
               </p>
             </form>
+
+            {/*
+              A prova antes do pedido: a agenda inteira, com dados inventados,
+              sem digitar nada. Fica depois do formulário porque quem já tem
+              conta veio entrar — mas fica na mesma coluna, e não escondida
+              num link de rodapé, porque quem chega pelo link de um colega não
+              faz ideia do que este app mostra.
+            */}
+            <div className="auth__ou" aria-hidden="true">
+              <span>ou</span>
+            </div>
+
+            <button type="button" className="btn-secondary auth__demo" onClick={onDemo}>
+              <Icon name="calendario" size={1} />
+              Ver um exemplo sem entrar
+            </button>
           </div>
         </div>
 

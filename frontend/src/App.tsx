@@ -4,6 +4,7 @@ import AppHeader from './components/AppHeader';
 import Icon from './components/Icon';
 import LoadingSkeleton from './components/LoadingSkeleton';
 import AvisoNovidades from './components/AvisoNovidades';
+import AvisoDemonstracao, { RecursosDaDemonstracao } from './components/AvisoDemonstracao';
 import ConviteNotificacoes from './components/ConviteNotificacoes';
 import LoginForm from './components/LoginForm';
 import SubjectList from './components/SubjectList';
@@ -31,6 +32,7 @@ import { requestGoogleAccessToken } from './services/googleAuth';
 import { useDoneEvents, eventKey } from './contexts/DoneEventsContext';
 import { ROTA_ADMIN, activityPath, navigate, useActivityRoute, useAdminRoute } from './lib/router';
 import { agendaEstaFresca, compararAgendas } from './lib/novidades';
+import { agendaDeExemplo } from './lib/demonstracao';
 import type { Subject, AcademicEvent, LoginCredentials } from './types';
 import './index.css';
 
@@ -74,6 +76,13 @@ const App: React.FC = () => {
   const [syncing, setSyncing] = useState(false);
   const [syncError, setSyncError] = useState<string | null>(null);
   const [backendOffline, setBackendOffline] = useState(false);
+  /*
+    A agenda de exemplo, para quem ainda não entrou. Não é uma sessão: nada
+    aqui fala com o backend, `authenticated` continua falso, e por isso a barra
+    de cima segue sem "Atualizar" nem menu da conta — botões que agiriam sobre
+    uma agenda que não existe. Ver `lib/demonstracao.ts`.
+  */
+  const [demo, setDemo] = useState(false);
 
   const { hydrate } = useDoneEvents();
 
@@ -289,6 +298,28 @@ const App: React.FC = () => {
     }
   };
 
+  /** Mostra a agenda inventada. Sem login, sem rede, sem token. */
+  const abrirDemonstracao = () => {
+    const exemplo = agendaDeExemplo();
+    setSubjects(exemplo.subjects);
+    setEvents(exemplo.events);
+    setLastScrapedAt(exemplo.lastScrapedAt);
+    setSelectedSubjectId(null);
+    setLoginError(null);
+    setDemo(true);
+    setStep('results');
+  };
+
+  /** Volta para o login e apaga o exemplo — ele não pode sobrar na tela. */
+  const sairDaDemonstracao = () => {
+    setDemo(false);
+    setSubjects([]);
+    setEvents([]);
+    setLastScrapedAt(null);
+    setSelectedSubjectId(null);
+    setStep('login');
+  };
+
   /** Limpa o estado local da sessão. */
   const resetLocalState = () => {
     setAuthenticated(false);
@@ -298,6 +329,7 @@ const App: React.FC = () => {
     setEvents([]);
     setNovidades(null);
     setSelectedSubjectId(null);
+    setDemo(false);
     setLoginError(null);
     setRefreshError(null);
     setSyncError(null);
@@ -447,13 +479,20 @@ const App: React.FC = () => {
                 canto, para quem abre o app à noite não precisar entrar antes
                 de baixar o brilho. */}
             <ThemeToggle className="theme-toggle--solto" />
-            <LoginForm onSubmit={handleLogin} loading={loginLoading} error={loginError} />
+            <LoginForm
+              onSubmit={handleLogin}
+              loading={loginLoading}
+              error={loginError}
+              onDemo={abrirDemonstracao}
+            />
           </>
         )}
 
         {step === 'login' && abrindoAgenda && (
           <LoadingSkeleton message="Na primeira vez isso leva cerca de um minuto, porque estamos lendo todas as suas disciplinas." />
         )}
+
+        {step === 'results' && demo && <AvisoDemonstracao onSair={sairDaDemonstracao} />}
 
         {step === 'results' && naRotaAdmin && (
           <AdminPage onBack={() => navigate('/')} />
@@ -488,7 +527,7 @@ const App: React.FC = () => {
           <AvisoNovidades frase={novidades} onFechar={() => setNovidades(null)} />
         )}
 
-        {step === 'results' && !naRotaAdmin && !activityKey && !selectedSubject && !mostrandoEsqueleto && (
+        {step === 'results' && !naRotaAdmin && !activityKey && !selectedSubject && !mostrandoEsqueleto && !demo && (
           <ConviteNotificacoes username={account?.username} />
         )}
 
@@ -498,8 +537,16 @@ const App: React.FC = () => {
             events={events}
             onSelectSubject={setSelectedSubjectId}
             lastScrapedAt={lastScrapedAt}
-            onOpenEvent={abrirAtividade}
+            /* Na demonstração o evento não abre: a página da atividade lê o
+               enunciado no Moodle com a sessão do aluno, e aqui não há aluno
+               nenhum. Mandar para o login no meio do exemplo seria pedir a
+               senha justamente de quem ainda está decidindo. */
+            onOpenEvent={demo ? () => {} : abrirAtividade}
           />
+        )}
+
+        {step === 'results' && demo && !selectedSubject && (
+          <RecursosDaDemonstracao onSair={sairDaDemonstracao} />
         )}
 
         {step === 'results' && !naRotaAdmin && !activityKey && selectedSubject && (
@@ -511,11 +558,13 @@ const App: React.FC = () => {
               setSyncError(null);
             }}
             onSync={
-              calendarEnabled ? () => handleSyncSubject(selectedSubject.name) : undefined
+              calendarEnabled && !demo
+                ? () => handleSyncSubject(selectedSubject.name)
+                : undefined
             }
             syncing={syncing}
             error={syncError}
-            onOpenEvent={abrirAtividade}
+            onOpenEvent={demo ? () => {} : abrirAtividade}
           />
         )}
 

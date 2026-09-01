@@ -144,6 +144,22 @@ comparação usa `stable_key`, então adiar uma prova não a transforma em event
 novo. O botão "Atualizar" ignora a janela de frescor e, quando nada mudou, diz
 isso — busca que termina sem sinal nenhum parece busca que não aconteceu.
 
+**Quem ainda não entrou vê a agenda antes de dar a senha.** A tela de entrada
+pedia matrícula e senha do Moodle sem mostrar nada em troca — é muita confiança
+para um app que a pessoa nunca viu funcionando, e quem chega pelo link de um
+colega não faz ideia do que ele mostra. "Ver um exemplo sem entrar" monta a
+agenda inteira com dados inventados (`frontend/src/lib/demonstracao.ts`), nos
+mesmos componentes da agenda real. Três decisões: as datas são **relativas a
+hoje**, senão a demo envelhece e abre com a semana vazia; o exemplo traz de
+propósito os selos que uma captura de tela não mostra (prazo adiado, nota que
+saiu, data lida do PDF, novidade na sala, semana cheia); e a faixa do topo não
+fecha, porque uma tela que parece a agenda do aluno e não é seria a pior
+primeira impressão possível. Nada ali fala com o backend — `authenticated`
+continua falso, o evento não abre a página da atividade (ela leria o Moodle com
+a sessão de alguém) e o convite de notificação não aparece. O que a demo não
+consegue provar — Lumi, aviso no celular, calendário assinável — é dito em três
+linhas no fim da rolagem, sem tela falsa.
+
 **Login automático no Moodle é impossível.** O navegador não aceita cookie de
 outro domínio; a única saída seria um plugin instalado pelo admin da UNOESC. Não
 tente de novo.
