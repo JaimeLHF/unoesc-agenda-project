@@ -11,8 +11,10 @@
  * 1. **As datas são relativas a hoje.** Datas fixas envelhecem e a demo
  *    abriria com uma semana vazia e tudo "Há 30 dias" — que é exatamente a
  *    tela que não convence ninguém.
- * 2. **Nada aqui imita uma pessoa real.** Nomes de disciplina são os da grade,
- *    e não há aluno, professor nem nota de ninguém.
+ * 2. **Nada aqui imita nada de verdade.** As disciplinas se chamam "Disciplina
+ *    001" e as atividades, "Webconferência 0001": com nomes de disciplina de
+ *    verdade a tela vira uma agenda que parece de alguém — e quem abre por
+ *    curiosidade não deve precisar decidir se aquilo é real.
  *
  * Os selos existem de propósito: prazo adiado, nota que saiu, data lida do
  * PDF, material novo na sala e semana cheia são o que o app faz de diferente
@@ -50,18 +52,18 @@ export function agendaDeExemplo(): AgendaDeExemplo {
 
   const subjects: Subject[] = [
     {
-      id: 'demo-empreendedorismo',
-      name: '24728 - EMPREENDEDORISMO E INOVAÇÃO',
+      id: 'demo-disciplina-1',
+      name: '001 - DISCIPLINA 001',
       ...semestre,
     },
     {
-      id: 'demo-banco',
-      name: '31002 - BANCO DE DADOS',
+      id: 'demo-disciplina-2',
+      name: '002 - DISCIPLINA 002',
       ...semestre,
     },
     {
-      id: 'demo-mobile',
-      name: '28743 - DESENVOLVIMENTO MOBILE',
+      id: 'demo-disciplina-3',
+      name: '003 - DISCIPLINA 003',
       ...semestre,
       // Nota que acabou de sair: é o aviso que a UNOESC manda por e-mail e o
       // aluno só vê quando abre o Moodle.
@@ -70,14 +72,14 @@ export function agendaDeExemplo(): AgendaDeExemplo {
       previous_grade: null,
     },
     {
-      id: 'demo-engenharia',
-      name: '10275 - ENGENHARIA DE SOFTWARE',
+      id: 'demo-disciplina-4',
+      name: '004 - DISCIPLINA 004',
       ...semestre,
       new_materials: [
-        { name: 'Slides da aula 9', modname: 'resource' },
-        { name: 'Gabarito da lista 3', modname: 'resource' },
+        { name: 'Material novo 0001', modname: 'resource' },
+        { name: 'Material novo 0002', modname: 'resource' },
       ],
-      pending_activities: [{ name: 'Trabalho final (sem data no Moodle)', modname: 'assign' }],
+      pending_activities: [{ name: 'Atividade 0002 (sem data no Moodle)', modname: 'assign' }],
     },
   ];
 
@@ -85,22 +87,22 @@ export function agendaDeExemplo(): AgendaDeExemplo {
     {
       id: 'demo-webconf',
       stable_key: 'demo-webconf',
-      title: 'Webconferência 1',
+      title: 'Webconferência 0001',
       date: emDias(1),
       time: '19:00',
-      description: 'Encontro ao vivo da Unidade 1.',
-      subject: '24728 - EMPREENDEDORISMO E INOVAÇÃO',
+      description: 'Encontro ao vivo da disciplina.',
+      subject: '001 - DISCIPLINA 001',
       type: 'webconference',
       source: 'moodle_course_text',
     },
     {
       id: 'demo-av2',
       stable_key: 'demo-av2',
-      title: 'Avaliação 2',
+      title: 'Avaliação 0002',
       date: emDias(3),
       time: '23:59',
-      description: 'Modelagem relacional — envio pelo Moodle.',
-      subject: '31002 - BANCO DE DADOS',
+      description: 'Envio pelo Moodle.',
+      subject: '002 - DISCIPLINA 002',
       type: 'exam',
       source: 'moodle_calendar',
       // O professor empurrou a data e a agenda diz de onde ela veio.
@@ -109,11 +111,11 @@ export function agendaDeExemplo(): AgendaDeExemplo {
     {
       id: 'demo-av1-mobile',
       stable_key: 'demo-av1-mobile',
-      title: 'Atividade Avaliativa 1',
+      title: 'Atividade Avaliativa 0001',
       date: emDias(5),
       time: '23:59',
-      description: 'Entrega do protótipo navegável.',
-      subject: '28743 - DESENVOLVIMENTO MOBILE',
+      description: 'Entrega individual.',
+      subject: '003 - DISCIPLINA 003',
       type: 'deadline',
       // Data que estava dentro do PDF da disciplina, não no calendário: a tela
       // marca com o selo "PDF" porque regex não vale o mesmo que cadastro.
@@ -123,22 +125,22 @@ export function agendaDeExemplo(): AgendaDeExemplo {
     {
       id: 'demo-forum',
       stable_key: 'demo-forum',
-      title: 'Fórum de discussão — Unidade 2',
+      title: 'Fórum 0001',
       date: emDias(6),
       time: '23:59',
       description: 'Participação vale nota.',
-      subject: '10275 - ENGENHARIA DE SOFTWARE',
+      subject: '004 - DISCIPLINA 004',
       type: 'deadline',
       source: 'moodle_calendar',
     },
     {
       id: 'demo-prova',
       stable_key: 'demo-prova',
-      title: 'Prova da Unidade 1',
+      title: 'Prova da Disciplina 002',
       date: emDias(12),
       time: '19:00',
       description: 'Presencial, no polo.',
-      subject: '31002 - BANCO DE DADOS',
+      subject: '002 - DISCIPLINA 002',
       type: 'exam',
       source: 'moodle_calendar',
     },
