@@ -103,6 +103,13 @@ class SubjectModel(BaseModel):
     # ninguém leu o boletim desta disciplina, ou quando os pesos do Moodle
     # ainda não fecham 100% e a conta não significaria nada. Ver `grades.py`.
     grade_forecast: Optional[str] = None
+    # A mesma previsão em números, para a tela do boletim do semestre poder
+    # ordenar e agrupar. A frase acima continua sendo a fonte do que se lê:
+    # texto montado no cliente a partir destes campos divergiria dela.
+    grade_current: Optional[float] = None
+    grade_needed: Optional[float] = None
+    # fechado | garantido | precisa | impossivel | sem_base
+    grade_status: Optional[str] = None
 
 
 class AcademicEvent(BaseModel):
@@ -692,6 +699,9 @@ async def scrape_portal(session: app_session.PortalSession = Depends(require_ses
             sub["pending_activities"] = sem_prazo.get(sub["name"], [])
             previsao = previsoes.get(sub["name"])
             sub["grade_forecast"] = grades.frase(previsao) if previsao else None
+            sub["grade_current"] = (previsao or {}).get("atual")
+            sub["grade_needed"] = (previsao or {}).get("precisa")
+            sub["grade_status"] = (previsao or {}).get("situacao")
 
         for ev in events:
             ev["synced"] = ev.get("stable_key") in synced_keys
@@ -731,6 +741,9 @@ async def get_cache(session: app_session.PortalSession = Depends(require_session
                 grade_changed=saiu_nota,
                 previous_grade=nota_anterior,
                 grade_forecast=grades.frase(previsoes[s.name]) if s.name in previsoes else None,
+                grade_current=previsoes.get(s.name, {}).get("atual"),
+                grade_needed=previsoes.get(s.name, {}).get("precisa"),
+                grade_status=previsoes.get(s.name, {}).get("situacao"),
             ))
         events = [
             AcademicEvent(

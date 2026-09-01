@@ -230,6 +230,22 @@ banco por dois caminhos — o disparo de notificação (três vezes ao dia) e a
 própria visita ao boletim, que agora grava o que leu. Quem nunca fez nem uma
 coisa nem outra não recebe previsão nenhuma, e o cartão fica como estava.
 
+**Cinco coisas pequenas que vieram juntas, e o que cada uma custa.** Um lote
+de 01/09/2026: o **simulador** ("e se eu tirar 8?") vive no `GradesPanel` e
+repete a fórmula do `grades.py` no cliente de propósito — ele recalcula a cada
+arrasto, e uma ida ao servidor por toque o tornaria inútil; se a regra mudar
+lá, muda aqui. A **anotação** do compromisso (`event_notes`, `/api/event-notes`)
+fica no servidor e não no navegador, porque é o dado que o aluno mais
+lamentaria perder ao trocar de aparelho — e salva sozinha um segundo depois da
+última tecla, já que botão "Salvar" em caixa de recado é mais uma chance de
+perder o que foi escrito. O **número no ícone** do app (`lib/badge.ts`,
+`navigator.setAppBadge`) é o único recado que o app dá sem gastar notificação;
+sem suporte ele não faz nada, e nada depende dele. A **busca** ocupa o lugar
+das visões enquanto há texto — mostrar as duas coisas faria procurar dentro da
+resposta. O **cartão da semana** (`lib/cartaoDaSemana.ts`) é `canvas` na mão,
+sem biblioteca, e não leva nome, matrícula nem nota: ele vai para o grupo da
+turma.
+
 **O aviso de nota olha o boletim item a item, não o total.** O total da
 disciplina (`/grade/report/overview`) só existe depois que o Moodle atribui
 peso a todas as avaliações, e durante boa parte do semestre ele vem vazio: em

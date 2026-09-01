@@ -56,6 +56,8 @@ export function agendaDeExemplo(): AgendaDeExemplo {
       name: '001 - DISCIPLINA 001',
       ...semestre,
       grade_forecast: 'Aprovação garantida — fecha em 8,2 mesmo zerando o que falta.',
+      grade_current: 8.2,
+      grade_status: 'garantido',
     },
     {
       id: 'demo-disciplina-2',
@@ -73,6 +75,9 @@ export function agendaDeExemplo(): AgendaDeExemplo {
       previous_grade: null,
       // A conta que o app faz sozinho a partir do boletim guardado.
       grade_forecast: 'Precisa de 5,8 na avaliação que falta para fechar 7,0.',
+      grade_current: 6.1,
+      grade_needed: 5.8,
+      grade_status: 'precisa',
     },
     {
       id: 'demo-disciplina-4',

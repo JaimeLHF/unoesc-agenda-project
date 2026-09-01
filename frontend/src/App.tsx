@@ -14,6 +14,7 @@ import Assistant from './components/Assistant';
 import AssistantFab from './components/AssistantFab';
 import ProfilePage from './components/ProfilePage';
 import AdminPage from './components/AdminPage';
+import BoletimPage from './components/BoletimPage';
 import ThemeToggle from './components/ThemeToggle';
 import {
   login,
@@ -31,7 +32,15 @@ import {
 import type { Account, Profile } from './services/api';
 import { requestGoogleAccessToken } from './services/googleAuth';
 import { useDoneEvents, eventKey } from './contexts/DoneEventsContext';
-import { ROTA_ADMIN, activityPath, navigate, useActivityRoute, useAdminRoute } from './lib/router';
+import {
+  ROTA_ADMIN,
+  ROTA_NOTAS,
+  activityPath,
+  navigate,
+  useActivityRoute,
+  useAdminRoute,
+  useNotasRoute,
+} from './lib/router';
 import { agendaEstaFresca, compararAgendas } from './lib/novidades';
 import { agendaDeExemplo } from './lib/demonstracao';
 import { atualizarBadge } from './lib/badge';
@@ -99,6 +108,9 @@ const App: React.FC = () => {
   // O painel do dono também mora no endereço: ele precisa poder ser aberto
   // direto, sem passar pela agenda, e o backend responde 404 para quem não é.
   const naRotaAdmin = useAdminRoute();
+  // As notas do semestre também moram no endereço: é a tela que o aluno abre
+  // uma vez por semana e quer poder favoritar.
+  const naRotaNotas = useNotasRoute();
   const abrirAtividade = (event: AcademicEvent) => navigate(activityPath(eventKey(event)));
 
   // Banner de "servidor fora do ar": axios interceptor dispatcha eventos
@@ -520,7 +532,7 @@ const App: React.FC = () => {
           <LoadingSkeleton message="Na primeira vez isso leva cerca de um minuto, porque estamos lendo todas as suas disciplinas." />
         )}
 
-        {step === 'results' && demo && (
+        {step === 'results' && demo && !naRotaNotas && (
           <AvisoDemonstracao
             onSair={sairDaDemonstracao}
             onRever={() => setTour(true)}
@@ -528,11 +540,22 @@ const App: React.FC = () => {
           />
         )}
 
+        {step === 'results' && naRotaNotas && (
+          <BoletimPage
+            subjects={subjects}
+            onBack={() => navigate('/')}
+            onSelectSubject={(id) => {
+              setSelectedSubjectId(id);
+              navigate('/');
+            }}
+          />
+        )}
+
         {step === 'results' && naRotaAdmin && (
           <AdminPage onBack={() => navigate('/')} />
         )}
 
-        {step === 'results' && !naRotaAdmin && activityKey && (
+        {step === 'results' && !naRotaAdmin && !naRotaNotas && activityKey && (
           <ActivityPage
             stableKey={activityKey}
             onBack={() => navigate('/')}
@@ -547,7 +570,7 @@ const App: React.FC = () => {
           lista pelo esqueleto a cada busca era esconder do aluno justamente o
           que ele abriu o app para ver.
         */}
-        {step === 'results' && !naRotaAdmin && !activityKey && !selectedSubject && mostrandoEsqueleto && (
+        {step === 'results' && !naRotaAdmin && !naRotaNotas && !activityKey && !selectedSubject && mostrandoEsqueleto && (
           <LoadingSkeleton cards={Math.max(subjects.length, 3)} />
         )}
 
@@ -557,15 +580,15 @@ const App: React.FC = () => {
           assunto tem o "Não mostre isso novamente" ali mesmo, sem precisar
           caçar configuração.
         */}
-        {step === 'results' && !naRotaAdmin && !activityKey && !selectedSubject && (
+        {step === 'results' && !naRotaAdmin && !naRotaNotas && !activityKey && !selectedSubject && (
           <AvisoNovidades frase={novidades} onFechar={() => setNovidades(null)} />
         )}
 
-        {step === 'results' && !naRotaAdmin && !activityKey && !selectedSubject && !mostrandoEsqueleto && !demo && (
+        {step === 'results' && !naRotaAdmin && !naRotaNotas && !activityKey && !selectedSubject && !mostrandoEsqueleto && !demo && (
           <ConviteNotificacoes username={account?.username} />
         )}
 
-        {step === 'results' && !naRotaAdmin && !activityKey && !selectedSubject && !mostrandoEsqueleto && (
+        {step === 'results' && !naRotaAdmin && !naRotaNotas && !activityKey && !selectedSubject && !mostrandoEsqueleto && (
           <SubjectList
             subjects={subjects}
             events={events}
@@ -576,14 +599,15 @@ const App: React.FC = () => {
                nenhum. Mandar para o login no meio do exemplo seria pedir a
                senha justamente de quem ainda está decidindo. */
             onOpenEvent={demo ? () => {} : abrirAtividade}
+            onAbrirNotas={() => navigate(ROTA_NOTAS)}
           />
         )}
 
-        {step === 'results' && demo && !selectedSubject && (
+        {step === 'results' && demo && !naRotaNotas && !selectedSubject && (
           <RecursosDaDemonstracao onSair={sairDaDemonstracao} />
         )}
 
-        {step === 'results' && !naRotaAdmin && !activityKey && selectedSubject && (
+        {step === 'results' && !naRotaAdmin && !naRotaNotas && !activityKey && selectedSubject && (
           <SubjectDetail
             subject={selectedSubject}
             events={eventsForSelected}

@@ -53,6 +53,10 @@ export interface Subject {
    * não fecham 100% e a conta não significaria nada.
    */
   grade_forecast?: string | null;
+  /** A mesma previsão em números, para a tela de notas ordenar e agrupar. */
+  grade_current?: number | null;
+  grade_needed?: number | null;
+  grade_status?: 'fechado' | 'garantido' | 'precisa' | 'impossivel' | 'sem_base' | string | null;
 }
 
 /** Tipos possíveis de evento acadêmico */

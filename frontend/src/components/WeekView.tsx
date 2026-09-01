@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import type { AcademicEvent, EventType } from '../types';
 import { useDoneEvents } from '../contexts/DoneEventsContext';
 import Icon from './Icon';
+import { compartilharCartao } from '../lib/cartaoDaSemana';
 import { formatarPeso, mudancaDePrazo } from '../lib/avisos';
 import { cargaDaSemana, descreverCarga } from '../lib/semana';
 
@@ -52,6 +53,7 @@ function intervalo(inicio: Date): string {
  */
 const WeekView: React.FC<WeekViewProps> = ({ events, onOpenEvent }) => {
   const [offset, setOffset] = useState(0);
+  const [compartilhando, setCompartilhando] = useState(false);
   const { isDone } = useDoneEvents();
 
   const hoje = new Date();
@@ -116,6 +118,27 @@ const WeekView: React.FC<WeekViewProps> = ({ events, onOpenEvent }) => {
             aria-label="Próxima semana"
           >
             <Icon name="voltar" size={0.9} />
+          </button>
+          {/*
+            O cartão da semana: uma imagem com estes mesmos prazos, para mandar
+            no grupo da turma. É como este app é descoberto — link solto no
+            grupo não diz o que ele faz, e a imagem diz.
+          */}
+          <button
+            type="button"
+            className="btn-ghost"
+            disabled={compartilhando}
+            onClick={async () => {
+              setCompartilhando(true);
+              const eventosDaSemana = dias.flatMap((d) => d.eventos);
+              const deu = await compartilharCartao(eventosDaSemana, intervalo(primeira));
+              setCompartilhando(false);
+              if (!deu) alert('Não consegui gerar a imagem neste navegador.');
+            }}
+            aria-label="Compartilhar a semana como imagem"
+          >
+            <Icon name="mais" size={0.9} />
+            Cartão
           </button>
         </div>
       </div>

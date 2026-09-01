@@ -3,8 +3,8 @@ import { useEffect, useState } from 'react';
 /**
  * Roteador mínimo, sem dependência.
  *
- * O app tem três rotas: a agenda (`/`), a atividade (`/atividade/<chave>`) e
- * o painel do dono (`/admin`).
+ * O app tem quatro rotas: a agenda (`/`), a atividade (`/atividade/<chave>`),
+ * as notas do semestre (`/notas`) e o painel do dono (`/admin`).
  * Trazer o react-router para isso custaria mais bytes no 4G do que o app
  * inteiro ganha — e a única coisa que precisamos é do endereço mudar junto
  * com a tela, para o botão voltar do navegador funcionar e o link poder ser
@@ -15,6 +15,9 @@ const PREFIXO = '/atividade/';
 
 /** Painel do dono. Endereço fixo: quem não é dono recebe 404 da API. */
 export const ROTA_ADMIN = '/admin';
+
+/** Todas as notas do semestre numa tela só. */
+export const ROTA_NOTAS = '/notas';
 
 /** Empurra um endereço novo e avisa quem estiver ouvindo. */
 export function navigate(path: string): void {
@@ -39,6 +42,11 @@ export function useActivityRoute(): string | null {
 /** `true` quando o endereço atual é o do painel do dono. */
 export function useAdminRoute(): boolean {
   return usePathname() === ROTA_ADMIN;
+}
+
+/** `true` quando o endereço atual é o das notas do semestre. */
+export function useNotasRoute(): boolean {
+  return usePathname() === ROTA_NOTAS;
 }
 
 /** O caminho atual, reagindo ao botão voltar e às chamadas de `navigate`. */

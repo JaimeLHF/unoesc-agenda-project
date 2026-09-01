@@ -14,6 +14,8 @@ interface SubjectListProps {
   lastScrapedAt?: string | null;
   /** Repassado para a faixa de alertas, que leva à página da atividade. */
   onOpenEvent: (event: AcademicEvent) => void;
+  /** Abre a tela com as notas de todas as disciplinas. */
+  onAbrirNotas?: () => void;
 }
 
 /** Formata "X minutos atrás" / "ontem" a partir de um timestamp ISO. */
@@ -162,6 +164,7 @@ const SubjectList: React.FC<SubjectListProps> = ({
   onSelectSubject,
   lastScrapedAt,
   onOpenEvent,
+  onAbrirNotas,
 }) => {
   const { isDone } = useDoneEvents();
   const [visao, setVisao] = React.useState<'semana' | 'disciplinas'>('disciplinas');
@@ -408,12 +411,20 @@ const SubjectList: React.FC<SubjectListProps> = ({
 
   return (
     <section className="subject-grid-section">
-      <div className="page-heading">
-        <h2 className="section-title">Suas disciplinas</h2>
-        <p className="section-subtitle">
-          Clique em uma disciplina para ver os eventos dela.
-          {lastScrapedRel && ` · Atualizado ${lastScrapedRel}`}
-        </p>
+      <div className="page-heading page-heading--com-acao">
+        <div>
+          <h2 className="section-title">Suas disciplinas</h2>
+          <p className="section-subtitle">
+            Clique em uma disciplina para ver os eventos dela.
+            {lastScrapedRel && ` · Atualizado ${lastScrapedRel}`}
+          </p>
+        </div>
+        {onAbrirNotas && subjects.length > 0 && (
+          <button type="button" className="btn-secondary" onClick={onAbrirNotas}>
+            <Icon name="prova" size={1} />
+            Minhas notas
+          </button>
+        )}
       </div>
 
       <div className="busca">
