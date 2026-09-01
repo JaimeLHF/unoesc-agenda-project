@@ -23,6 +23,7 @@ from app.database import (
     CourseItem,
     GradeItem,
     DoneEvent,
+    EventNote,
     PushSubscription,
     Event,
     Meta,
@@ -138,6 +139,7 @@ def delete_user(session: Session, user_id: str) -> None:
     session.execute(delete(Event).where(Event.user_id == user_id))
     session.execute(delete(Subject).where(Subject.user_id == user_id))
     session.execute(delete(DoneEvent).where(DoneEvent.user_id == user_id))
+    session.execute(delete(EventNote).where(EventNote.user_id == user_id))
     session.execute(delete(CourseItem).where(CourseItem.user_id == user_id))
     session.execute(delete(GradeItem).where(GradeItem.user_id == user_id))
     session.execute(delete(PushSubscription).where(PushSubscription.user_id == user_id))
@@ -442,6 +444,7 @@ def upsert_events(session: Session, user_id: str, events: list[dict]) -> None:
             subject=e["subject"],
             type=e["type"],
             source=e.get("source"),
+            event_type=e.get("event_type"),
             url=e.get("url"),
             previous_date=previous_date,
             date_changed_at=date_changed_at,
@@ -457,6 +460,7 @@ def upsert_events(session: Session, user_id: str, events: list[dict]) -> None:
                 "description": stmt.excluded.description,
                 "type": stmt.excluded.type,
                 "source": stmt.excluded.source,
+                "event_type": stmt.excluded.event_type,
                 "url": stmt.excluded.url,
                 "previous_date": stmt.excluded.previous_date,
                 "date_changed_at": stmt.excluded.date_changed_at,
@@ -787,6 +791,45 @@ def mark_done(session: Session, user_id: str, stable_key: str) -> None:
         index_elements=[DoneEvent.user_id, DoneEvent.stable_key]
     )
     session.execute(stmt)
+
+
+# ---------------------------------------------------------------------------
+# Anotações do aluno sobre um compromisso
+# ---------------------------------------------------------------------------
+
+def get_note(session: Session, user_id: str, stable_key: str) -> str:
+    """A anotação deste aluno neste evento. String vazia quando não há."""
+    linha = session.get(EventNote, (user_id, stable_key))
+    return linha.text if linha else ""
+
+
+def notes_by_key(session: Session, user_id: str) -> dict[str, str]:
+    """Todas as anotações do aluno, para a lista marcar quem tem recado."""
+    linhas = session.execute(
+        select(EventNote).where(EventNote.user_id == user_id)
+    ).scalars().all()
+    return {linha.stable_key: linha.text for linha in linhas}
+
+
+def set_note(session: Session, user_id: str, stable_key: str, texto: str) -> str:
+    """
+    Guarda (ou apaga) a anotação. Texto vazio apaga a linha em vez de deixar
+    uma string vazia no banco — assim "tem anotação?" é só a presença da linha.
+    """
+    texto = (texto or "").strip()[:2000]
+    linha = session.get(EventNote, (user_id, stable_key))
+
+    if not texto:
+        if linha is not None:
+            session.delete(linha)
+        return ""
+
+    if linha is None:
+        session.add(EventNote(user_id=user_id, stable_key=stable_key, text=texto))
+    else:
+        linha.text = texto
+        linha.updated_at = utc_now()
+    return texto
 
 
 def unmark_done(session: Session, user_id: str, stable_key: str) -> None:

@@ -180,6 +180,11 @@ class Event(Base):
     subject: Mapped[str] = mapped_column(String, nullable=False, index=True)
     type: Mapped[str] = mapped_column(String, nullable=False)        # webconference|deadline|exam|other
     source: Mapped[Optional[str]] = mapped_column(String)            # moodle_calendar
+    # due | open | close, como o calendário do Moodle classifica a data. Vale
+    # a pena guardar por causa do `open`: é a data em que a atividade passa a
+    # aceitar envio, e até então o aluno abre a sala, encontra a tarefa
+    # fechada e volta no dia seguinte para conferir de novo.
+    event_type: Mapped[Optional[str]] = mapped_column(String)
     url: Mapped[Optional[str]] = mapped_column(String)               # link direto pro evento no portal
     # ID do evento correspondente no Google Calendar. Preenchido após uma
     # sincronização bem-sucedida; é o que faz o frontend saber que o evento
@@ -197,6 +202,30 @@ class Event(Base):
     # garimpo de PDF preenche: o calendário do Moodle não carrega peso.
     weight: Mapped[Optional[float]] = mapped_column(Float)
     last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utc_now, onupdate=utc_now
+    )
+
+
+class EventNote(Base):
+    """
+    A anotação que o aluno escreve sobre um compromisso.
+
+    "A prova cobre os capítulos 3 a 5", "levar calculadora", "combinei com a
+    Ana de fazer a parte 2". Sem um lugar para isso dentro da agenda, esse
+    recado vai para o bloco de notas do celular e some do contexto em que ele
+    importa — a tela onde a data está.
+
+    A chave é `(user_id, stable_key)`: a anotação segue o evento mesmo quando o
+    professor muda a data, porque `stable_key` vem do id do Moodle. Some junto
+    com a conta, como todo o resto (ver `delete_user`).
+    """
+
+    __tablename__ = "event_notes"
+
+    user_id: Mapped[str] = mapped_column(String, primary_key=True)
+    stable_key: Mapped[str] = mapped_column(String, primary_key=True)
+    text: Mapped[str] = mapped_column(Text, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=utc_now, onupdate=utc_now
     )
 

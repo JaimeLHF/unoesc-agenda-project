@@ -8,6 +8,8 @@ O relógio que dispara as notificações.
            mudou nada e o aluno sumiu há dias, um empurrãozinho
     17:00  o que começa daqui a pouco — **não fala com o Moodle**
     19:00  véspera ("amanhã tem prova") + o que mudou
+    21:00  última chamada: a entrega de hoje que ainda não foi marcada como
+           concluída — também **sem falar com o Moodle**
 
 Três idas ao Moodle, e não uma por hora: cada rodada faz um login **por aluno
 inscrito**, mais uma requisição de boletim por disciplina (ver `_boletins`), e
@@ -54,10 +56,15 @@ from app.moodle import TZ_BR, MoodleClient
 logger = logging.getLogger("agenda.scheduler")
 
 # Hora (no fuso de Brasília) → nome do disparo.
-HORARIOS = {7: "manha", 13: "meio", 17: "lembrete", 19: "noite"}
+HORARIOS = {7: "manha", 13: "meio", 17: "lembrete", 19: "noite", 21: "ultima_chamada"}
 
 # Disparos que não abrem o Moodle: falam só do que já está no banco.
-SLOTS_SEM_MOODLE = {"lembrete"}
+SLOTS_SEM_MOODLE = {"lembrete", "ultima_chamada"}
+
+# A partir de que hora um compromisso de hoje ainda vale como "última
+# chamada". Entrega do Moodle vence 23:59; o que era de manhã já passou, e
+# avisar sobre isso às 21h só serviria para dar um susto inútil.
+HORA_ULTIMA_CHAMADA = "21:00"
 
 # Janela do lembrete da tarde. Meia hora de piso porque aviso que chega junto
 # com o começo não serve para nada; cinco horas de teto para que o disparo das
@@ -195,6 +202,7 @@ def _do_dia(user_id: str, dia: str) -> list[dict]:
             {
                 "title": e.title, "date": e.date, "time": e.time,
                 "subject": e.subject, "type": e.type,
+                "event_type": e.event_type,
             }
             for e in repo.list_events(db, user_id)
             if e.date == dia and e.stable_key not in feitos
@@ -278,6 +286,25 @@ def _marcar_habito(user_id: str, agora: datetime, proximo: int) -> None:
         repo.set_meta(db, user_id, "push:habito", agora.date().isoformat())
         repo.set_meta(db, user_id, "push:habito:frase", str(proximo))
         db.commit()
+
+
+def _vencendo_hoje(user_id: str) -> list[dict]:
+    """Compromissos de hoje que ainda não foram marcados como concluídos e
+    vencem no fim do dia — a lista da última chamada."""
+    hoje = _agora().date().isoformat()
+    return [
+        e for e in _do_dia(user_id, hoje)
+        if (e.get("time") or "") >= HORA_ULTIMA_CHAMADA
+        # A abertura de uma atividade não vence nada: ela só passou a aceitar
+        # envio, e cobrar entrega por causa dela seria mentira.
+        and e.get("event_type") != "open"
+    ]
+
+
+def _abriu_hoje(user_id: str) -> list[dict]:
+    """Atividades cuja data de abertura é hoje."""
+    hoje = _agora().date().isoformat()
+    return [e for e in _do_dia(user_id, hoje) if e.get("event_type") == "open"]
 
 
 # ---------------------------------------------------------------------------
@@ -394,6 +421,12 @@ def atender(user_id: str, slot: str) -> int:
             enviados += entregar(
                 user_id, push.resumo_do_dia(_do_dia(user_id, hoje.isoformat())), "dia"
             )
+            # "Abriu para envio" anda junto do resumo da manhã, e não num
+            # horário próprio: é a mesma pergunta ("o que tenho hoje?") vista
+            # do outro lado, e um disparo a mais só para isso gastaria o canal.
+            enviados += entregar(
+                user_id, push.abriu_para_envio(_abriu_hoje(user_id)), "abriu"
+            )
         elif slot == "meio" and enviados == 0:
             # Só quando o disparo não teve nada de concreto a dizer: nota
             # lançada e prazo alterado são o motivo pelo qual ele ligou os
@@ -413,6 +446,10 @@ def atender(user_id: str, slot: str) -> int:
         elif slot == "noite":
             amanha = (hoje + timedelta(days=1)).isoformat()
             enviados += entregar(user_id, push.vespera(_do_dia(user_id, amanha)), "vespera")
+        elif slot == "ultima_chamada":
+            enviados += entregar(
+                user_id, push.ultima_chamada(_vencendo_hoje(user_id)), "ultima"
+            )
 
     except Exception as exc:  # um aluno não derruba a rodada dos outros
         logger.warning("notificação falhou para %s: %s", user_id, exc)

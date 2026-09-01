@@ -231,6 +231,49 @@ def lembrete(eventos: list[dict], minutos: int) -> Optional[tuple[str, str, str]
     return f"{nome} {_daqui(minutos)}", corpo, "/"
 
 
+def ultima_chamada(eventos: list[dict]) -> Optional[tuple[str, str, str]]:
+    """
+    A entrega vence hoje à noite e ainda não está marcada como concluída.
+
+    É o aviso mais barato de todos em valor por notificação: nota perdida por
+    esquecimento é a única que o aluno não recupera estudando. Sai perto do
+    fim do dia e só para o que sobrou — o resumo da manhã já falou do dia
+    inteiro, e quem entregou marcou como concluído e some daqui.
+    """
+    if not eventos:
+        return None
+
+    e = eventos[0]
+    hora = e.get("time")
+    titulo = f"Última chamada — {hora}" if hora else "Última chamada"
+    corpo = f"{e['title']} — {_sem_codigo(e['subject'])}"
+    if len(eventos) > 1:
+        corpo += f" · e mais {_plural(len(eventos) - 1, 'entrega', 'entregas')}"
+    return titulo, corpo, "/"
+
+
+def abriu_para_envio(eventos: list[dict]) -> Optional[tuple[str, str, str]]:
+    """
+    A atividade passou a aceitar envio hoje.
+
+    O Moodle marca essa data no calendário (`event_type: open`) e não avisa
+    ninguém: o aluno abre a sala, encontra a tarefa fechada, e volta no dia
+    seguinte para conferir de novo — ou esquece que ela existia.
+    """
+    if not eventos:
+        return None
+
+    if len(eventos) == 1:
+        e = eventos[0]
+        return "Abriu para envio", f"{e['title']} — {_sem_codigo(e['subject'])}", "/"
+
+    return (
+        f"{len(eventos)} atividades abriram para envio",
+        _lista([e["title"] for e in eventos]),
+        "/",
+    )
+
+
 def notas_novas(disciplinas: list[dict]) -> Optional[tuple[str, str, str]]:
     """
     Saiu nota. É o aviso que a UNOESC não manda por e-mail, e o motivo pelo

@@ -250,6 +250,17 @@ def main_teste() -> int:
           "Prova em 45 min", "abaixo de uma hora e meia a conta é em minutos")
     igual(push.lembrete([], 0), None, "tarde sem compromisso não vira notificação")
 
+    # Nota perdida por esquecimento é a única que não se recupera estudando.
+    igual(push.ultima_chamada([{"title": "Atividade Avaliativa 1", "time": "23:59",
+                                "subject": "28743 - Desenvolvimento Mobile"}])[0],
+          "Última chamada — 23:59", "a hora do fim do prazo vai no título")
+    igual(push.ultima_chamada([])[0] if push.ultima_chamada([]) else None, None,
+          "sem entrega pendente não sai nada às 21h")
+
+    igual(push.abriu_para_envio([{"title": "Tarefa 2",
+                                  "subject": "31002 - Banco de Dados"}])[0],
+          "Abriu para envio", "a atividade que passou a aceitar envio é notícia")
+
     # O empurrãozinho de quem sumiu. Não tem fato por trás, então o que
     # sustenta é o repertório: frase repetida vira paisagem, e frase que
     # promete tela inexistente custa a confiança de quem abriu.

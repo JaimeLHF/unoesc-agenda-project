@@ -406,10 +406,32 @@ def main_teste() -> int:
             f"B não recebe a previsão calculada com o boletim de A ({previsao_b})",
         )
 
+        # -- anotações do aluno sobre um compromisso -------------------------
+        client.put(
+            "/api/event-notes",
+            json={"stable_key": chave_a, "text": "A prova cobre os capítulos 3 a 5"},
+            headers=auth(token_a),
+        )
+        notas_a = client.get("/api/event-notes", headers=auth(token_a)).json()
+        notas_b = client.get("/api/event-notes", headers=auth(token_b)).json()
+        verificar(notas_a.get(chave_a) == "A prova cobre os capítulos 3 a 5",
+                  f"A lê a própria anotação ({notas_a})")
+        verificar(notas_b == {}, f"B não vê a anotação de A ({notas_b})")
+
+        client.put(
+            "/api/event-notes",
+            json={"stable_key": chave_a, "text": "   "},
+            headers=auth(token_a),
+        )
+        verificar(client.get("/api/event-notes", headers=auth(token_a)).json() == {},
+                  "anotação em branco apaga a linha em vez de guardar vazio")
+
         print("\n[3] Nenhum endpoint de dados responde sem sessão")
         sem_sessao = [
             ("get", "/api/cache", None),
             ("get", "/api/done-events", None),
+            ("get", "/api/event-notes", None),
+            ("put", "/api/event-notes", {"stable_key": "x", "text": "y"}),
             ("post", "/api/done-events", {"stable_key": chave_a}),
             ("post", "/api/scrape", None),
             ("delete", "/api/cache", None),

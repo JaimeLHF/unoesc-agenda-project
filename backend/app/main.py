@@ -745,6 +745,7 @@ async def get_cache(session: app_session.PortalSession = Depends(require_session
                 synced=e.google_event_id is not None,
                 url=e.url,
                 source=e.source,
+                event_type=e.event_type,
                 previous_date=repo.aviso_de_mudanca(e),
                 weight=e.weight,
             )
@@ -759,6 +760,38 @@ async def get_cache(session: app_session.PortalSession = Depends(require_session
         done_keys=done_keys,
         last_scraped_at=last_scraped_at,
     )
+
+
+class NotaDoEvento(BaseModel):
+    """A anotação que o aluno escreveu sobre um compromisso."""
+    stable_key: str
+    text: str = ""
+
+
+@app.get("/api/event-notes", response_model=dict[str, str])
+async def listar_anotacoes(session: app_session.PortalSession = Depends(require_session)):
+    """Todas as anotações deste aluno, por `stable_key`. Nunca de outro."""
+    with repo.get_session() as db:
+        return repo.notes_by_key(db, session.user_id)
+
+
+@app.put("/api/event-notes", response_model=NotaDoEvento)
+async def salvar_anotacao(
+    corpo: NotaDoEvento,
+    session: app_session.PortalSession = Depends(require_session),
+):
+    """
+    Escreve (ou apaga, com texto vazio) a anotação do aluno num compromisso.
+
+    Não confere se o evento existe na agenda dele: o aluno pode anotar sobre
+    algo que o Moodle ainda vai publicar, e a linha morre com a conta de todo
+    jeito. O que a rota garante é o que importa — a anotação é gravada e lida
+    sempre sob o `user_id` da sessão.
+    """
+    with repo.get_session() as db:
+        texto = repo.set_note(db, session.user_id, corpo.stable_key, corpo.text)
+        db.commit()
+    return NotaDoEvento(stable_key=corpo.stable_key, text=texto)
 
 
 @app.get("/api/done-events", response_model=DoneEventsResponse)
@@ -1122,6 +1155,7 @@ async def activity_detail(
         synced_keys = set(repo.list_synced_keys(db, session.user_id))
 
         detalhe = {
+            "note": repo.get_note(db, session.user_id, stable_key),
             "stable_key": evento.stable_key,
             "title": evento.title,
             "date": evento.date,
