@@ -201,7 +201,7 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSubmit, loading, error, onDemo 
 
             <button type="button" className="btn-secondary auth__demo" onClick={onDemo}>
               <Icon name="calendario" size={1} />
-              Ver um exemplo sem entrar
+              Veja como funciona
             </button>
           </div>
         </div>

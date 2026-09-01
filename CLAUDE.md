@@ -160,6 +160,18 @@ a sessão de alguém) e o convite de notificação não aparece. O que a demo n�
 consegue provar — Lumi, aviso no celular, calendário assinável — é dito em três
 linhas no fim da rolagem, sem tela falsa.
 
+Por cima dela roda uma apresentação guiada de seis passos
+(`TourDemonstracao.tsx`), escrita à mão: uma biblioteca de tour traria seis
+balões e um recorte, e esta é a primeira tela que alguém vê no 4G. O escuro é
+uma `box-shadow` de 9999px em volta de um retângulo, não um recorte de
+verdade; uma folha invisível engole os cliques, senão a pessoa sai da tela que
+o balão está explicando; e o passo cujo alvo não existe é pulado sem aparecer,
+porque a demonstração muda com o calendário. Dois passos clicam num botão da
+própria tela antes de acender (`clicarAntes`) — é como a visão por semana
+mostra os selos de que ela fala, em vez de mandar o visitante procurar. Medir
+no mesmo tick desse clique pegava a tela anterior e descartava o passo: são
+dois `requestAnimationFrame` antes da medida.
+
 **Login automático no Moodle é impossível.** O navegador não aceita cookie de
 outro domínio; a única saída seria um plugin instalado pelo admin da UNOESC. Não
 tente de novo.

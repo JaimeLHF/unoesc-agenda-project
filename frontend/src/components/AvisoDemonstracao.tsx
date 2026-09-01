@@ -5,6 +5,13 @@ interface AvisoDemonstracaoProps {
   onSair: () => void;
 }
 
+interface FaixaProps extends AvisoDemonstracaoProps {
+  /** Recomeça a apresentação guiada. */
+  onRever: () => void;
+  /** Enquanto ela está no ar, o botão de rever sairia por cima dela. */
+  tourNoAr: boolean;
+}
+
 /**
  * A faixa que acompanha a agenda de exemplo.
  *
@@ -16,7 +23,7 @@ interface AvisoDemonstracaoProps {
  * Não fecha. Um "x" transformaria a demonstração numa tela indistinguível da
  * agenda real assim que a pessoa clicasse.
  */
-const AvisoDemonstracao: React.FC<AvisoDemonstracaoProps> = ({ onSair }) => (
+const AvisoDemonstracao: React.FC<FaixaProps> = ({ onSair, onRever, tourNoAr }) => (
   <div className="demo-banner" role="status">
     <span className="demo-banner__texto">
       <Icon name="alerta" size={1} />
@@ -25,9 +32,16 @@ const AvisoDemonstracao: React.FC<AvisoDemonstracaoProps> = ({ onSair }) => (
         como a agenda funciona.
       </span>
     </span>
-    <button type="button" className="btn-primary demo-banner__acao" onClick={onSair}>
-      Entrar com minha conta
-    </button>
+    <span className="demo-banner__botoes">
+      {!tourNoAr && (
+        <button type="button" className="btn-ghost demo-banner__rever" onClick={onRever}>
+          Rever a apresentação
+        </button>
+      )}
+      <button type="button" className="btn-primary demo-banner__acao" onClick={onSair}>
+        Entrar com minha conta
+      </button>
+    </span>
   </div>
 );
 

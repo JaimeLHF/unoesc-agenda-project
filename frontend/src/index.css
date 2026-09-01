@@ -432,6 +432,89 @@ body {
   width: auto;
 }
 
+/*
+  A apresentação guiada da demonstração.
+
+  O escuro em volta do alvo é a sombra deste retângulo, não um overlay com
+  recorte: uma `box-shadow` de 9999px cobre a tela inteira e deixa aceso só o
+  que está dentro dele. Uma folha invisível por baixo segura os cliques.
+*/
+.tour {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+}
+
+.tour__folha {
+  position: absolute;
+  inset: 0;
+}
+
+.tour__foco {
+  position: absolute;
+  border-radius: calc(var(--radius) + 4px);
+  box-shadow: 0 0 0 9999px rgba(15, 23, 42, 0.62);
+  pointer-events: none;
+  transition: top 0.18s ease, left 0.18s ease, width 0.18s ease, height 0.18s ease;
+}
+
+.tour__balao {
+  position: absolute;
+  padding: 1rem 1.1rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  background: var(--color-surface);
+  box-shadow: 0 12px 32px rgba(15, 23, 42, 0.28);
+  text-wrap: pretty;
+}
+
+.tour__contador {
+  margin: 0 0 0.35rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-muted);
+}
+
+.tour__titulo {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+  color: var(--color-text);
+}
+
+.tour__texto {
+  margin: 0 0 0.9rem;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--color-text-muted);
+}
+
+.tour__acoes {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.tour .btn-primary.tour__proximo {
+  width: auto;
+  padding: 0.45rem 1rem;
+  font-size: 0.85rem;
+}
+
+.demo-banner__botoes {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex-wrap: wrap;
+}
+
+.demo-banner .btn-ghost.demo-banner__rever {
+  color: var(--color-alert-orange-ink);
+  font-size: 0.82rem;
+}
+
 /* ---- Ícones ----
    Herdam cor e tamanho do contexto; o alinhamento vertical evita que o texto
    ao lado suba meio pixel em cada botão. */

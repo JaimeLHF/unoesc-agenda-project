@@ -5,6 +5,7 @@ import Icon from './components/Icon';
 import LoadingSkeleton from './components/LoadingSkeleton';
 import AvisoNovidades from './components/AvisoNovidades';
 import AvisoDemonstracao, { RecursosDaDemonstracao } from './components/AvisoDemonstracao';
+import TourDemonstracao from './components/TourDemonstracao';
 import ConviteNotificacoes from './components/ConviteNotificacoes';
 import LoginForm from './components/LoginForm';
 import SubjectList from './components/SubjectList';
@@ -83,6 +84,11 @@ const App: React.FC = () => {
     uma agenda que não existe. Ver `lib/demonstracao.ts`.
   */
   const [demo, setDemo] = useState(false);
+  /*
+    A apresentação guiada roda por cima da agenda de exemplo, e sai dela: quem
+    pulou continua com a demonstração na tela, e a faixa oferece rever.
+  */
+  const [tour, setTour] = useState(false);
 
   const { hydrate } = useDoneEvents();
 
@@ -308,11 +314,15 @@ const App: React.FC = () => {
     setLoginError(null);
     setDemo(true);
     setStep('results');
+    // O tour começa depois que a agenda existe no DOM: ele mede os elementos
+    // que vai acender, e medir antes da pintura devolveria retângulo zerado.
+    requestAnimationFrame(() => setTour(true));
   };
 
   /** Volta para o login e apaga o exemplo — ele não pode sobrar na tela. */
   const sairDaDemonstracao = () => {
     setDemo(false);
+    setTour(false);
     setSubjects([]);
     setEvents([]);
     setLastScrapedAt(null);
@@ -330,6 +340,7 @@ const App: React.FC = () => {
     setNovidades(null);
     setSelectedSubjectId(null);
     setDemo(false);
+    setTour(false);
     setLoginError(null);
     setRefreshError(null);
     setSyncError(null);
@@ -492,7 +503,13 @@ const App: React.FC = () => {
           <LoadingSkeleton message="Na primeira vez isso leva cerca de um minuto, porque estamos lendo todas as suas disciplinas." />
         )}
 
-        {step === 'results' && demo && <AvisoDemonstracao onSair={sairDaDemonstracao} />}
+        {step === 'results' && demo && (
+          <AvisoDemonstracao
+            onSair={sairDaDemonstracao}
+            onRever={() => setTour(true)}
+            tourNoAr={tour}
+          />
+        )}
 
         {step === 'results' && naRotaAdmin && (
           <AdminPage onBack={() => navigate('/')} />
@@ -596,6 +613,12 @@ const App: React.FC = () => {
           />
         )}
       </main>
+
+      {/*
+        A apresentação guiada é a última coisa desenhada: ela escurece a tela
+        inteira menos o que está explicando, e precisa ficar por cima de tudo.
+      */}
+      {demo && tour && !selectedSubjectId && <TourDemonstracao onFim={() => setTour(false)} />}
 
       {/*
         Lumi fica alcançável de qualquer tela — menos da sua própria, onde o
