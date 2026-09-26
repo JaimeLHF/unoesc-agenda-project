@@ -23,6 +23,8 @@ interface Alert {
   event: AcademicEvent;
   urgency: Urgency;
   diffDays: number;
+  /** Data de abertura, quando o prazo tem uma e ela ainda não chegou. */
+  opensOn?: string;
 }
 
 /** Substantivos por tipo, para uso em frase. */
@@ -33,8 +35,47 @@ const TYPE_NOUN: Record<EventType, string> = {
   other: 'Evento',
 };
 
+/** "Início de X" e "Término de X" viram a mesma chave dentro da disciplina. */
+function chavePar(ev: AcademicEvent): string {
+  const nome = ev.title.replace(/^(in[ií]cio|abertura|t[eé]rmino|fechamento|encerramento)\s+d[eoa]s?\s+/i, '');
+  return `${ev.subject}|${nome.trim().toLowerCase()}`;
+}
+
+/**
+ * O Moodle cria dois eventos para a mesma prova: quando abre e quando fecha.
+ * Na faixa eram duas linhas para uma coisa só, e a de cima parecia o prazo.
+ * Quando os dois existem, fica a linha do prazo, e a abertura vira um
+ * "(abre 28/09)" nela enquanto não chegou. Abertura sem par continua sozinha.
+ */
+function juntarAberturas(events: AcademicEvent[]): {
+  eventos: AcademicEvent[];
+  abertura: Map<AcademicEvent, AcademicEvent>;
+} {
+  const fechamentos = new Map<string, AcademicEvent>();
+  for (const ev of events) {
+    if (ev.event_type === 'close' || ev.event_type === 'due') fechamentos.set(chavePar(ev), ev);
+  }
+  const abertura = new Map<AcademicEvent, AcademicEvent>();
+  const eventos = events.filter((ev) => {
+    if (ev.event_type !== 'open') return true;
+    const prazo = fechamentos.get(chavePar(ev));
+    if (!prazo) return true;
+    abertura.set(prazo, ev);
+    return false;
+  });
+  return { eventos, abertura };
+}
+
+function diaMes(iso: string): string {
+  const [, m, d] = iso.split('-');
+  return `${d}/${m}`;
+}
+
 /** Calcula urgência (em dias civis) e filtra apenas eventos futuros. */
-function computeAlerts(events: AcademicEvent[]): Alert[] {
+function computeAlerts(
+  events: AcademicEvent[],
+  abertura: Map<AcademicEvent, AcademicEvent>,
+): Alert[] {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const todayMs = today.getTime();
@@ -60,7 +101,11 @@ function computeAlerts(events: AcademicEvent[]): Alert[] {
     else if (diffDays <= 7) urgency = 'week';
     else urgency = 'later';
 
-    alerts.push({ event: ev, urgency, diffDays });
+    const abre = abertura.get(ev);
+    const abreMs = abre ? new Date(`${abre.date}T${abre.time ?? '00:00'}:00`).getTime() : NaN;
+    const opensOn = abre && abreMs > Date.now() ? abre.date : undefined;
+
+    alerts.push({ event: ev, urgency, diffDays, opensOn });
   }
 
   alerts.sort((a, b) => {
@@ -80,6 +125,11 @@ function abre(event: AcademicEvent): boolean {
  * cor do texto. O que atrapalha um cabeçalho ajuda um alerta.
  */
 function buildMessage(alert: Alert): { icon: string; text: string } {
+  const msg = buildBase(alert);
+  return alert.opensOn ? { ...msg, text: `${msg.text} (abre ${diaMes(alert.opensOn)})` } : msg;
+}
+
+function buildBase(alert: Alert): { icon: string; text: string } {
   const { event, urgency, diffDays } = alert;
   const noun = TYPE_NOUN[event.type as EventType] ?? 'Evento';
   const subject = event.subject.replace(/^\d+\s*-\s*/, ''); // tira código numérico do início
@@ -127,8 +177,11 @@ const EventAlerts: React.FC<EventAlertsProps> = ({ events, maxAlerts = 10, onOpe
   const { isDone } = useDoneEvents();
 
   // Eventos já marcados como concluídos não geram alertas — o aluno já os fez
-  const pending = events.filter((e) => !isDone(e));
-  const alerts = computeAlerts(pending).slice(0, maxAlerts);
+  // O par é montado antes do filtro: prova concluída não pode deixar a
+  // abertura dela sobrando sozinha na faixa.
+  const { eventos, abertura } = juntarAberturas(events);
+  const pending = eventos.filter((e) => !isDone(e));
+  const alerts = computeAlerts(pending, abertura).slice(0, maxAlerts);
   if (alerts.length === 0) return null;
 
   return (
