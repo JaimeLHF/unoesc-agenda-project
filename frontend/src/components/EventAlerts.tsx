@@ -25,7 +25,7 @@ interface Alert {
   diffDays: number;
 }
 
-/** Substantivos por tipo, em letra minúscula para uso em frase. */
+/** Substantivos por tipo, para uso em frase. */
 const TYPE_NOUN: Record<EventType, string> = {
   webconference: 'Webconferência',
   deadline: 'Entrega',
@@ -77,7 +77,10 @@ function computeAlerts(events: AcademicEvent[]): Alert[] {
  */
 function buildMessage(alert: Alert): { icon: string; text: string } {
   const { event, urgency, diffDays } = alert;
-  const noun = TYPE_NOUN[event.type as EventType] ?? 'Evento';
+  // A data de abertura do Moodle ("Início de …") vira evento como o prazo, e
+  // "EM 2 DIAS: Prova" lia como a prova vencendo — era ela abrindo.
+  const abre = event.event_type === 'open' ? 'abre ' : '';
+  const noun = abre + (TYPE_NOUN[event.type as EventType] ?? 'Evento');
   const subject = event.subject.replace(/^\d+\s*-\s*/, ''); // tira código numérico do início
   const time = event.time ? ` às ${event.time}` : '';
 
