@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import ActivityPage from './components/ActivityPage';
 import AppHeader from './components/AppHeader';
 import Icon from './components/Icon';
@@ -44,6 +44,7 @@ import {
 import { agendaEstaFresca, compararAgendas } from './lib/novidades';
 import { agendaDeExemplo } from './lib/demonstracao';
 import { atualizarBadge } from './lib/badge';
+import { juntarAberturas } from './lib/aberturas';
 import type { Subject, AcademicEvent, LoginCredentials } from './types';
 import './index.css';
 
@@ -461,9 +462,13 @@ const App: React.FC = () => {
   */
   const mostrandoEsqueleto = refreshing && subjects.length === 0;
 
+  // Abertura e término da mesma prova viram um evento só na tela. A lista
+  // original segue intacta para comparação de novidades e sincronização.
+  const eventosAgenda = useMemo(() => juntarAberturas(events), [events]);
+
   const selectedSubject = subjects.find((s) => s.id === selectedSubjectId) ?? null;
   const eventsForSelected = selectedSubject
-    ? events.filter((e) => e.subject === selectedSubject.name)
+    ? eventosAgenda.filter((e) => e.subject === selectedSubject.name)
     : [];
 
   // A tela de entrada já mostra a marca no meio dela; repetir a barra em cima
@@ -591,7 +596,7 @@ const App: React.FC = () => {
         {step === 'results' && !naRotaAdmin && !naRotaNotas && !activityKey && !selectedSubject && !mostrandoEsqueleto && (
           <SubjectList
             subjects={subjects}
-            events={events}
+            events={eventosAgenda}
             onSelectSubject={setSelectedSubjectId}
             lastScrapedAt={lastScrapedAt}
             /* Na demonstração o evento não abre: a página da atividade lê o

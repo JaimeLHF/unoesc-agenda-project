@@ -80,6 +80,11 @@ export interface AcademicEvent {
    */
   stable_key?: string;
   event_type?: 'due' | 'open' | 'close';
+  /**
+   * Quando o prazo abre, se o Moodle mandou a abertura como evento à parte.
+   * Montado no cliente por `lib/aberturas.ts`, que tira a abertura da lista.
+   */
+  abre?: { date: string; time?: string };
   module?: string;      // assign | quiz | ...
   /**
    * De onde a data veio. `moodle_calendar` é o prazo cadastrado pelo

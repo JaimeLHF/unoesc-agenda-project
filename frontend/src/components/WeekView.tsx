@@ -3,6 +3,7 @@ import type { AcademicEvent, EventType } from '../types';
 import { useDoneEvents } from '../contexts/DoneEventsContext';
 import Icon from './Icon';
 import { formatarPeso, mudancaDePrazo } from '../lib/avisos';
+import { aberturaFutura } from '../lib/aberturas';
 import { cargaDaSemana, descreverCarga } from '../lib/semana';
 
 interface WeekViewProps {
@@ -147,6 +148,7 @@ const WeekView: React.FC<WeekViewProps> = ({ events, onOpenEvent }) => {
                 {eventos.map((e) => {
                   const mudanca = mudancaDePrazo(e);
                   const peso = formatarPeso(e.weight);
+                  const abre = aberturaFutura(e);
                   return (
                   <li key={e.id}>
                     <button
@@ -165,6 +167,11 @@ const WeekView: React.FC<WeekViewProps> = ({ events, onOpenEvent }) => {
                           title={`Esta data era ${mudanca.de} e mudou.`}
                         >
                           {mudanca.rotulo}
+                        </span>
+                      )}
+                      {abre && (
+                        <span className="semana__peso" title="Ainda não abriu para responder">
+                          abre {abre}
                         </span>
                       )}
                       {peso && (

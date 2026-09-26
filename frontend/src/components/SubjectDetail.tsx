@@ -5,6 +5,7 @@ import GradesPanel from './GradesPanel';
 import type { IconName } from './Icon';
 import { useDoneEvents } from '../contexts/DoneEventsContext';
 import { formatarPeso, mudancaDePrazo } from '../lib/avisos';
+import { aberturaFutura } from '../lib/aberturas';
 
 interface SubjectDetailProps {
   subject: Subject;
@@ -258,6 +259,7 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
                     const rel = relativeLabel(event.date, event.time);
                     const mudanca = mudancaDePrazo(event);
                     const peso = formatarPeso(event.weight);
+                    const abre = aberturaFutura(event);
                     const cardClass = [
                       'event-card',
                       'event-card--clickable',
@@ -325,6 +327,11 @@ const SubjectDetail: React.FC<SubjectDetailProps> = ({
                               {mudanca && (
                                 <span className="status-pill status-pill--mudou">
                                   {mudanca.rotulo} · era {mudanca.de}
+                                </span>
+                              )}
+                              {abre && !done && (
+                                <span className="status-pill status-pill--peso">
+                                  Abre {abre}
                                 </span>
                               )}
                               {peso && (
