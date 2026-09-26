@@ -70,6 +70,10 @@ function computeAlerts(events: AcademicEvent[]): Alert[] {
   return alerts;
 }
 
+function abre(event: AcademicEvent): boolean {
+  return event.event_type === 'open';
+}
+
 /**
  * Aqui os emojis ficam, contra a regra do resto da interface: esta é a faixa de
  * urgência, e o 🚨 vermelho salta mais do que qualquer ícone de traço na mesma
@@ -77,12 +81,18 @@ function computeAlerts(events: AcademicEvent[]): Alert[] {
  */
 function buildMessage(alert: Alert): { icon: string; text: string } {
   const { event, urgency, diffDays } = alert;
-  // A data de abertura do Moodle ("Início de …") vira evento como o prazo, e
-  // "EM 2 DIAS: Prova" lia como a prova vencendo — era ela abrindo.
-  const abre = event.event_type === 'open' ? 'abre ' : '';
-  const noun = abre + (TYPE_NOUN[event.type as EventType] ?? 'Evento');
+  const noun = TYPE_NOUN[event.type as EventType] ?? 'Evento';
   const subject = event.subject.replace(/^\d+\s*-\s*/, ''); // tira código numérico do início
   const time = event.time ? ` às ${event.time}` : '';
+
+  // A data de abertura do Moodle ("Início de …") vira evento como o prazo.
+  // Com o mesmo alarme, "EM 2 DIAS: Prova" lia como a prova vencendo — era
+  // ela abrindo, e o prazo de verdade já tem a própria linha na faixa.
+  if (abre(event)) {
+    const quando =
+      diffDays === 0 ? `HOJE${time}` : diffDays === 1 ? `AMANHÃ${time}` : `EM ${diffDays} DIAS`;
+    return { icon: '🔓', text: `ABRE ${quando}: ${noun} de ${subject}` };
+  }
 
   switch (urgency) {
     case 'today':
@@ -135,7 +145,7 @@ const EventAlerts: React.FC<EventAlertsProps> = ({ events, maxAlerts = 10, onOpe
             <li key={alert.event.id}>
               <button
                 type="button"
-                className={`alert-pill alert-pill--${alert.urgency}`}
+                className={`alert-pill alert-pill--${abre(alert.event) ? 'later' : alert.urgency}`}
                 onClick={() => onOpenEvent(alert.event)}
                 title={alert.event.title}
               >
