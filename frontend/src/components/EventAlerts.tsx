@@ -1,7 +1,6 @@
 import React from 'react';
 import type { AcademicEvent, EventType } from '../types';
 import { useDoneEvents } from '../contexts/DoneEventsContext';
-import { aberturaFutura } from '../lib/aberturas';
 
 interface EventAlertsProps {
   events: AcademicEvent[];
@@ -71,34 +70,16 @@ function computeAlerts(events: AcademicEvent[]): Alert[] {
   return alerts;
 }
 
-function abre(event: AcademicEvent): boolean {
-  return event.event_type === 'open';
-}
-
 /**
  * Aqui os emojis ficam, contra a regra do resto da interface: esta é a faixa de
  * urgência, e o 🚨 vermelho salta mais do que qualquer ícone de traço na mesma
  * cor do texto. O que atrapalha um cabeçalho ajuda um alerta.
  */
 function buildMessage(alert: Alert): { icon: string; text: string } {
-  const msg = buildBase(alert);
-  const abre = aberturaFutura(alert.event);
-  return abre ? { ...msg, text: `${msg.text} (abre ${abre})` } : msg;
-}
-
-function buildBase(alert: Alert): { icon: string; text: string } {
   const { event, urgency, diffDays } = alert;
   const noun = TYPE_NOUN[event.type as EventType] ?? 'Evento';
   const subject = event.subject.replace(/^\d+\s*-\s*/, ''); // tira código numérico do início
   const time = event.time ? ` às ${event.time}` : '';
-
-  // Abertura que ficou sem o término ao lado. Com o mesmo alarme do prazo,
-  // "EM 2 DIAS: Prova" leria como a prova vencendo — é ela abrindo.
-  if (abre(event)) {
-    const quando =
-      diffDays === 0 ? `HOJE${time}` : diffDays === 1 ? `AMANHÃ${time}` : `EM ${diffDays} DIAS`;
-    return { icon: '🔓', text: `ABRE ${quando}: ${noun} de ${subject}` };
-  }
 
   switch (urgency) {
     case 'today':
@@ -133,8 +114,10 @@ const EventAlerts: React.FC<EventAlertsProps> = ({ events, maxAlerts = 10, onOpe
   const { isDone } = useDoneEvents();
 
   // Eventos já marcados como concluídos não geram alertas — o aluno já os fez
-  // A abertura já chega juntada ao prazo (`lib/aberturas.ts`).
-  const pending = events.filter((e) => !isDone(e));
+  // A faixa só fala de quando vence: abertura não entra, nem sozinha nem como
+  // "(abre 29/10)" ao lado do prazo — a data de abertura fica na semana e na
+  // disciplina, para quem for procurar.
+  const pending = events.filter((e) => !isDone(e) && e.event_type !== 'open');
   const alerts = computeAlerts(pending).slice(0, maxAlerts);
   if (alerts.length === 0) return null;
 
@@ -152,7 +135,7 @@ const EventAlerts: React.FC<EventAlertsProps> = ({ events, maxAlerts = 10, onOpe
             <li key={alert.event.id}>
               <button
                 type="button"
-                className={`alert-pill alert-pill--${abre(alert.event) ? 'later' : alert.urgency}`}
+                className={`alert-pill alert-pill--${alert.urgency}`}
                 onClick={() => onOpenEvent(alert.event)}
                 title={alert.event.title}
               >
